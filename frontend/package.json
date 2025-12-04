@@ -10,6 +10,9 @@
     "format:check": "prettier --check ."
   },
   "dependencies": {
+    "@copilotkit/react-core": "^1.10.6",
+    "@copilotkit/react-ui": "^1.10.6",
+    "@copilotkit/runtime": "^1.10.6",
     "@privy-io/react-auth": "^3.8.1",
     "@solana-program/system": "^0.10.0",
     "@solana-program/token": "^0.9.0",
