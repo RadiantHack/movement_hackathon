@@ -33,7 +33,11 @@ export function Providers({ children }: ProvidersProps) {
         },
       }}
     >
-      <CopilotKit publicApiKey={copilotApiKey} runtimeUrl={copilotRuntimeUrl}>
+      <CopilotKit
+        runtimeUrl="/api/copilotkit"
+        showDevConsole={false}
+        agent="a2a_chat"
+      >
         {children}
       </CopilotKit>
     </PrivyProvider>

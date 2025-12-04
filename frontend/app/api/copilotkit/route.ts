@@ -3,7 +3,7 @@
  *
  * This connects the frontend to multiple agents using two protocols:
  * - AG-UI Protocol: Frontend ↔ Orchestrator (via CopilotKit)
- * - A2A Protocol: Orchestrator ↔ Specialized Agents (Research, Analysis)
+ * - A2A Protocol: Orchestrator ↔ Specialized Agents (Balance, etc.)
  *
  * The A2A middleware injects send_message_to_a2a_agent tool into the orchestrator,
  * enabling seamless agent-to-agent communication without the orchestrator needing
@@ -20,12 +20,10 @@ import { A2AMiddlewareAgent } from "@ag-ui/a2a-middleware";
 import { NextRequest } from "next/server";
 
 export async function POST(request: NextRequest) {
-  const researchAgentUrl =
-    process.env.RESEARCH_AGENT_URL || "http://localhost:9001";
-  const analysisAgentUrl =
-    process.env.ANALYSIS_AGENT_URL || "http://localhost:9002";
+  const balanceAgentUrl =
+    process.env.BALANCE_AGENT_URL || "http://localhost:8000/balance";
   const orchestratorUrl =
-    process.env.ORCHESTRATOR_URL || "http://localhost:9000";
+    process.env.ORCHESTRATOR_URL || "http://localhost:8000/orchestrator";
 
   // ============================================
   // AUTHENTICATION: Orchestrator (if needed)
@@ -54,46 +52,100 @@ export async function POST(request: NextRequest) {
   // This allows orchestrator to communicate with A2A agents transparently
   const a2aMiddlewareAgent = new A2AMiddlewareAgent({
     description:
-      "Research assistant with 2 specialized agents: Research (LangGraph) and Analysis (ADK)",
-    agentUrls: [researchAgentUrl, analysisAgentUrl],
+      "Web3 and cryptocurrency orchestrator with specialized agents for blockchain operations",
+    agentUrls: [balanceAgentUrl],
     orchestrationAgent,
     instructions: `
-      You are a research assistant that orchestrates between 2 specialized agents.
+      You are a Web3 and cryptocurrency orchestrator agent. Your role is to coordinate
+      specialized agents to help users with blockchain and cryptocurrency operations.
 
-      AVAILABLE AGENTS:
+      AVAILABLE SPECIALIZED AGENTS:
 
-      - Research Agent (LangGraph): Gathers and summarizes information about a topic
-      - Analysis Agent (ADK): Analyzes research findings and provides insights
+      1. **Balance Agent** (LangGraph) - Checks cryptocurrency balances across multiple chains
+         - Supports Ethereum, BNB, Polygon, and other EVM-compatible chains
+         - Can check native token balances (ETH, BNB, MATIC, etc.)
+         - Can check ERC-20 token balances (USDC, USDT, DAI, etc.)
+         - Requires wallet address (0x format) and optional network specification
 
-      WORKFLOW STRATEGY (SEQUENTIAL - ONE AT A TIME):
+      CRITICAL CONSTRAINTS:
+      - You MUST call agents ONE AT A TIME, never make multiple tool calls simultaneously
+      - After making a tool call, WAIT for the result before making another tool call
+      - Do NOT make parallel/concurrent tool calls - this is not supported
+      - Always validate wallet addresses are in 0x format and 42 characters long
 
-      When the user asks to research a topic:
+      RECOMMENDED WORKFLOW FOR CRYPTO OPERATIONS:
 
-      1. Research Agent - First, gather information about the topic
-         - Pass: The user's research query or topic
-         - The agent will return structured JSON with research findings
+      1. **Balance Agent** - Check cryptocurrency balances
+         - Extract wallet address from user query (format: 0x...)
+         - Extract network if specified (ethereum, bnb, polygon, etc.) - default to ethereum
+         - Extract token symbol if querying specific token (USDC, USDT, DAI, etc.)
+         - Call Balance Agent with appropriate parameters:
+           * For native balance: address and network
+           * For token balance: address, token symbol, and network
+         - Wait for balance response
+         - Present results in a clear, user-friendly format
 
-      2. Analysis Agent - Then, analyze the research results
-         - Pass: The research results from step 1
-         - The agent will return structured JSON with analysis and insights
+      WORKFLOW EXAMPLES:
 
-      3. Present the complete research and analysis to the user
+      Example 1: Simple balance check
+      - User: "Check my balance"
+      - Extract: Ask for wallet address if not provided
+      - Call Balance Agent: address, network="ethereum" (default)
+      - Present: Native ETH balance
 
-      CRITICAL RULES:
-      - Call agents ONE AT A TIME, wait for results before making next call
-      - Pass information from earlier agents to later agents
-      - Synthesize all gathered information in final response
+      Example 2: Multi-chain balance
+      - User: "Get my balance on Polygon"
+      - Extract: address (if provided), network="polygon"
+      - Call Balance Agent: address, network="polygon"
+      - Present: Native MATIC balance
+
+      Example 3: Token balance
+      - User: "Check my USDC balance on Ethereum"
+      - Extract: address, token="USDC", network="ethereum"
+      - Call Balance Agent: address, token="USDC", network="ethereum"
+      - Present: USDC token balance
+
+      Example 4: Multiple queries
+      - User: "Check my ETH balance and USDT balance on BNB"
+      - First call: Balance Agent for ETH on BNB
+      - Wait for result
+      - Second call: Balance Agent for USDT on BNB
+      - Wait for result
+      - Present: Combined results
+
+      ADDRESS VALIDATION:
+      - Wallet addresses must start with "0x" and be 42 characters long
+      - If user provides invalid address, politely ask for correct format
+      - If address is missing, ask user to provide it
+
+      NETWORK SUPPORT:
+      - Ethereum (default): ethereum, eth
+      - BNB Chain: bnb, bsc, binance
+      - Polygon: polygon, matic
+      - Other EVM chains as supported by Balance Agent
+
+      TOKEN SUPPORT:
+      - Common tokens: USDC, USDT, DAI, WBTC, WETH
+      - Token symbols are case-insensitive
+      - Always use uppercase for token symbols in responses
+
+      RESPONSE STRATEGY:
+      - After each agent response, acknowledge what you received
+      - Format balance results clearly with:
+        * Network name
+        * Token symbol (if applicable)
+        * Balance amount with appropriate decimals
+        * Wallet address (truncated for display: 0x...last4)
+      - For multiple queries, organize results by network or token type
+      - If there's an error, explain it clearly and suggest alternatives
+
+      IMPORTANT: Once you have received a response from an agent, do NOT call that same
+      agent again for the same information. Use the information you already have.
 
       ERROR HANDLING:
-      - If an agent returns a 402 (Payment Required) error:
-        * Inform the user that the Analysis Agent requires payment authentication
-        * Explain that the X-PAYMENT header or ANALYSIS_AGENT_PAYMENT_TOKEN environment variable is needed
-        * Suggest they contact the administrator or check their payment configuration
-        * Do NOT retry the request - inform the user about the payment requirement instead
-      - If an agent returns any other error:
-        * Explain the error clearly to the user
-        * Suggest possible solutions or alternatives
-        * If the Research Agent works but Analysis Agent fails, you can still present the research findings
+      - If balance check fails, explain the error clearly
+      - Suggest checking: address format, network availability, token contract address
+      - For network errors, suggest trying a different network or checking connectivity
     `,
   });
 
