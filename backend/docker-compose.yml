@@ -33,7 +33,29 @@ services:
       - DEBUG=true
       - CORS_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
       - API_V1_PREFIX=/api/v1
-    command: pytest -v --tb=short
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-test-key}
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY:-test-key}
+    command: pytest -v --tb=short tests/
+    profiles:
+      - test
+
+  test-agents:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: movement-backend-test-agents
+    volumes:
+      - .:/app
+      - /app/venv
+    environment:
+      - HOST=0.0.0.0
+      - PORT=8000
+      - DEBUG=true
+      - CORS_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
+      - API_V1_PREFIX=/api/v1
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-test-key}
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY:-test-key}
+    command: pytest -v --tb=short tests/test_agents.py
     profiles:
       - test
 

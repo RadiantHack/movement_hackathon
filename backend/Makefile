@@ -67,6 +67,10 @@ docker-test:
 	@echo "Running tests in Docker..."
 	docker-compose --profile test run --rm test
 
+docker-test-agents:
+	@echo "Running agent tests in Docker..."
+	docker-compose --profile test run --rm test-agents
+
 docker-test-coverage:
 	@echo "Running tests with coverage in Docker..."
 	docker-compose --profile test run --rm test pytest --cov=app --cov-report=html --cov-report=term
@@ -98,7 +102,8 @@ help:
 	@echo "  make docker-shell     - Open shell in Docker container"
 	@echo ""
 	@echo "Docker test commands:"
-	@echo "  make docker-test      - Run tests in Docker"
+	@echo "  make docker-test      - Run all tests in Docker"
+	@echo "  make docker-test-agents - Run agent tests (balance, orchestrator, liquidity) in Docker"
 	@echo "  make docker-test-coverage - Run tests with coverage in Docker"
 	@echo ""
 	@echo "Docker format/lint commands:"
