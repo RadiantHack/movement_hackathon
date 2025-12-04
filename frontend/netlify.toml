@@ -1,16 +1,12 @@
 [build]
   command = "npm run build"
-  publish = ".next"
 
 [build.environment]
   NODE_VERSION = "20"
   NPM_FLAGS = "--legacy-peer-deps"
 
-# Next.js rewrites for client-side routing
-[[redirects]]
-  from = "/*"
-  to = "/index.html"
-  status = 200
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
 
 # Environment variables (set these in Netlify dashboard)
 # NEXT_PUBLIC_PRIVY_APP_ID
