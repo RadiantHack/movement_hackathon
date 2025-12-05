@@ -1,7 +1,8 @@
 "use client";
 
-import { usePrivy, useWallets } from "@privy-io/react-auth";
-import { useState } from "react";
+import { usePrivy, useWallets, useGuestAccounts, WalletWithMetadata } from "@privy-io/react-auth";
+import { useCreateWallet as useCreateExtendedWallet } from "@privy-io/react-auth/extended-chains";
+import { useState, useEffect } from "react";
 
 export function RightSidebar({
   isOpen,
@@ -10,11 +11,16 @@ export function RightSidebar({
   isOpen?: boolean;
   onClose?: () => void;
 }) {
-  const { user, logout } = usePrivy();
+  const { user, logout, ready, authenticated } = usePrivy();
   const { wallets } = useWallets();
+  const { createWallet: createExtendedWallet } = useCreateExtendedWallet();
+  const { createGuestAccount } = useGuestAccounts();
   const [copied, setCopied] = useState(false);
+  const [copiedSui, setCopiedSui] = useState(false);
   const [showDepositModal, setShowDepositModal] = useState(false);
   const [showWithdrawModal, setShowWithdrawModal] = useState(false);
+  const [pendingAction, setPendingAction] = useState("");
+  const [isCreatingSuiWallet, setIsCreatingSuiWallet] = useState(false);
 
   const walletAddress = wallets[0]?.address || "";
 
@@ -29,6 +35,43 @@ export function RightSidebar({
   const handleLogout = () => {
     logout();
   };
+
+  /**
+   * Handle pending wallet creation actions after user/guest account is ready
+   * Pattern from whitelabel-starter: handles wallet creation once user/guest account is ready
+   */
+  useEffect(() => {
+    if (pendingAction === "Sui" && user) {
+      createExtendedWallet({ chainType: "sui" });
+      setIsCreatingSuiWallet(false);
+      setPendingAction("");
+    }
+  }, [user, createExtendedWallet, pendingAction]);
+
+  /**
+   * Create Sui wallet
+   * If user is not authenticated, create a guest account first
+   * Pattern from whitelabel-starter
+   */
+  const createSuiWallet = async () => {
+    if (!ready) return;
+
+    setIsCreatingSuiWallet(true);
+
+    if (!authenticated && !user?.isGuest) {
+      await createGuestAccount();
+    }
+
+    setPendingAction("Sui");
+  };
+
+  /**
+   * Get Sui wallet from user's linked accounts
+   */
+  const suiWallet = user?.linkedAccounts.find(
+    (account): account is WalletWithMetadata =>
+      account.type === "wallet" && account.chainType === "sui"
+  );
 
   // Mock recent transactions - replace with actual data
   const recentTransactions = [
@@ -208,6 +251,116 @@ export function RightSidebar({
               <p className="text-sm text-zinc-500 dark:text-zinc-400">
                 No wallet connected
               </p>
+            </div>
+          )}
+        </div>
+
+        {/* Sui Wallet Section */}
+        <div className="border-b border-zinc-200 p-6 dark:border-zinc-800">
+          <h2 className="mb-4 text-sm font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+            Sui Wallet
+          </h2>
+          {suiWallet ? (
+            <div className="rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-700 dark:bg-zinc-800">
+              <div className="mb-3 flex items-center justify-between">
+                <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                  Sui Wallet Connected
+                </p>
+                <div className="flex h-2 w-2 items-center justify-center">
+                  <span className="absolute h-2 w-2 animate-ping rounded-full bg-green-400 opacity-75"></span>
+                  <span className="relative h-2 w-2 rounded-full bg-green-500"></span>
+                </div>
+              </div>
+              <div className="mb-3">
+                <p className="font-mono text-sm font-medium text-zinc-950 dark:text-zinc-50">
+                  {suiWallet.address.slice(0, 6)}...{suiWallet.address.slice(-4)}
+                </p>
+                <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">
+                  Sui Network
+                </p>
+              </div>
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(suiWallet.address);
+                  setCopied(true);
+                  setTimeout(() => setCopied(false), 2000);
+                }}
+                className="flex w-full items-center justify-center gap-2 rounded-md bg-zinc-100 px-3 py-2 text-xs font-medium text-zinc-700 transition-colors hover:bg-zinc-200 dark:bg-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-600"
+              >
+                {copied ? (
+                  <>
+                    <svg
+                      className="h-4 w-4"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M5 13l4 4L19 7"
+                      />
+                    </svg>
+                    Copied!
+                  </>
+                ) : (
+                  <>
+                    <svg
+                      className="h-4 w-4"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
+                      />
+                    </svg>
+                    Copy Address
+                  </>
+                )}
+              </button>
+            </div>
+          ) : (
+            <div className="rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-700 dark:bg-zinc-800">
+              <p className="mb-3 text-sm text-zinc-500 dark:text-zinc-400">
+                No Sui wallet created yet
+              </p>
+              <button
+                onClick={createSuiWallet}
+                disabled={isCreatingSuiWallet}
+                className="flex w-full items-center justify-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:bg-zinc-400 disabled:cursor-not-allowed dark:bg-blue-500 dark:hover:bg-blue-600"
+              >
+                {isCreatingSuiWallet ? (
+                  <>
+                    <svg
+                      className="h-4 w-4 animate-spin"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                    >
+                      <circle
+                        className="opacity-25"
+                        cx="12"
+                        cy="12"
+                        r="10"
+                        stroke="currentColor"
+                        strokeWidth="4"
+                      ></circle>
+                      <path
+                        className="opacity-75"
+                        fill="currentColor"
+                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                      ></path>
+                    </svg>
+                    Creating...
+                  </>
+                ) : (
+                  "Create Sui Wallet"
+                )}
+              </button>
             </div>
           )}
         </div>
