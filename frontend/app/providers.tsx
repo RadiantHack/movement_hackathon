@@ -3,6 +3,7 @@
 import { PrivyProvider } from "@privy-io/react-auth";
 import { CopilotKit } from "@copilotkit/react-core";
 import { ReactNode } from "react";
+import { MovementWalletModal } from "./components/movement-wallet-modal";
 
 interface ProvidersProps {
   children: ReactNode;
@@ -24,11 +25,12 @@ export function Providers({ children }: ProvidersProps) {
       appId={appId}
       clientId={clientId}
       config={{
-        // Create embedded wallets for users who don't have a wallet
+        // Disable automatic wallet creation - users will create wallets manually (e.g., Movement wallets)
         embeddedWallets: {
           ethereum: {
-            createOnLogin: "users-without-wallets",
+            createOnLogin: "off", // Disable automatic Ethereum wallet creation
           },
+          showWalletUIs: false, // Hide Privy's default wallet UIs
         },
         // Configure Movement blockchain (EVM-compatible)
         supportedChains: [
@@ -63,6 +65,7 @@ export function Providers({ children }: ProvidersProps) {
         publicApiKey={copilotApiKey}
       >
         {children}
+        <MovementWalletModal />
       </CopilotKit>
     </PrivyProvider>
   );

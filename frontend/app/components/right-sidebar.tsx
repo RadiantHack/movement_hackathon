@@ -1,6 +1,6 @@
 "use client";
 
-import { usePrivy, useWallets, useGuestAccounts, WalletWithMetadata } from "@privy-io/react-auth";
+import { usePrivy, WalletWithMetadata } from "@privy-io/react-auth";
 import { useCreateWallet as useCreateExtendedWallet } from "@privy-io/react-auth/extended-chains";
 import { useState, useEffect } from "react";
 
@@ -12,25 +12,13 @@ export function RightSidebar({
   onClose?: () => void;
 }) {
   const { user, logout, ready, authenticated } = usePrivy();
-  const { wallets } = useWallets();
   const { createWallet: createExtendedWallet } = useCreateExtendedWallet();
-  const { createGuestAccount } = useGuestAccounts();
-  const [copied, setCopied] = useState(false);
-  const [copiedSui, setCopiedSui] = useState(false);
+  const [copiedMovement, setCopiedMovement] = useState(false);
   const [showDepositModal, setShowDepositModal] = useState(false);
   const [showWithdrawModal, setShowWithdrawModal] = useState(false);
   const [pendingAction, setPendingAction] = useState("");
-  const [isCreatingSuiWallet, setIsCreatingSuiWallet] = useState(false);
-
-  const walletAddress = wallets[0]?.address || "";
-
-  const copyAddress = () => {
-    if (walletAddress) {
-      navigator.clipboard.writeText(walletAddress);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    }
-  };
+  const [isCreatingMovementWallet, setIsCreatingMovementWallet] =
+    useState(false);
 
   const handleLogout = () => {
     logout();
@@ -41,36 +29,34 @@ export function RightSidebar({
    * Pattern from whitelabel-starter: handles wallet creation once user/guest account is ready
    */
   useEffect(() => {
-    if (pendingAction === "Sui" && user) {
-      createExtendedWallet({ chainType: "sui" });
-      setIsCreatingSuiWallet(false);
+    if (pendingAction === "Movement" && user) {
+      createExtendedWallet({ chainType: "movement" });
+      setIsCreatingMovementWallet(false);
       setPendingAction("");
     }
   }, [user, createExtendedWallet, pendingAction]);
 
   /**
-   * Create Sui wallet
-   * If user is not authenticated, create a guest account first
-   * Pattern from whitelabel-starter
+   * Create Movement wallet
+   * Only allowed when user is authenticated
    */
-  const createSuiWallet = async () => {
-    if (!ready) return;
-
-    setIsCreatingSuiWallet(true);
-
-    if (!authenticated && !user?.isGuest) {
-      await createGuestAccount();
+  const createMovementWallet = async () => {
+    if (!ready || !authenticated) {
+      console.warn("User must be authenticated to create a wallet");
+      return;
     }
 
-    setPendingAction("Sui");
+    setIsCreatingMovementWallet(true);
+    setPendingAction("Movement");
   };
 
   /**
-   * Get Sui wallet from user's linked accounts
+   * Get Movement wallet from user's linked accounts
+   * Backend returns chainType as "aptos" for Movement wallets
    */
-  const suiWallet = user?.linkedAccounts.find(
+  const movementWallet = user?.linkedAccounts.find(
     (account): account is WalletWithMetadata =>
-      account.type === "wallet" && account.chainType === "sui"
+      account.type === "wallet" && account.chainType === "aptos"
   );
 
   // Mock recent transactions - replace with actual data
@@ -115,10 +101,13 @@ export function RightSidebar({
 
   const getColorClasses = (color: string) => {
     const colors: Record<string, string> = {
-      purple: "bg-purple-100 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400",
+      purple:
+        "bg-purple-100 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400",
       blue: "bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400",
-      green: "bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400",
-      yellow: "bg-yellow-100 text-yellow-600 dark:bg-yellow-900/30 dark:text-yellow-400",
+      green:
+        "bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400",
+      yellow:
+        "bg-yellow-100 text-yellow-600 dark:bg-yellow-900/30 dark:text-yellow-400",
     };
     return colors[color] || colors.blue;
   };
@@ -135,8 +124,9 @@ export function RightSidebar({
 
       {/* Sidebar Container */}
       <div
-        className={`fixed inset-y-0 right-0 z-50 flex w-80 flex-col border-l border-zinc-200 bg-zinc-50 transition-transform duration-300 dark:border-zinc-800 dark:bg-zinc-900 xl:static xl:flex xl:translate-x-0 ${isOpen ? "translate-x-0" : "translate-x-full"
-          }`}
+        className={`fixed inset-y-0 right-0 z-50 flex w-80 flex-col border-l border-zinc-200 bg-zinc-50 transition-transform duration-300 dark:border-zinc-800 dark:bg-zinc-900 xl:static xl:flex xl:translate-x-0 ${
+          isOpen ? "translate-x-0" : "translate-x-full"
+        }`}
       >
         {/* Logout Button - Top */}
         <div className="flex items-center justify-between border-b border-zinc-200 p-4 dark:border-zinc-800">
@@ -181,16 +171,16 @@ export function RightSidebar({
           </button>
         </div>
 
-        {/* Wallet Section */}
+        {/* Movement Wallet Section */}
         <div className="border-b border-zinc-200 p-6 dark:border-zinc-800">
           <h2 className="mb-4 text-sm font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
-            Wallet
+            Movement Wallet
           </h2>
-          {walletAddress ? (
+          {movementWallet ? (
             <div className="rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-700 dark:bg-zinc-800">
               <div className="mb-3 flex items-center justify-between">
                 <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                  Connected
+                  Movement Wallet Connected
                 </p>
                 <div className="flex h-2 w-2 items-center justify-center">
                   <span className="absolute h-2 w-2 animate-ping rounded-full bg-green-400 opacity-75"></span>
@@ -199,95 +189,22 @@ export function RightSidebar({
               </div>
               <div className="mb-3">
                 <p className="font-mono text-sm font-medium text-zinc-950 dark:text-zinc-50">
-                  {walletAddress.slice(0, 6)}...{walletAddress.slice(-4)}
+                  {movementWallet.address.slice(0, 6)}...
+                  {movementWallet.address.slice(-4)}
                 </p>
                 <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">
                   Movement Network
                 </p>
               </div>
               <button
-                onClick={copyAddress}
-                className="flex w-full items-center justify-center gap-2 rounded-md bg-zinc-100 px-3 py-2 text-xs font-medium text-zinc-700 transition-colors hover:bg-zinc-200 dark:bg-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-600"
-              >
-                {copied ? (
-                  <>
-                    <svg
-                      className="h-4 w-4"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M5 13l4 4L19 7"
-                      />
-                    </svg>
-                    Copied!
-                  </>
-                ) : (
-                  <>
-                    <svg
-                      className="h-4 w-4"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
-                      />
-                    </svg>
-                    Copy Address
-                  </>
-                )}
-              </button>
-            </div>
-          ) : (
-            <div className="rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-700 dark:bg-zinc-800">
-              <p className="text-sm text-zinc-500 dark:text-zinc-400">
-                No wallet connected
-              </p>
-            </div>
-          )}
-        </div>
-
-        {/* Sui Wallet Section */}
-        <div className="border-b border-zinc-200 p-6 dark:border-zinc-800">
-          <h2 className="mb-4 text-sm font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
-            Sui Wallet
-          </h2>
-          {suiWallet ? (
-            <div className="rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-700 dark:bg-zinc-800">
-              <div className="mb-3 flex items-center justify-between">
-                <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                  Sui Wallet Connected
-                </p>
-                <div className="flex h-2 w-2 items-center justify-center">
-                  <span className="absolute h-2 w-2 animate-ping rounded-full bg-green-400 opacity-75"></span>
-                  <span className="relative h-2 w-2 rounded-full bg-green-500"></span>
-                </div>
-              </div>
-              <div className="mb-3">
-                <p className="font-mono text-sm font-medium text-zinc-950 dark:text-zinc-50">
-                  {suiWallet.address.slice(0, 6)}...{suiWallet.address.slice(-4)}
-                </p>
-                <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">
-                  Sui Network
-                </p>
-              </div>
-              <button
                 onClick={() => {
-                  navigator.clipboard.writeText(suiWallet.address);
-                  setCopied(true);
-                  setTimeout(() => setCopied(false), 2000);
+                  navigator.clipboard.writeText(movementWallet.address);
+                  setCopiedMovement(true);
+                  setTimeout(() => setCopiedMovement(false), 2000);
                 }}
                 className="flex w-full items-center justify-center gap-2 rounded-md bg-zinc-100 px-3 py-2 text-xs font-medium text-zinc-700 transition-colors hover:bg-zinc-200 dark:bg-zinc-700 dark:text-zinc-300 dark:hover:bg-zinc-600"
               >
-                {copied ? (
+                {copiedMovement ? (
                   <>
                     <svg
                       className="h-4 w-4"
@@ -327,14 +244,14 @@ export function RightSidebar({
           ) : (
             <div className="rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-700 dark:bg-zinc-800">
               <p className="mb-3 text-sm text-zinc-500 dark:text-zinc-400">
-                No Sui wallet created yet
+                No Movement wallet created yet
               </p>
               <button
-                onClick={createSuiWallet}
-                disabled={isCreatingSuiWallet}
+                onClick={createMovementWallet}
+                disabled={isCreatingMovementWallet || !authenticated}
                 className="flex w-full items-center justify-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:bg-zinc-400 disabled:cursor-not-allowed dark:bg-blue-500 dark:hover:bg-blue-600"
               >
-                {isCreatingSuiWallet ? (
+                {isCreatingMovementWallet ? (
                   <>
                     <svg
                       className="h-4 w-4 animate-spin"
@@ -358,7 +275,7 @@ export function RightSidebar({
                     Creating...
                   </>
                 ) : (
-                  "Create Sui Wallet"
+                  "Create Movement Wallet"
                 )}
               </button>
             </div>
@@ -427,7 +344,8 @@ export function RightSidebar({
                 </p>
                 <div className="mb-4 rounded-md bg-zinc-100 p-3 dark:bg-zinc-700">
                   <p className="break-all font-mono text-xs text-zinc-900 dark:text-zinc-100">
-                    {walletAddress}
+                    {movementWallet?.address ||
+                      "Please create a Movement wallet first"}
                   </p>
                 </div>
                 <button
