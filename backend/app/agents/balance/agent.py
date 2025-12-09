@@ -182,23 +182,32 @@ def get_system_prompt() -> str:
     """Get the system prompt for the agent."""
     return """You are a helpful Web3 assistant specializing in checking cryptocurrency balances.
 
+CRITICAL: Address Validation Rules
+- Wallet addresses can be 42 characters OR 66 characters long - BOTH are valid
+- 42-character addresses (0x + 40 hex): Ethereum, BNB, Polygon networks
+- 66-character addresses (0x + 64 hex): Movement Network, Aptos networks
+- If an address starts with "0x" and contains valid hex characters, it is VALID
+- NEVER reject an address because of its length
+- NEVER say an address is "invalid" if it's 66 characters - it's a valid Movement Network address
+- When you see a 66-character address, automatically use network="movement"
+
 When users ask about balances:
-1. Extract the wallet address if provided (format: 0x... or Aptos format)
-2. Determine which network they're asking about:
+1. Extract the wallet address if provided (format: 0x...)
+2. Determine which network:
+   - If address is 66 characters: use "movement" network
+   - If address is 42 characters: use network specified by user, or default to "ethereum"
    - For Movement Network: use "movement" or "aptos" (they are the same)
-   - Default to ethereum if not specified
 3. For token queries, identify the token symbol (USDC, USDT, DAI, MOVE, etc.)
-4. Use the appropriate tool to fetch balance data
+4. Call the appropriate tool (get_balance or get_token_balance) with the address and network
 5. Present results in a clear, user-friendly format
 
 Special handling for Movement Network:
-- Movement Network uses Aptos-compatible addresses
-- When user says "get my balance" or "give my balance" on Movement, use the wallet address they provided
-- Movement addresses can be in 0x format (Ethereum-style) or Aptos format - both work
-- The network parameter should be "movement" or "aptos" for Movement Network
+- Movement Network uses 66-character addresses (0x + 64 hex characters)
+- These addresses are VALID - do not reject them
+- When you see a 66-character address, use network="movement" or network="aptos"
+- The tool functions automatically handle 66-character addresses correctly
 
 If the user doesn't provide an address, politely ask for it.
-Addresses should start with 0x and contain valid hexadecimal characters.
 If there's an error, explain it clearly and suggest alternatives."""
 
 
@@ -264,7 +273,10 @@ def get_movement_indexer_url() -> str:
 
 
 def fetch_movement_balances(address: str) -> Dict[str, Any]:
-    """Fetch balances from Movement Network using the indexer API.
+    """Fetch balances from Movement Network using the indexer API with pagination.
+    
+    Uses the robust balance fetching function from get_movement_balance.py
+    which includes pagination, proper error handling, and native token sorting.
     
     Args:
         address: Wallet address to check
@@ -273,38 +285,81 @@ def fetch_movement_balances(address: str) -> Dict[str, Any]:
         Dictionary with balance information
     """
     try:
-        indexer_url = get_movement_indexer_url()
-        variables = {"ownerAddress": address}
-        payload = {
-            "query": MOVEMENT_BALANCES_QUERY,
-            "variables": variables,
-        }
-        headers = {
-            "Content-Type": "application/json",
-            "Accept": "application/json",
-        }
-        response = requests.post(
-            indexer_url,
-            json=payload,
-            headers=headers,
-            timeout=30,
-        )
-        if response.status_code != 200:
+        # Import the robust balance fetching functions
+        import sys
+        import os
+        from pathlib import Path
+        
+        # Add backend directory to path to import get_movement_balance
+        # From: backend/app/agents/balance/agent.py
+        # To: backend/get_movement_balance.py
+        current_file = Path(__file__).resolve()
+        backend_dir = current_file.parent.parent.parent.parent
+        backend_dir_str = str(backend_dir)
+        
+        if backend_dir_str not in sys.path:
+            sys.path.insert(0, backend_dir_str)
+        
+        # Import the functions
+        from get_movement_balance import get_balances, get_indexer_url
+        
+        # Get indexer URL (uses default provider: sentio)
+        indexer_url = get_indexer_url()
+        
+        # Fetch balances with pagination support
+        result = get_balances(indexer_url=indexer_url, address=address)
+        
+        # Return in the format expected by the agent
+        if result.get("success", False):
+            return {
+                "success": True,
+                "balances": result.get("balances", []),
+            }
+        else:
             return {
                 "success": False,
-                "error": f"Indexer API error: {response.status_code}",
+                "error": result.get("error", "Unknown error"),
             }
-        data = response.json()
-        if "errors" in data:
+    except ImportError as e:
+        # Fallback to original implementation if import fails
+        try:
+            indexer_url = get_movement_indexer_url()
+            variables = {"ownerAddress": address}
+            payload = {
+                "query": MOVEMENT_BALANCES_QUERY,
+                "variables": variables,
+            }
+            headers = {
+                "Content-Type": "application/json",
+                "Accept": "application/json",
+            }
+            response = requests.post(
+                indexer_url,
+                json=payload,
+                headers=headers,
+                timeout=30,
+            )
+            if response.status_code != 200:
+                return {
+                    "success": False,
+                    "error": f"Indexer API error: {response.status_code}",
+                }
+            data = response.json()
+            if "errors" in data:
+                return {
+                    "success": False,
+                    "error": f"GraphQL errors: {json.dumps(data['errors'])}",
+                }
+            balances = data.get("data", {}).get("current_fungible_asset_balances", [])
+            return {
+                "success": True,
+                "balances": balances,
+            }
+        except Exception as fallback_error:
             return {
                 "success": False,
-                "error": f"GraphQL errors: {json.dumps(data['errors'])}",
+                "error": f"Import error: {str(e)}, Fallback error: {str(fallback_error)}",
             }
-        balances = data.get("data", {}).get("current_fungible_asset_balances", [])
-        return {
-            "success": True,
-            "balances": balances,
-        }
     except Exception as e:
         return {
             "success": False,
@@ -327,36 +382,97 @@ def format_movement_balance_response(balances_data: Dict[str, Any], address: str
     balances = balances_data.get("balances", [])
     if not balances:
         return f"Address {address} has no token balances on Movement Network."
-    result_lines = [f"Movement Network balances for {address}:\n"]
-    for idx, balance in enumerate(balances, 1):
-        asset_type = balance.get("asset_type", "Unknown")
+    
+    # Process each token individually (don't group - show all 6 tokens separately)
+    token_list: List[Dict[str, Any]] = []
+    
+    for balance in balances:
         amount = balance.get("amount", "0")
         metadata = balance.get("metadata", {})
-        name = metadata.get("name", "Unknown Token")
-        symbol = metadata.get("symbol", "Unknown")
-        decimals = int(metadata.get("decimals", 18))
+        asset_type = balance.get("asset_type", "Unknown")
+        
+        # Handle metadata structure (can be dict or nested)
+        if isinstance(metadata, dict):
+            name = metadata.get("name", "Unknown Token")
+            symbol = metadata.get("symbol", "Unknown")
+            decimals_str = metadata.get("decimals", "18")
+        else:
+            name = "Unknown Token"
+            symbol = "Unknown"
+            decimals_str = "18"
+        
+        try:
+            decimals = int(decimals_str)
+        except (ValueError, TypeError):
+            decimals = 18
+        
         try:
             amount_int = int(amount)
+            
+            # Skip only truly zero balances - show all tokens with any balance (even very small)
+            if amount_int == 0:
+                continue
+            
             formatted_balance = amount_int / (10 ** decimals)
-            result_lines.append(
-                f"{idx}. {name} ({symbol}): {formatted_balance:.6f} {symbol}"
-            )
+            
+            # Store each token individually (don't group by symbol)
+            token_list.append({
+                "name": name,
+                "symbol": symbol.upper(),
+                "balance": formatted_balance,
+                "asset_type": asset_type
+            })
         except (ValueError, TypeError):
-            result_lines.append(f"{idx}. {name} ({symbol}): {amount} (raw)")
+            # If we can't parse, skip it
+            continue
+    
+    if not token_list:
+        return f"Address {address} has no non-zero token balances on Movement Network."
+    
+    # Format output - show all tokens individually
+    result_lines = [f"Movement Network balances for {address}:\n"]
+    for idx, token_data in enumerate(token_list, 1):
+        balance = token_data["balance"]
+        name = token_data["name"]
+        symbol = token_data["symbol"]
+        # Format with appropriate decimal places
+        # For very small balances, show more decimal places to avoid showing as 0.000000
+        if balance >= 1:
+            formatted = f"{balance:.6f}".rstrip('0').rstrip('.')
+        elif balance >= 0.000001:
+            formatted = f"{balance:.6f}".rstrip('0').rstrip('.')
+        else:
+            # For very small balances (like WBTC.e with 0.00000013), show up to 8 decimal places
+            # This ensures we don't display 0.000000 for tokens that actually have a balance
+            formatted = f"{balance:.8f}".rstrip('0').rstrip('.')
+            # If after stripping it's empty or just ".", show at least 8 decimals
+            if not formatted or formatted == ".":
+                formatted = f"{balance:.8f}"
+        result_lines.append(f"{idx}. {name} ({symbol}): {formatted} {symbol}")
+    
     return "\n".join(result_lines)
 
 
 @tool
 def get_balance(address: str, network: str = DEFAULT_NETWORK) -> str:
     """Get the balance of a cryptocurrency address on a specific network.
+    
+    This tool accepts both 42-character (Ethereum) and 66-character (Movement/Aptos) addresses.
+    If address is 66 characters, it automatically uses Movement Network.
 
     Args:
-        address: The cryptocurrency wallet address (0x... or Aptos format)
+        address: The cryptocurrency wallet address starting with 0x.
+                 Accepts 42-character (Ethereum/BNB/Polygon) or 66-character (Movement/Aptos) addresses.
         network: The blockchain network (ethereum, bnb, polygon, movement, aptos, etc.)
+                 If address is 66 characters, automatically uses "movement" network.
 
     Returns:
         The balance as a string
     """
+    # Auto-detect Movement Network for 66-character addresses
+    if len(address) == 66 and address.startswith("0x"):
+        network = "movement"
+    
     network_lower = network.lower()
     if network_lower in ["movement", "aptos"]:
         balances_data = fetch_movement_balances(address)
@@ -367,15 +483,24 @@ def get_balance(address: str, network: str = DEFAULT_NETWORK) -> str:
 @tool
 def get_token_balance(address: str, token: str, network: str = DEFAULT_NETWORK) -> str:
     """Get the balance of a specific token for an address on a network.
+    
+    This tool accepts both 42-character (Ethereum) and 66-character (Movement/Aptos) addresses.
+    If address is 66 characters, it automatically uses Movement Network.
 
     Args:
-        address: The cryptocurrency wallet address (0x... or Aptos format)
+        address: The cryptocurrency wallet address starting with 0x.
+                 Accepts 42-character (Ethereum/BNB/Polygon) or 66-character (Movement/Aptos) addresses.
         token: The token symbol (e.g., USDC, USDT, DAI, MOVE)
         network: The blockchain network (ethereum, bnb, polygon, movement, aptos, etc.)
+                 If address is 66 characters, automatically uses "movement" network.
 
     Returns:
         The token balance as a string
     """
+    # Auto-detect Movement Network for 66-character addresses
+    if len(address) == 66 and address.startswith("0x"):
+        network = "movement"
+    
     network_lower = network.lower()
     if network_lower in ["movement", "aptos"]:
         balances_data = fetch_movement_balances(address)

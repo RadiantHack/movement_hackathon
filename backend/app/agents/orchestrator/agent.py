@@ -83,10 +83,12 @@ orchestrator_agent = LlmAgent(
     AVAILABLE SPECIALIZED AGENTS:
 
     1. **Balance Agent** (LangGraph) - Checks cryptocurrency balances across multiple chains
-       - Supports Ethereum, BNB, Polygon, and other EVM-compatible chains
-       - Can check native token balances (ETH, BNB, MATIC, etc.)
+       - Supports Ethereum, BNB, Polygon, Movement Network, and other EVM-compatible chains
+       - Can check native token balances (ETH, BNB, MATIC, MOVE, etc.)
        - Can check ERC-20 token balances (USDC, USDT, DAI, etc.)
        - Requires wallet address (0x format) and optional network specification
+       - Movement Network addresses are 66 characters (0x + 64 hex chars)
+       - Ethereum/BNB/Polygon addresses are 42 characters (0x + 40 hex chars)
 
     2. **Bridge Agent** (LangGraph) - Cross-chain asset bridging via Movement Bridge
        - Bridges assets between Ethereum, BNB, Polygon and Movement Network
@@ -146,7 +148,10 @@ orchestrator_agent = LlmAgent(
     - You MUST call agents ONE AT A TIME, never make multiple tool calls simultaneously
     - After making a tool call, WAIT for the result before making another tool call
     - Do NOT make parallel/concurrent tool calls - this is not supported
-    - Always validate wallet addresses are in 0x format and 42 characters long
+    - Wallet addresses must start with "0x" and be valid hexadecimal
+    - Ethereum addresses are 42 characters (0x + 40 hex chars)
+    - Movement Network/Aptos addresses are 66 characters (0x + 64 hex chars)
+    - Accept both formats - do NOT reject addresses based on length alone
 
     RECOMMENDED WORKFLOW FOR CRYPTO OPERATIONS:
 
@@ -189,14 +194,19 @@ orchestrator_agent = LlmAgent(
     - Present: Combined results
 
     ADDRESS VALIDATION:
-    - Wallet addresses must start with "0x" and be 42 characters long
-    - If user provides invalid address, politely ask for correct format
+    - Wallet addresses must start with "0x" and contain valid hexadecimal characters
+    - Ethereum addresses: 42 characters (0x + 40 hex chars) - for Ethereum, BNB, Polygon, etc.
+    - Movement Network/Aptos addresses: 66 characters (0x + 64 hex chars) - for Movement Network
+    - DO NOT reject addresses based on length - accept both formats
+    - If user provides invalid address (doesn't start with 0x or contains invalid chars), politely ask for correct format
     - If address is missing, ask user to provide it
+    - For Movement Network queries, addresses are typically 66 characters long
 
     NETWORK SUPPORT:
-    - Ethereum (default): ethereum, eth
-    - BNB Chain: bnb, bsc, binance
-    - Polygon: polygon, matic
+    - Ethereum (default): ethereum, eth (42-char addresses)
+    - BNB Chain: bnb, bsc, binance (42-char addresses)
+    - Polygon: polygon, matic (42-char addresses)
+    - Movement Network: movement, aptos (66-char addresses)
     - Other EVM chains as supported by Balance Agent
 
     TOKEN SUPPORT:
