@@ -530,17 +530,57 @@ orchestrator_agent = LlmAgent(
 
     - For Movement Network queries, addresses are 66 characters long
 
-    **CRITICAL**: The user's wallet address is ALWAYS provided in the system instructions
+    **CRITICAL - WALLET ADDRESS EXTRACTION**:
 
-    - When user says "my balance", "check balance", "get balance at my wallet", or similar:
+    The user's wallet address is ALWAYS provided in the system instructions/context from the frontend.
 
-      * IMMEDIATELY look for the wallet address in the system instructions
+    - **STEP 1**: When user says "my balance", "check balance", "get balance at my wallet", "get my wallet balance", or similar:
 
-      * The wallet address will be explicitly stated like: "The user has a connected Movement Network wallet address: 0x..."
+      * IMMEDIATELY search the system instructions/context for the wallet address
 
-      * Use that exact address - DO NOT ask for it
+      * Look for patterns like:
+        - "The user has a connected Movement Network wallet address: 0x..."
+        - "User's connected wallet address for Movement Network: 0x..."
+        - "address\":\"0x...\" in JSON context
+        - Any 66-character address starting with "0x" in the system message
+
+    - **STEP 2**: Extract the EXACT wallet address from the system instructions
+
+      * The address will be 66 characters long (0x + 64 hex characters) for Movement Network
+
+      * Look for the address in multiple formats:
+        - Plain text: "The user has a connected Movement Network wallet address: 0x..."
+        - JSON format: "address\":\"0x...\"" or '{"address":"0x..."}'
+        - Context array: Check if there's a context object with address field
+
+      * If you see JSON, parse it to extract the address field
+
+      * Copy the address EXACTLY as it appears - do NOT modify it, do NOT truncate it
+
+      * Example: If you see "0x5eab3cef1bd13a0f5fdc0dfc22e99a56df5360fd9b48c5dcc4467e3129907498", use that EXACT string
+
+      * CRITICAL: The address must be the FULL 66 characters - do NOT use partial addresses
+
+    - **STEP 3**: Use the extracted address immediately
+
+      * DO NOT ask the user for the address - it's already provided
+
+      * DO NOT use any other address - use ONLY the one from system instructions
 
       * Network is ALWAYS "movement" - DO NOT ask for network
+
+      * Call Balance Agent with: "get balance of [EXTRACTED_ADDRESS] on movement"
+
+    - **EXAMPLE**:
+
+      System instructions contain: "The user has a connected Movement Network wallet address: 0x5eab3cef1bd13a0f5fdc0dfc22e99a56df5360fd9b48c5dcc4467e3129907498"
+
+      User says: "get my wallet balance"
+
+      You MUST:
+      1. Extract: 0x5eab3cef1bd13a0f5fdc0dfc22e99a56df5360fd9b48c5dcc4467e3129907498
+      2. Call: send_message_to_a2a_agent(agentName="balance", task="get balance of 0x5eab3cef1bd13a0f5fdc0dfc22e99a56df5360fd9b48c5dcc4467e3129907498 on movement")
+      3. DO NOT use any other address
 
     TOKEN SUPPORT:
 
