@@ -39,3 +39,40 @@ export interface AgentStyle {
     icon: string;
     framework: string;
   }
+
+/**
+ * Transfer action parameters
+ * Used when user wants to transfer tokens
+ */
+export type TransferActionRenderProps = ActionRenderProps<
+  [
+    {
+      readonly name: "amount";
+      readonly type: "string";
+      readonly description: "The amount of tokens to transfer";
+    },
+    {
+      readonly name: "token";
+      readonly type: "string";
+      readonly description: "The token symbol to transfer (e.g., MOVE, USDC, USDT)";
+    },
+    {
+      readonly name: "toAddress";
+      readonly type: "string";
+      readonly description: "The recipient wallet address (66 characters for Movement Network)";
+    },
+  ]
+>;
+
+/**
+ * Transfer data structure
+ */
+export interface TransferData {
+  amount: string;
+  token: string;
+  tokenSymbol: string;
+  toAddress: string;
+  fromAddress: string;
+  network: string;
+  error?: string;
+}

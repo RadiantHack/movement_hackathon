@@ -89,6 +89,8 @@ orchestrator_agent = LlmAgent(
 
     - Balance queries: "get balance", "check USDT", "get popular tokens", "show trending tokens"
 
+    - Transfer queries: "transfer 1 MOVE to 0x...", "send 100 USDC to address", "I want to transfer tokens"
+
     - Liquidity queries: "get liquidity", "show pools", "find liquidity for MOVE/USDT"
 
     - Bridge queries: "bridge tokens", "bridge USDC from Ethereum to Movement"
@@ -321,6 +323,94 @@ orchestrator_agent = LlmAgent(
     - Movement Network addresses are 66 characters (0x + 64 hex chars)
 
     - All operations are EXCLUSIVELY on Movement Network - do NOT reference other chains
+
+    RECOMMENDED WORKFLOW FOR TRANSFER QUERIES:
+
+    **For Transfer Queries** (CRITICAL - Use Frontend Action):
+
+    When a user wants to transfer tokens (e.g., "transfer 1 MOVE to 0x...", "send 100 USDC to address", "I want to transfer tokens"):
+
+    1. **Extract Transfer Parameters**:
+
+       - **Amount**: Extract the amount from user query (e.g., "1", "100", "0.5")
+
+       - **Token**: Extract token symbol from user query (e.g., "MOVE", "USDC", "USDT", "DAI")
+
+         * If no token specified, default to "MOVE" (native token)
+
+       - **To Address**: Extract recipient address from user query
+
+         * Look for 66-character addresses starting with "0x" (Movement Network format)
+
+         * If user says "this address" or "that address", check if an address was mentioned earlier in conversation
+
+         * If address is provided in the query, use it
+
+         * If address is missing, ask user to provide the recipient address
+
+    2. **Extract From Address**:
+
+       - **CRITICAL**: The sender address is ALWAYS the user's connected wallet address from system instructions
+
+       - Extract the wallet address from system instructions (same process as balance queries)
+
+       - Use that exact address as the "fromAddress"
+
+    3. **Call Frontend Transfer Action**:
+
+       - Use the action: **initiate_transfer**
+
+       - Parameters:
+
+         * amount: The amount to transfer (as string, e.g., "1", "100", "0.5")
+
+         * token: The token symbol (e.g., "MOVE", "USDC", "USDT")
+
+         * toAddress: The recipient address (66 characters, must start with 0x)
+
+       - Example: initiate_transfer(amount="1", token="MOVE", toAddress="0x5eab3cef1bd13a0f5fdc0dfc22e99a56df5360fd9b48c5dcc4467e3129907498")
+
+    4. **Transfer Card Display**:
+
+       - The frontend will display a TransferCard with transfer details
+
+       - User can review and click "Transfer" button to execute
+
+       - DO NOT execute the transfer yourself - let the frontend handle it
+
+    **Transfer Query Examples**:
+
+    - "transfer 1 MOVE to 0x5eab3cef1bd13a0f5fdc0dfc22e99a56df5360fd9b48c5dcc4467e3129907498"
+
+      → initiate_transfer(amount="1", token="MOVE", toAddress="0x5eab3cef1bd13a0f5fdc0dfc22e99a56df5360fd9b48c5dcc4467e3129907498")
+
+    - "I want to transfer 100 USDC to this address: 0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb"
+
+      → initiate_transfer(amount="100", token="USDC", toAddress="0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb")
+
+    - "send 0.5 MOVE to 0x..."
+
+      → initiate_transfer(amount="0.5", token="MOVE", toAddress="0x...")
+
+    - "transfer tokens" (missing amount/address)
+
+      → Ask user: "Please provide the amount, token symbol, and recipient address for the transfer."
+
+    **CRITICAL RULES FOR TRANSFERS**:
+
+    - ALWAYS use the user's wallet address from system instructions as the "fromAddress"
+
+    - DO NOT ask for the sender address - it's already provided
+
+    - If recipient address is missing, ask user to provide it
+
+    - If amount is missing, ask user to provide it
+
+    - Default token to "MOVE" if not specified
+
+    - Network is ALWAYS "movement" (Movement Network)
+
+    - DO NOT execute the transfer - just call initiate_transfer action and let frontend handle execution
 
     RECOMMENDED WORKFLOW FOR BALANCE QUERIES:
 
