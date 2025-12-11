@@ -16,17 +16,23 @@ import {
   copilotRuntimeNextJSAppRouterEndpoint,
 } from "@copilotkit/runtime";
 import { HttpAgent } from "@ag-ui/client";
-import { A2AMiddlewareAgent } from "@ag-ui/a2a-middleware";
+import { A2AMiddlewareAgent } from "../helper.ts";
 import { NextRequest } from "next/server";
 
 export async function POST(request: NextRequest) {
   // Get base URL - prioritize NEXT_PUBLIC_BASE_URL for Railway/production
   // Remove trailing slash if present to avoid double slashes
-  const rawBaseUrl =
-    process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:8000";
-  const baseUrl = rawBaseUrl.replace(/\/$/, "");
+  // Get base URL - use environment variable if available, otherwise default to localhost
+  const baseUrl =
+    process.env.NEXT_PUBLIC_BACKEND_URL || 
+    process.env.BACKEND_URL || 
+    "http://localhost:8000";
 
   // Agent URLs - all Movement Network agents
+  // CRITICAL: A2A middleware extracts agent names from URL paths:
+  // - http://localhost:8000/balance -> agentName: "balance"
+  // - http://localhost:8000/bridge -> agentName: "bridge"
+  // Make sure backend is running and agents are accessible at these URLs
   const balanceAgentUrl = `${baseUrl}/balance`;
   const bridgeAgentUrl = `${baseUrl}/bridge`;
   const orderbookAgentUrl = `${baseUrl}/orderbook`;
@@ -41,60 +47,49 @@ export async function POST(request: NextRequest) {
   // This works for both local (localhost:8000) and Railway (https://backend.railway.app)
   const orchestratorUrl = `${baseUrl}/orchestrator/`;
 
-  // ============================================
-  // AUTHENTICATION: Orchestrator (if needed)
-  // ============================================
-
-  // Extract orchestrator auth (if different from A2A agents)
-  const orchestratorAuth =
-    process.env.ORCHESTRATOR_AUTH_TOKEN || request.headers.get("authorization");
-
-  const orchestratorHeaders: Record<string, string> = {};
-  if (orchestratorAuth) {
-    orchestratorHeaders["Authorization"] = orchestratorAuth.startsWith(
-      "Bearer "
-    )
-      ? orchestratorAuth
-      : `Bearer ${orchestratorAuth}`;
-  }
-
   // Connect to orchestrator via AG-UI Protocol with authentication
   const orchestrationAgent = new HttpAgent({
     url: orchestratorUrl,
-    headers: orchestratorHeaders, // Pass orchestrator auth headers
   });
 
   // A2A Middleware: Wraps orchestrator and injects send_message_to_a2a_agent tool
   // This allows orchestrator to communicate with all A2A agents transparently
+  // NOTE: Agent names are extracted from URL paths:
+  // - http://localhost:8000/balance -> agentName: "balance"
+  // - http://localhost:8000/bridge -> agentName: "bridge"
+  // - etc.
   const a2aMiddlewareAgent = new A2AMiddlewareAgent({
     description:
       "Web3 and cryptocurrency orchestrator with specialized agents for Movement Network operations",
     agentUrls: [
-      balanceAgentUrl,
-      bridgeAgentUrl,
-      orderbookAgentUrl,
-      predictionAgentUrl,
-      liquidityAgentUrl,
-      yieldOptimizerAgentUrl,
-      lendingAgentUrl,
-      bitcoinDefiAgentUrl,
-      stablecoinAgentUrl,
-      analyticsAgentUrl,
+      balanceAgentUrl, // Maps to agentName: "balance"
+      bridgeAgentUrl, // Maps to agentName: "bridge"
+      orderbookAgentUrl, // Maps to agentName: "orderbook"
+      predictionAgentUrl, // Maps to agentName: "prediction"
+      liquidityAgentUrl, // Maps to agentName: "liquidity"
+      yieldOptimizerAgentUrl, // Maps to agentName: "yield_optimizer"
+      lendingAgentUrl, // Maps to agentName: "lending"
+      bitcoinDefiAgentUrl, // Maps to agentName: "bitcoin_defi"
+      stablecoinAgentUrl, // Maps to agentName: "stablecoin"
+      analyticsAgentUrl, // Maps to agentName: "analytics"
     ],
     orchestrationAgent,
     instructions: `
-      You are a Web3 and cryptocurrency orchestrator agent. Your role is to coordinate
-      specialized agents to help users with blockchain and cryptocurrency operations.
+      You are a Web3 and cryptocurrency orchestrator agent for Movement Network. Your role is to coordinate
+      specialized agents to help users with blockchain and cryptocurrency operations on Movement Network.
+      
+      CRITICAL: This application works EXCLUSIVELY with Movement Network. All operations default to Movement Network.
+
 
       AVAILABLE SPECIALIZED AGENTS:
 
-      1. **Balance Agent** (LangGraph) - Checks cryptocurrency balances across multiple chains
-         - Supports Ethereum, BNB, Polygon, Movement Network, and other EVM-compatible chains
-         - Can check native token balances (ETH, BNB, MATIC, MOVE, etc.)
-         - Can check ERC-20 token balances (USDC, USDT, DAI, etc.)
-         - Requires wallet address (0x format, 42 or 66 characters) and optional network specification
+      1. **Balance Agent** (LangGraph) - Checks cryptocurrency balances on Movement Network
+         - Works EXCLUSIVELY with Movement Network
+         - Can check native token balances (MOVE)
+         - Can check token balances (USDC, USDT, DAI, etc.)
+         - Requires wallet address (0x format, 66 characters for Movement Network)
          - Movement Network addresses are 66 characters (0x + 64 hex chars)
-         - Ethereum/BNB/Polygon addresses are 42 characters (0x + 40 hex chars)
+         - Network is ALWAYS "movement" - do not use other networks
 
       2. **Bridge Agent** (LangGraph) - Cross-chain asset bridging via Movement Bridge
          - Bridges assets between Ethereum, BNB, Polygon and Movement Network
@@ -158,60 +153,78 @@ export async function POST(request: NextRequest) {
 
       RECOMMENDED WORKFLOW FOR CRYPTO OPERATIONS:
 
-      1. **Balance Agent** - Check cryptocurrency balances
-         - Extract wallet address from user query (format: 0x...)
-         - Extract network if specified (ethereum, bnb, polygon, etc.) - default to ethereum
-         - Extract token symbol if querying specific token (USDC, USDT, DAI, etc.)
-         - Call Balance Agent with appropriate parameters:
-           * For native balance: address and network
-           * For token balance: address, token symbol, and network
+      1. **Balance Agent** - Check cryptocurrency balances on Movement Network
+         - **CRITICAL**: The user's wallet address is ALWAYS provided in the system instructions
+         - **CRITICAL**: Network is ALWAYS "movement" (Movement Network) - this is the ONLY network
+         - When user says "my balance", "check balance", "get balance at my wallet", or similar:
+           * IMMEDIATELY look for the wallet address in the system instructions
+           * The wallet address will be explicitly stated like: "The user has a connected Movement Network wallet address: 0x..."
+           * Use that exact address - DO NOT ask for it
+           * Network is ALWAYS "movement" - DO NOT ask for network
+         - Extract token symbol if querying specific token (USDC, USDT, DAI, etc.) - optional
          - Wait for balance response
          - Present results in a clear, user-friendly format
 
       WORKFLOW EXAMPLES:
 
       Example 1: Simple balance check
-      - User: "Check my balance"
-      - Extract: Ask for wallet address if not provided
-      - Call Balance Agent: address, network="ethereum" (default)
-      - Present: Native ETH balance
+      - User: "Check my balance" or "get balance at my wallet"
+      - System instructions contain: "The user has a connected Movement Network wallet address: 0x..."
+      - Extract the wallet address from system instructions (e.g., "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb")
+      - Network is ALWAYS "movement" (Movement Network is the only network)
+      - Call Balance Agent using tool: send_message_to_a2a_agent
+        * agentName: "balance"
+        * task: "get balance of 0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb on movement"
+      - DO NOT ask for address or network - use them immediately
+      - Present: Native MOVE balance and token balances
 
-      Example 2: Multi-chain balance
-      - User: "Get my balance on Polygon"
-      - Extract: address (if provided), network="polygon"
-      - Call Balance Agent: address, network="polygon"
-      - Present: Native MATIC balance
+      Example 2: Token balance
+      - User: "Check my USDC balance" or "Get my USDC balance"
+      - System instructions contain wallet address: "0x..."
+      - Extract wallet address from system instructions
+      - Extract token: "USDC"
+      - Network is ALWAYS "movement"
+      - Call Balance Agent using tool: send_message_to_a2a_agent
+        * agentName: "balance"
+        * task: "get balance of [WALLET_ADDRESS] token USDC on movement"
+      - Present: USDC token balance on Movement Network
 
-      Example 3: Token balance
-      - User: "Check my USDC balance on Ethereum"
-      - Extract: address, token="USDC", network="ethereum"
-      - Call Balance Agent: address, token="USDC", network="ethereum"
-      - Present: USDC token balance
+      Example 3: All tokens balance
+      - User: "Show all my tokens" or "Get all my balances"
+      - System instructions contain wallet address: "0x..."
+      - Extract wallet address from system instructions
+      - Network is ALWAYS "movement"
+      - Call Balance Agent using tool: send_message_to_a2a_agent
+        * agentName: "balance"
+        * task: "get balance of [WALLET_ADDRESS] on movement"
+      - Present: All token balances on Movement Network
 
-      Example 4: Multiple queries
-      - User: "Check my ETH balance and USDT balance on BNB"
-      - First call: Balance Agent for ETH on BNB
-      - Wait for result
-      - Second call: Balance Agent for USDT on BNB
-      - Wait for result
-      - Present: Combined results
+      ⚠️ CRITICAL TOOL NAME REMINDER:
+      - The tool name is: send_message_to_a2a_agent
+      - "a2a" means "a-2-a" (the letter a, the number 2, the letter a)
+      - DO NOT use: send_message_to_a_a_agent (wrong - has underscores)
+      - ALWAYS use: send_message_to_a2a_agent (correct - has number 2)
+      - When calling agents, use: send_message_to_a2a_agent(agentName="balance", task="...")
 
       ADDRESS VALIDATION:
       - Wallet addresses must start with "0x" and contain valid hexadecimal characters
-      - Valid address formats:
-        * 42 characters (0x + 40 hex): Ethereum, BNB, Polygon networks
-        * 66 characters (0x + 64 hex): Movement Network, Aptos networks
-      - BOTH formats are valid - do NOT reject addresses based on length
-      - If address is 66 characters, automatically use "movement" network
-      - If user provides invalid address (doesn't start with 0x or contains invalid chars), politely ask for correct format
-      - If address is missing, ask user to provide it
+      - Movement Network addresses are 66 characters (0x + 64 hex chars)
+      - **AUTOMATIC WALLET ADDRESS**: The wallet address is ALWAYS provided in the system instructions
+      - When user says "my balance", "check balance", or "get balance at my wallet":
+        * FIRST: Check the system instructions for "The user has a connected Movement Network wallet address: [ADDRESS]"
+        * Use that address IMMEDIATELY - DO NOT ask the user for it
+        * Network is ALWAYS "movement" - DO NOT ask for network
+        * If you see the address in instructions, use it right away without asking
+      - Network is ALWAYS "movement" (Movement Network) - this is the ONLY supported network
+      - NEVER ask for wallet address if system instructions already contain it
+      - NEVER ask for network - it is always "movement"
+      - If user explicitly provides a different address in their query, you can use that address instead
 
       NETWORK SUPPORT:
-      - Ethereum (default): ethereum, eth (42-char addresses)
-      - BNB Chain: bnb, bsc, binance (42-char addresses)
-      - Polygon: polygon, matic (42-char addresses)
-      - Movement Network: movement, aptos (66-char addresses)
-      - Other EVM chains as supported by Balance Agent
+      - Movement Network ONLY: movement, aptos (66-char addresses)
+      - This application works EXCLUSIVELY with Movement Network
+      - All operations default to and use "movement" network
+      - DO NOT suggest or use other networks (Ethereum, BNB, Polygon, etc.)
 
       TOKEN SUPPORT:
       - Common tokens: USDC, USDT, DAI, WBTC, WETH
@@ -241,7 +254,7 @@ export async function POST(request: NextRequest) {
   // CopilotKit runtime connects frontend to agent system
   const runtime = new CopilotRuntime({
     agents: {
-      a2a_chat: a2aMiddlewareAgent, // Must match agent prop in <CopilotKit agent="a2a_chat">
+      a2a_chat: a2aMiddlewareAgent as any, // Must match agent prop in <CopilotKit agent="a2a_chat">
     },
   });
 
@@ -249,6 +262,7 @@ export async function POST(request: NextRequest) {
     runtime,
     serviceAdapter: new ExperimentalEmptyAdapter(),
     endpoint: "/api/copilotkit",
+    logLevel: "debug", // Enable debug logging to troubleshoot agent discovery
   });
 
   return handleRequest(request);

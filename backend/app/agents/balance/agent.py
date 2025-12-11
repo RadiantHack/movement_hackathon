@@ -720,7 +720,7 @@ def create_balance_agent_app(card_url: str) -> A2AStarletteApplication:
         A2AStarletteApplication instance configured for the balance agent
     """
     agent_card = AgentCard(
-        name="Balance Agent",
+        name="balance",
         description=(
             "LangGraph powered agent that helps to get "
             "cryptocurrency balances across multiple chains"

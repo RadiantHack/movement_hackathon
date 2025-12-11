@@ -62,12 +62,18 @@ Backend will be available at http://localhost:8000
 
 2. **Set up Privy authentication:**
    - Create a `.env.local` file in the `frontend` directory
-   - Get your Privy App ID from [Privy Dashboard](https://dashboard.privy.io)
-   - Add the following to `.env.local`:
+   - Copy the example file: `cp .env.example .env.local`
+   - Get your Privy credentials from [Privy Dashboard](https://dashboard.privy.io):
+     - **App ID**: From your app settings
+     - **Client ID**: Optional, for multi-environment setup
+     - **App Secret**: Required for server-side operations (transfers, wallet operations)
+       - Get this from Settings → API Keys in Privy Dashboard
+   - Update `.env.local` with your actual values:
      ```
      NEXT_PUBLIC_PRIVY_APP_ID=your-privy-app-id
+     NEXT_PUBLIC_PRIVY_CLIENT_ID=your-privy-client-id  # Optional
+     PRIVY_APP_SECRET=your-privy-app-secret  # Required for transfers
      ```
-   - Optionally add `NEXT_PUBLIC_PRIVY_CLIENT_ID` for multi-environment setup
 
 3. **Run the development server:**
    ```bash

@@ -21,6 +21,7 @@ const nextConfig: NextConfig = {
       net: false,
       tls: false,
     };
+
     return config;
   },
 };
