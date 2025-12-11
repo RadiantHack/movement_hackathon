@@ -390,7 +390,7 @@ export function RightSidebar({
                 className="flex items-start gap-3 rounded-lg bg-white p-3 shadow-sm transition-all hover:shadow-md dark:bg-zinc-800"
               >
                 <div
-                  className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full text-lg ${getColorClasses(tx.color)}`}
+                  className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-lg ${getColorClasses(tx.color)}`}
                 >
                   {tx.icon}
                 </div>
@@ -399,7 +399,7 @@ export function RightSidebar({
                     <p className="text-sm font-medium text-zinc-900 dark:text-zinc-100">
                       {tx.type}
                     </p>
-                    <span className="flex-shrink-0 rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700 dark:bg-green-900/30 dark:text-green-400">
+                    <span className="shrink-0 rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700 dark:bg-green-900/30 dark:text-green-400">
                       {tx.status}
                     </span>
                   </div>

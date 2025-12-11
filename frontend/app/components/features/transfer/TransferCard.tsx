@@ -116,10 +116,6 @@ export const TransferCard: React.FC<TransferCardProps> = ({
         );
       }
 
-      if (toAddress === senderAddress) {
-        throw new Error("Bruhhh!! You can't send to yourself.");
-      }
-
       // Convert amount to Octas (Aptos uses 8 decimals)
       const parsedAmount = parseFloat(amount);
       if (isNaN(parsedAmount) || parsedAmount <= 0) {
@@ -188,7 +184,15 @@ export const TransferCard: React.FC<TransferCardProps> = ({
     }
   };
 
-  const DetailRow = ({ label, value, mono }: { label: string; value: string; mono?: boolean }) => (
+  const DetailRow = ({
+    label,
+    value,
+    mono,
+  }: {
+    label: string;
+    value: string;
+    mono?: boolean;
+  }) => (
     <div className="flex justify-between items-center">
       <span className="text-sm font-medium text-gray-700">{label}:</span>
       <span
