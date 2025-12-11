@@ -22,16 +22,6 @@ const nextConfig: NextConfig = {
       tls: false,
     };
 
-    // Exclude Node.js-specific packages from client-side bundling
-    if (!isServer) {
-      config.resolve.fallback = {
-        ...config.resolve.fallback,
-        got: false,
-        "@aptos-labs/ts-sdk": false,
-        "@aptos-labs/aptos-client": false,
-      };
-    }
-
     return config;
   },
 };
