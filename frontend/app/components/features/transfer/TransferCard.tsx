@@ -17,7 +17,6 @@ import {
   Aptos,
   AptosConfig,
   Network,
-  AccountAddress,
   AccountAuthenticatorEd25519,
   Ed25519PublicKey,
   Ed25519Signature,
