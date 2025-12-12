@@ -24,8 +24,8 @@ export async function POST(request: NextRequest) {
   // Remove trailing slash if present to avoid double slashes
   // Get base URL - use environment variable if available, otherwise default to localhost
   const baseUrl =
-    process.env.NEXT_PUBLIC_BACKEND_URL || 
-    process.env.BACKEND_URL || 
+    process.env.NEXT_PUBLIC_BACKEND_URL ||
+    process.env.BACKEND_URL ||
     "http://localhost:8000";
 
   // Agent URLs - all Movement Network agents

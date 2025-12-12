@@ -8,7 +8,6 @@
 
 import { ActionRenderProps } from "@copilotkit/react-core";
 
-
 /**
  * Type for the send_message_to_a2a_agent action parameters
  * Used when the orchestrator sends tasks to A2A agents
@@ -33,12 +32,12 @@ export type MessageActionRenderProps = ActionRenderProps<
  * Used to style agent badges with consistent colors and icons
  */
 export interface AgentStyle {
-    bgColor: string;
-    textColor: string;
-    borderColor: string;
-    icon: string;
-    framework: string;
-  }
+  bgColor: string;
+  textColor: string;
+  borderColor: string;
+  icon: string;
+  framework: string;
+}
 
 /**
  * Transfer action parameters

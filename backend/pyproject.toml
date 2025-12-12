@@ -24,6 +24,7 @@ dependencies = [
     "langchain-core",
     # Blockchain dependencies
     "web3>=6.15.0",
+    "aptos-sdk>=1.0.0",
     "requests>=2.32.5",
     # Google ADK for liquidity agent
     "google-adk>=1.17.0",

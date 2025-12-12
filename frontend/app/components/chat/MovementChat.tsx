@@ -9,7 +9,11 @@
  */
 
 import { useEffect } from "react";
-import { useCopilotChat, useCopilotReadable, useCopilotAction } from "@copilotkit/react-core";
+import {
+  useCopilotChat,
+  useCopilotReadable,
+  useCopilotAction,
+} from "@copilotkit/react-core";
 import { CopilotChat } from "@copilotkit/react-ui";
 import { MessageToA2A } from "./a2a/MessageToA2A";
 import { MessageFromA2A } from "./a2a/MessageFromA2A";
@@ -65,24 +69,28 @@ const ChatInner = ({ walletAddress }: MovementChatProps) => {
   // Register transfer action - shows TransferCard when user wants to transfer tokens
   useCopilotAction({
     name: "initiate_transfer",
-    description: "Initiate a token transfer on Movement Network. Use this when user wants to transfer tokens to another address.",
+    description:
+      "Initiate a token transfer on Movement Network. Use this when user wants to transfer tokens to another address.",
     parameters: [
       {
         name: "amount",
         type: "string",
-        description: "The amount of tokens to transfer (e.g., '1', '100', '0.5')",
+        description:
+          "The amount of tokens to transfer (e.g., '1', '100', '0.5')",
         required: true,
       },
       {
         name: "token",
         type: "string",
-        description: "The token symbol to transfer (e.g., 'MOVE', 'USDC', 'USDT')",
+        description:
+          "The token symbol to transfer (e.g., 'MOVE', 'USDC', 'USDT')",
         required: true,
       },
       {
         name: "toAddress",
         type: "string",
-        description: "The recipient wallet address (66 characters for Movement Network, must start with 0x)",
+        description:
+          "The recipient wallet address (66 characters for Movement Network, must start with 0x)",
         required: true,
       },
     ],
@@ -129,7 +137,10 @@ const ChatInner = ({ walletAddress }: MovementChatProps) => {
       for (const message of visibleMessages) {
         const msg = message as any;
 
-        if (msg.type === "ResultMessage" && msg.actionName === "send_message_to_a2a_agent") {
+        if (
+          msg.type === "ResultMessage" &&
+          msg.actionName === "send_message_to_a2a_agent"
+        ) {
           try {
             const result = msg.result;
             console.log(
@@ -203,16 +214,23 @@ const ChatInner = ({ walletAddress }: MovementChatProps) => {
                   );
                 } else {
                   // Try one more time with a simpler approach - look for bridge type specifically
-                  const bridgeMatch = cleanResult.match(/type["\s]*:["\s]*"bridge"/i);
+                  const bridgeMatch = cleanResult.match(
+                    /type["\s]*:["\s]*"bridge"/i
+                  );
                   if (bridgeMatch) {
                     // Try to extract a larger JSON block around the bridge type
                     const startIdx = cleanResult.indexOf("{");
                     const endIdx = cleanResult.lastIndexOf("}");
                     if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
                       try {
-                        const candidate = cleanResult.substring(startIdx, endIdx + 1);
+                        const candidate = cleanResult.substring(
+                          startIdx,
+                          endIdx + 1
+                        );
                         parsed = JSON.parse(candidate);
-                        console.log("✅ Extracted bridge JSON with fallback method");
+                        console.log(
+                          "✅ Extracted bridge JSON with fallback method"
+                        );
                       } catch (e) {
                         console.warn(
                           "No valid JSON found in result string. Raw result:",
@@ -302,4 +320,3 @@ REMEMBER: The wallet address is ${walletAddress} - use it exactly as shown.`
 export default function MovementChat({ walletAddress }: MovementChatProps) {
   return <ChatInner walletAddress={walletAddress} />;
 }
-

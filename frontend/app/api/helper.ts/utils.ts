@@ -1,9 +1,8 @@
 import { AgentCard } from "@a2a-js/sdk";
 
 const getSpecificInstructions = (additionalInstructions?: string) => {
-
   if (additionalInstructions) {
-  return `
+    return `
 There are 2 sections to your instructions: The domain specific instructions and the general instructions.
 - The domain specific instructions are application/domain specific instructions and requirements for you to follow.
 - The general instructions contain instructions for you to follow that are not specific to the application/domain, like how to communicate with the agents.
@@ -14,14 +13,17 @@ ${additionalInstructions}
 
 **END Domain Specific Instructions:**
 **BEGIN General Instructions:**
-`.trim();;
-  };
+`.trim();
+  }
 
   return "**BEGIN General Instructions:**";
 };
 
-
-export const createSystemPrompt = (agentCards: AgentCard[], additionalInstructions?: string) => `
+export const createSystemPrompt = (
+  agentCards: AgentCard[],
+  additionalInstructions?: string
+) =>
+  `
 ${getSpecificInstructions(additionalInstructions)}
 
 **BEGIN General Instructions:**

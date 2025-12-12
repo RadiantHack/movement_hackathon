@@ -58,4 +58,3 @@ export function getTokenInfo(symbol: string): TokenInfo | null {
 export function isNativeToken(symbol: string): boolean {
   return symbol.toUpperCase() === "MOVE";
 }
-
