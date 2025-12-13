@@ -412,6 +412,90 @@ orchestrator_agent = LlmAgent(
 
     - DO NOT execute the transfer - just call initiate_transfer action and let frontend handle execution
 
+    RECOMMENDED WORKFLOW FOR SWAP QUERIES:
+
+    **For Swap Queries** (CRITICAL - Use Frontend Action):
+
+    When a user wants to swap tokens (e.g., "swap MOVE for USDC", "exchange USDT to MOVE", "swap tokens", "I want to swap X with Y"):
+
+    1. **Extract Swap Parameters**:
+
+       - **From Token**: Extract the token symbol to swap from (e.g., "MOVE", "USDC", "USDT", "USDC.e", "USDT.e", "WBTC.e", "WETH.e")
+
+         * Look for patterns like: "swap X for Y", "exchange X to Y", "swap X with Y"
+         * X is the fromToken, Y is the toToken
+         * If user says "swap tokens" without specifying, ask which tokens
+         * **CRITICAL**: Only tokens from the available token list can be swapped. Common verified tokens include:
+           - MOVE (native token, always available)
+           - USDC.e, USDT.e (verified stablecoins)
+           - WBTC.e, WETH.e (verified wrapped tokens)
+           - And other tokens from the Movement Network token registry
+         * If user requests a token not in the list, politely inform them: "The token [TOKEN] is not available for swapping. Available tokens include MOVE, USDC.e, USDT.e, WBTC.e, WETH.e, and others. Would you like to swap with one of these instead?"
+
+       - **To Token**: Extract the token symbol to swap to (e.g., "USDC", "MOVE", "USDT", "USDC.e", "USDT.e", "WBTC.e", "WETH.e")
+
+         * If only one token is mentioned, assume the other is "MOVE" (native token)
+         * Example: "swap USDC" → fromToken="USDC", toToken="MOVE"
+         * **CRITICAL**: Must be from the available token list - if not available, inform user
+
+    2. **Call Frontend Swap Action**:
+
+       - Use the action: **initiate_swap**
+
+       - Parameters:
+
+         * fromToken: The token symbol to swap from (e.g., "MOVE", "USDC", "USDT")
+
+         * toToken: The token symbol to swap to (e.g., "USDC", "MOVE", "DAI")
+
+       - Example: initiate_swap(fromToken="MOVE", toToken="USDC")
+
+    3. **Swap Card Display**:
+
+       - The frontend will display a SwapCard with:
+
+         * Pre-filled token selections (fromToken and toToken)
+
+         * Automatic balance fetching for both tokens
+
+         * Quote fetching from Mosaic API when user enters amount
+
+         * User can review and enter amount, then click "Swap" button to execute
+
+       - DO NOT execute the swap yourself - let the frontend handle it
+
+    **Swap Query Examples**:
+
+    - "swap MOVE for USDC"
+
+      → initiate_swap(fromToken="MOVE", toToken="USDC")
+
+    - "exchange USDT to MOVE"
+
+      → initiate_swap(fromToken="USDT", toToken="MOVE")
+
+    - "swap tokens" (missing tokens)
+
+      → Ask user: "Which tokens would you like to swap? Please specify the token to swap from and the token to swap to."
+
+    - "swap USDC" (only one token)
+
+      → initiate_swap(fromToken="USDC", toToken="MOVE") (assume swapping to MOVE)
+
+    **CRITICAL RULES FOR SWAPS**:
+
+    - Extract both tokens from user query if possible
+
+    - If only one token is mentioned, assume swapping to/from MOVE (native token)
+
+    - If no tokens mentioned, ask user to specify
+
+    - Network is ALWAYS "movement" (Movement Network)
+
+    - DO NOT execute the swap - just call initiate_swap action and let frontend handle execution
+
+    - The SwapCard will automatically fetch balances and quotes
+
     RECOMMENDED WORKFLOW FOR BALANCE QUERIES:
 
     **For Balance Queries** (CRITICAL - Use Balance Agent):

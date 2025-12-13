@@ -165,6 +165,33 @@ export async function POST(request: NextRequest) {
          - Wait for balance response
          - Present results in a clear, user-friendly format
 
+      2. **Swap Tokens** - Use Frontend Action (initiate_swap)
+         - When user wants to swap tokens (e.g., "swap MOVE for USDC", "exchange USDT to MOVE", "swap tokens"):
+           * Extract the "from" token symbol (e.g., "MOVE", "USDC", "USDT", "USDC.e", "USDT.e", "WBTC.e", "WETH.e")
+           * Extract the "to" token symbol (e.g., "USDC", "MOVE", "USDT", "USDC.e", "USDT.e", "WBTC.e", "WETH.e")
+           * **CRITICAL**: Only tokens from the available token list can be swapped. Common verified tokens include:
+             - MOVE (native token, always available)
+             - USDC.e, USDT.e (verified stablecoins)
+             - WBTC.e, WETH.e (verified wrapped tokens)
+             - And other tokens from the Movement Network token registry
+           * If user requests a token not in the list, politely inform them: "The token [TOKEN] is not available for swapping. Available tokens include MOVE, USDC.e, USDT.e, WBTC.e, WETH.e, and others. Would you like to swap with one of these instead?"
+           * If user requests a token not in the list, inform them it's not available and suggest alternatives
+           * If user says "swap X with Y" or "swap X for Y", X is fromToken and Y is toToken
+           * If user says "exchange X to Y", X is fromToken and Y is toToken
+           * If only one token is mentioned, assume the other is MOVE (native token)
+           * Use the action: **initiate_swap**
+           * Parameters:
+             - fromToken: The token to swap from (must be from available token list)
+             - toToken: The token to swap to (must be from available token list)
+           * Example: initiate_swap(fromToken="MOVE", toToken="USDC.e")
+         - The frontend will display a SwapCard with:
+           * Pre-filled token selections
+           * Automatic balance fetching
+           * Quote fetching from Mosaic API
+           * User can enter amount and execute swap
+         - DO NOT execute the swap yourself - let the frontend handle it
+         - If a token is not available, the frontend will show an error message
+
       WORKFLOW EXAMPLES:
 
       Example 1: Simple balance check
@@ -198,6 +225,14 @@ export async function POST(request: NextRequest) {
         * agentName: "balance"
         * task: "get balance of [WALLET_ADDRESS] on movement"
       - Present: All token balances on Movement Network
+
+      Example 4: Swap tokens
+      - User: "swap MOVE for USDC" or "exchange USDT to MOVE" or "swap tokens"
+      - Extract fromToken: "MOVE" (or first mentioned token)
+      - Extract toToken: "USDC" (or second mentioned token)
+      - Use action: initiate_swap(fromToken="MOVE", toToken="USDC")
+      - Frontend will display SwapCard with pre-filled tokens and balances
+      - User can enter amount and execute swap
 
       ⚠️ CRITICAL TOOL NAME REMINDER:
       - The tool name is: send_message_to_a2a_agent

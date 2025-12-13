@@ -28,6 +28,8 @@ import { useSignRawHash } from "@privy-io/react-auth/extended-chains";
 
 interface SwapCardProps {
   walletAddress: string | null;
+  initialFromToken?: string;
+  initialToToken?: string;
 }
 
 interface TokenBalance {
@@ -56,12 +58,31 @@ const aptos = new Aptos(
   })
 );
 
-export const SwapCard: React.FC<SwapCardProps> = ({ walletAddress }) => {
+export const SwapCard: React.FC<SwapCardProps> = ({
+  walletAddress,
+  initialFromToken,
+  initialToToken,
+}) => {
   const { ready, authenticated, user } = usePrivy();
   const { signRawHash } = useSignRawHash();
-  const [fromToken, setFromToken] = useState<string>("MOVE");
-  const [toToken, setToToken] = useState<string>("USDC");
+  const [fromToken, setFromToken] = useState<string>(
+    initialFromToken || "MOVE"
+  );
+  const [toToken, setToToken] = useState<string>(initialToToken || "USDC");
   const [fromAmount, setFromAmount] = useState<string>("");
+
+  // Update tokens when initial props change
+  useEffect(() => {
+    if (initialFromToken) {
+      setFromToken(initialFromToken);
+    }
+  }, [initialFromToken]);
+
+  useEffect(() => {
+    if (initialToToken) {
+      setToToken(initialToToken);
+    }
+  }, [initialToToken]);
   const [toAmount, setToAmount] = useState<string>("");
   const [swapping, setSwapping] = useState(false);
   const [swapError, setSwapError] = useState<string | null>(null);
@@ -136,10 +157,9 @@ export const SwapCard: React.FC<SwapCardProps> = ({ walletAddress }) => {
     const fetchFromBalance = async () => {
       setLoadingFromBalance(true);
       try {
-        // Use original symbol case for API query
-        const originalSymbol = getOriginalSymbol(fromToken);
+        // Fetch all balances without token filter for better matching
         const response = await fetch(
-          `/api/balance?address=${encodeURIComponent(walletAddress)}&token=${encodeURIComponent(originalSymbol)}`
+          `/api/balance?address=${encodeURIComponent(walletAddress)}`
         );
 
         if (!response.ok) {
@@ -148,11 +168,21 @@ export const SwapCard: React.FC<SwapCardProps> = ({ walletAddress }) => {
 
         const data = await response.json();
         if (data.success && data.balances && data.balances.length > 0) {
-          // Find the matching token balance - case-insensitive comparison
-          const normalizedFromToken = fromToken.toUpperCase();
+          // Find the matching token balance - case-insensitive comparison with partial matching
+          // Handles cases like "USDC" matching "USDC.e" and vice versa
+          const normalizedFromToken = fromToken
+            .toUpperCase()
+            .replace(/\./g, "");
           const tokenBalance = data.balances.find((b: TokenBalance) => {
-            const normalizedSymbol = b.metadata.symbol.toUpperCase();
-            return normalizedSymbol === normalizedFromToken;
+            const normalizedSymbol = b.metadata.symbol
+              .toUpperCase()
+              .replace(/\./g, "");
+            // Exact match or partial match (e.g., "USDC" matches "USDC.E")
+            return (
+              normalizedSymbol === normalizedFromToken ||
+              normalizedSymbol.startsWith(normalizedFromToken) ||
+              normalizedFromToken.startsWith(normalizedSymbol)
+            );
           });
 
           if (tokenBalance) {
@@ -191,10 +221,9 @@ export const SwapCard: React.FC<SwapCardProps> = ({ walletAddress }) => {
     const fetchToBalance = async () => {
       setLoadingToBalance(true);
       try {
-        // Use original symbol case for API query
-        const originalSymbol = getOriginalSymbol(toToken);
+        // Fetch all balances without token filter for better matching
         const response = await fetch(
-          `/api/balance?address=${encodeURIComponent(walletAddress)}&token=${encodeURIComponent(originalSymbol)}`
+          `/api/balance?address=${encodeURIComponent(walletAddress)}`
         );
 
         if (!response.ok) {
@@ -203,11 +232,19 @@ export const SwapCard: React.FC<SwapCardProps> = ({ walletAddress }) => {
 
         const data = await response.json();
         if (data.success && data.balances && data.balances.length > 0) {
-          // Find the matching token balance - case-insensitive comparison
-          const normalizedToToken = toToken.toUpperCase();
+          // Find the matching token balance - case-insensitive comparison with partial matching
+          // Handles cases like "USDC" matching "USDC.e" and vice versa
+          const normalizedToToken = toToken.toUpperCase().replace(/\./g, "");
           const tokenBalance = data.balances.find((b: TokenBalance) => {
-            const normalizedSymbol = b.metadata.symbol.toUpperCase();
-            return normalizedSymbol === normalizedToToken;
+            const normalizedSymbol = b.metadata.symbol
+              .toUpperCase()
+              .replace(/\./g, "");
+            // Exact match or partial match (e.g., "USDC" matches "USDC.E")
+            return (
+              normalizedSymbol === normalizedToToken ||
+              normalizedSymbol.startsWith(normalizedToToken) ||
+              normalizedToToken.startsWith(normalizedSymbol)
+            );
           });
 
           if (tokenBalance) {
@@ -311,7 +348,15 @@ export const SwapCard: React.FC<SwapCardProps> = ({ walletAddress }) => {
   ]);
 
   const handleFromAmountChange = (value: string) => {
-    setFromAmount(value);
+    // Only allow numbers and decimal point
+    const numericValue = value.replace(/[^0-9.]/g, "");
+    // Prevent multiple decimal points
+    const parts = numericValue.split(".");
+    const formattedValue =
+      parts.length > 2
+        ? parts[0] + "." + parts.slice(1).join("")
+        : numericValue;
+    setFromAmount(formattedValue);
     // Quote will be fetched automatically via useEffect
   };
 
@@ -436,43 +481,55 @@ export const SwapCard: React.FC<SwapCardProps> = ({ walletAddress }) => {
       setTxHash(executed.hash);
 
       // Refresh balances after successful swap
-      if (fromTokenFullInfo) {
-        const originalFromSymbol = getOriginalSymbol(fromToken);
-        const fromResponse = await fetch(
-          `/api/balance?address=${encodeURIComponent(walletAddress || senderAddress)}&token=${encodeURIComponent(originalFromSymbol)}`
-        );
-        if (fromResponse.ok) {
-          const fromData = await fromResponse.json();
-          if (
-            fromData.success &&
-            fromData.balances &&
-            fromData.balances.length > 0
-          ) {
-            const normalizedFromToken = fromToken.toUpperCase();
-            const tokenBalance = fromData.balances.find((b: TokenBalance) => {
-              return b.metadata.symbol.toUpperCase() === normalizedFromToken;
-            });
-            if (tokenBalance) {
-              setFromBalance(tokenBalance.formattedAmount);
+      const balanceResponse = await fetch(
+        `/api/balance?address=${encodeURIComponent(walletAddress || senderAddress)}`
+      );
+      if (balanceResponse.ok) {
+        const balanceData = await balanceResponse.json();
+        if (
+          balanceData.success &&
+          balanceData.balances &&
+          balanceData.balances.length > 0
+        ) {
+          // Update fromToken balance
+          if (fromTokenFullInfo) {
+            const normalizedFromToken = fromToken
+              .toUpperCase()
+              .replace(/\./g, "");
+            const fromTokenBalance = balanceData.balances.find(
+              (b: TokenBalance) => {
+                const normalizedSymbol = b.metadata.symbol
+                  .toUpperCase()
+                  .replace(/\./g, "");
+                return (
+                  normalizedSymbol === normalizedFromToken ||
+                  normalizedSymbol.startsWith(normalizedFromToken) ||
+                  normalizedFromToken.startsWith(normalizedSymbol)
+                );
+              }
+            );
+            if (fromTokenBalance) {
+              setFromBalance(fromTokenBalance.formattedAmount);
             }
           }
-        }
-      }
 
-      if (toTokenFullInfo) {
-        const originalToSymbol = getOriginalSymbol(toToken);
-        const toResponse = await fetch(
-          `/api/balance?address=${encodeURIComponent(walletAddress || senderAddress)}&token=${encodeURIComponent(originalToSymbol)}`
-        );
-        if (toResponse.ok) {
-          const toData = await toResponse.json();
-          if (toData.success && toData.balances && toData.balances.length > 0) {
-            const normalizedToToken = toToken.toUpperCase();
-            const tokenBalance = toData.balances.find((b: TokenBalance) => {
-              return b.metadata.symbol.toUpperCase() === normalizedToToken;
-            });
-            if (tokenBalance) {
-              setToBalance(tokenBalance.formattedAmount);
+          // Update toToken balance
+          if (toTokenFullInfo) {
+            const normalizedToToken = toToken.toUpperCase().replace(/\./g, "");
+            const toTokenBalance = balanceData.balances.find(
+              (b: TokenBalance) => {
+                const normalizedSymbol = b.metadata.symbol
+                  .toUpperCase()
+                  .replace(/\./g, "");
+                return (
+                  normalizedSymbol === normalizedToToken ||
+                  normalizedSymbol.startsWith(normalizedToToken) ||
+                  normalizedToToken.startsWith(normalizedSymbol)
+                );
+              }
+            );
+            if (toTokenBalance) {
+              setToBalance(toTokenBalance.formattedAmount);
             }
           }
         }
@@ -549,7 +606,8 @@ export const SwapCard: React.FC<SwapCardProps> = ({ walletAddress }) => {
           <div className="flex gap-2">
             <div className="flex-1">
               <input
-                type="number"
+                type="text"
+                inputMode="decimal"
                 value={fromAmount}
                 onChange={(e) => handleFromAmountChange(e.target.value)}
                 placeholder="0.0"
@@ -634,6 +692,7 @@ export const SwapCard: React.FC<SwapCardProps> = ({ walletAddress }) => {
             <div className="flex-1 relative">
               <input
                 type="text"
+                inputMode="decimal"
                 value={loadingQuote ? "..." : toAmount}
                 readOnly
                 placeholder={loadingQuote ? "Loading quote..." : "0.0"}
