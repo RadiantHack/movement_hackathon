@@ -53,3 +53,42 @@ body {
 .copilotKitButton {
   @apply rounded-lg! bg-zinc-900! text-white! hover:bg-zinc-800! focus:ring-0! dark:bg-zinc-100! dark:text-zinc-900! dark:hover:bg-zinc-200!;
 }
+
+.copilotKitMessages {
+  @apply rounded-xl! overflow-hidden!;
+  border-radius: 0.75rem !important;
+  overflow: hidden !important;
+}
+
+/* Target parent containers that might need rounding */
+.copilotKitChat .copilotKitMessages,
+div.copilotKitMessages {
+  border-radius: 0.75rem !important;
+  overflow: hidden !important;
+}
+
+/* Ensure CopilotChat can scroll its messages */
+.copilotKitChat {
+  display: flex !important;
+  flex-direction: column !important;
+  height: 100% !important;
+}
+
+/* Find and enable scrolling on the messages container */
+.copilotKitChat > div:first-child {
+  display: flex !important;
+  flex-direction: column !important;
+  flex: 1 !important;
+  min-height: 0 !important;
+  overflow: hidden !important;
+}
+
+/* Enable scrolling on the messages area */
+.copilotKitChat [class*="MessagesContainer"],
+.copilotKitChat [class*="messages-container"],
+.copilotKitChat > div > div:first-child {
+  flex: 1 !important;
+  overflow-y: auto !important;
+  overflow-x: hidden !important;
+  min-height: 0 !important;
+}
