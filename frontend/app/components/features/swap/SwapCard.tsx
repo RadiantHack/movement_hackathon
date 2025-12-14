@@ -167,16 +167,27 @@ export const SwapCard: React.FC<SwapCardProps> = ({
         }
 
         const data = await response.json();
+        console.log("Balance API response:", data); // Debug log
+        console.log("Looking for token:", fromToken); // Debug log
+
         if (data.success && data.balances && data.balances.length > 0) {
           // Find the matching token balance - case-insensitive comparison with partial matching
           // Handles cases like "USDC" matching "USDC.e" and vice versa
           const normalizedFromToken = fromToken
             .toUpperCase()
-            .replace(/\./g, "");
+            .replace(/\./g, "")
+            .trim();
+
+          console.log("Normalized fromToken:", normalizedFromToken); // Debug log
+
           const tokenBalance = data.balances.find((b: TokenBalance) => {
             const normalizedSymbol = b.metadata.symbol
               .toUpperCase()
-              .replace(/\./g, "");
+              .replace(/\./g, "")
+              .trim();
+
+            console.log("Comparing with:", normalizedSymbol, b.metadata.symbol); // Debug log
+
             // Exact match or partial match (e.g., "USDC" matches "USDC.E")
             return (
               normalizedSymbol === normalizedFromToken ||
@@ -186,9 +197,10 @@ export const SwapCard: React.FC<SwapCardProps> = ({
           });
 
           if (tokenBalance) {
+            console.log("Found balance:", tokenBalance.formattedAmount);
             setFromBalance(tokenBalance.formattedAmount);
           } else {
-            // Log for debugging
+            // Token not found in user's balances - set to "0" to display it
             console.log(
               "Balance not found for token:",
               fromToken,
@@ -198,6 +210,7 @@ export const SwapCard: React.FC<SwapCardProps> = ({
             setFromBalance("0.000000");
           }
         } else {
+          console.log("No balances in response");
           setFromBalance("0.000000");
         }
       } catch (error) {
@@ -231,14 +244,27 @@ export const SwapCard: React.FC<SwapCardProps> = ({
         }
 
         const data = await response.json();
+        console.log("Balance API response (toToken):", data);
+        console.log("Looking for token:", toToken);
+
         if (data.success && data.balances && data.balances.length > 0) {
           // Find the matching token balance - case-insensitive comparison with partial matching
           // Handles cases like "USDC" matching "USDC.e" and vice versa
-          const normalizedToToken = toToken.toUpperCase().replace(/\./g, "");
+          const normalizedToToken = toToken
+            .toUpperCase()
+            .replace(/\./g, "")
+            .trim();
+
+          console.log("Normalized toToken:", normalizedToToken);
+
           const tokenBalance = data.balances.find((b: TokenBalance) => {
             const normalizedSymbol = b.metadata.symbol
               .toUpperCase()
-              .replace(/\./g, "");
+              .replace(/\./g, "")
+              .trim();
+
+            console.log("Comparing with:", normalizedSymbol, b.metadata.symbol);
+
             // Exact match or partial match (e.g., "USDC" matches "USDC.E")
             return (
               normalizedSymbol === normalizedToToken ||
@@ -248,19 +274,21 @@ export const SwapCard: React.FC<SwapCardProps> = ({
           });
 
           if (tokenBalance) {
+            console.log("Found balance:", tokenBalance.formattedAmount);
             setToBalance(tokenBalance.formattedAmount);
           } else {
-            // Log for debugging
+            // Token not found in user's balances - set to "0" to display it
             console.log(
               "Balance not found for token:",
               toToken,
               "Available:",
               data.balances.map((b: TokenBalance) => b.metadata.symbol)
             );
-            setToBalance("0.000000");
+            setToBalance("0");
           }
         } else {
-          setToBalance("0.000000");
+          console.log("No balances in response");
+          setToBalance("0");
         }
       } catch (error) {
         console.error("Error fetching to balance:", error);
@@ -573,7 +601,7 @@ export const SwapCard: React.FC<SwapCardProps> = ({
     <div className="w-full max-w-md mx-auto">
       <div className="rounded-2xl p-6 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-lg">
         <div className="flex items-center gap-3 mb-6">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-purple-600 flex items-center justify-center">
+          <div className="w-10 h-10 rounded-xl bg-linear-to-br from-purple-500 to-purple-600 flex items-center justify-center">
             <svg
               className="w-6 h-6 text-white"
               fill="none"
@@ -628,25 +656,25 @@ export const SwapCard: React.FC<SwapCardProps> = ({
               ))}
             </select>
           </div>
-          {fromTokenInfo && (
-            <div className="mt-1 flex items-center justify-between">
-              <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                Balance:{" "}
-                {loadingFromBalance ? (
-                  <span className="inline-block animate-pulse">Loading...</span>
-                ) : fromBalance !== null ? (
-                  <span className="font-medium text-zinc-700 dark:text-zinc-300">
-                    {parseFloat(fromBalance).toLocaleString(undefined, {
-                      minimumFractionDigits: 2,
-                      maximumFractionDigits: 6,
-                    })}{" "}
-                    {fromTokenInfo.symbol}
-                  </span>
-                ) : (
-                  <span>-- {fromTokenInfo.symbol}</span>
-                )}
-              </p>
-              {fromBalance !== null && parseFloat(fromBalance) > 0 && (
+          <div className="mt-1 flex items-center justify-between">
+            <p className="text-xs text-zinc-500 dark:text-zinc-400">
+              Balance:{" "}
+              {loadingFromBalance ? (
+                <span className="inline-block animate-pulse">Loading...</span>
+              ) : fromBalance !== null ? (
+                <span className="font-medium text-zinc-700 dark:text-zinc-300">
+                  {parseFloat(fromBalance).toLocaleString(undefined, {
+                    minimumFractionDigits: 0,
+                    maximumFractionDigits: 6,
+                  })}{" "}
+                  {fromToken}
+                </span>
+              ) : (
+                <span>-- {fromToken}</span>
+              )}
+            </p>
+            {
+              fromBalance !== null && parseFloat(fromBalance) > 0 && (
                 <button
                   onClick={() => setFromAmount(fromBalance)}
                   className="text-xs font-medium text-purple-600 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300 transition-colors"
@@ -654,9 +682,18 @@ export const SwapCard: React.FC<SwapCardProps> = ({
                 >
                   Max
                 </button>
-              )}
-            </div>
-          )}
+              )
+              // : (
+              // <button
+              // onClick={() => setFromAmount("0.000000")}
+              // className="text-xs font-medium text-purple-600 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300 transition-colors"
+              // disabled={swapping}
+              // >
+              // NONE
+              // </button>
+              // )
+            }
+          </div>
         </div>
 
         {/* Swap Button */}
@@ -717,24 +754,24 @@ export const SwapCard: React.FC<SwapCardProps> = ({
               ))}
             </select>
           </div>
-          {toTokenInfo && (
-            <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+          <div className="mt-1">
+            <p className="text-xs text-zinc-500 dark:text-zinc-400">
               Balance:{" "}
               {loadingToBalance ? (
                 <span className="inline-block animate-pulse">Loading...</span>
               ) : toBalance !== null ? (
                 <span className="font-medium text-zinc-700 dark:text-zinc-300">
                   {parseFloat(toBalance).toLocaleString(undefined, {
-                    minimumFractionDigits: 2,
+                    minimumFractionDigits: 0,
                     maximumFractionDigits: 6,
                   })}{" "}
-                  {toTokenInfo.symbol}
+                  {toToken}
                 </span>
               ) : (
-                <span>-- {toTokenInfo.symbol}</span>
+                <span>-- {toToken}</span>
               )}
             </p>
-          )}
+          </div>
         </div>
 
         {/* Slippage Tolerance */}
