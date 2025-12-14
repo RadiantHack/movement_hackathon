@@ -167,8 +167,6 @@ export const SwapCard: React.FC<SwapCardProps> = ({
         }
 
         const data = await response.json();
-        console.log("Balance API response:", data); // Debug log
-        console.log("Looking for token:", fromToken); // Debug log
 
         if (data.success && data.balances && data.balances.length > 0) {
           // Find the matching token balance - case-insensitive comparison with partial matching
@@ -178,15 +176,11 @@ export const SwapCard: React.FC<SwapCardProps> = ({
             .replace(/\./g, "")
             .trim();
 
-          console.log("Normalized fromToken:", normalizedFromToken); // Debug log
-
           const tokenBalance = data.balances.find((b: TokenBalance) => {
             const normalizedSymbol = b.metadata.symbol
               .toUpperCase()
               .replace(/\./g, "")
               .trim();
-
-            console.log("Comparing with:", normalizedSymbol, b.metadata.symbol); // Debug log
 
             // Exact match or partial match (e.g., "USDC" matches "USDC.E")
             return (
@@ -197,7 +191,6 @@ export const SwapCard: React.FC<SwapCardProps> = ({
           });
 
           if (tokenBalance) {
-            console.log("Found balance:", tokenBalance.formattedAmount);
             setFromBalance(tokenBalance.formattedAmount);
           } else {
             // Token not found in user's balances - set to "0" to display it
@@ -210,7 +203,6 @@ export const SwapCard: React.FC<SwapCardProps> = ({
             setFromBalance("0.000000");
           }
         } else {
-          console.log("No balances in response");
           setFromBalance("0.000000");
         }
       } catch (error) {
@@ -244,9 +236,6 @@ export const SwapCard: React.FC<SwapCardProps> = ({
         }
 
         const data = await response.json();
-        console.log("Balance API response (toToken):", data);
-        console.log("Looking for token:", toToken);
-
         if (data.success && data.balances && data.balances.length > 0) {
           // Find the matching token balance - case-insensitive comparison with partial matching
           // Handles cases like "USDC" matching "USDC.e" and vice versa
@@ -255,15 +244,11 @@ export const SwapCard: React.FC<SwapCardProps> = ({
             .replace(/\./g, "")
             .trim();
 
-          console.log("Normalized toToken:", normalizedToToken);
-
           const tokenBalance = data.balances.find((b: TokenBalance) => {
             const normalizedSymbol = b.metadata.symbol
               .toUpperCase()
               .replace(/\./g, "")
               .trim();
-
-            console.log("Comparing with:", normalizedSymbol, b.metadata.symbol);
 
             // Exact match or partial match (e.g., "USDC" matches "USDC.E")
             return (
@@ -274,7 +259,6 @@ export const SwapCard: React.FC<SwapCardProps> = ({
           });
 
           if (tokenBalance) {
-            console.log("Found balance:", tokenBalance.formattedAmount);
             setToBalance(tokenBalance.formattedAmount);
           } else {
             // Token not found in user's balances - set to "0" to display it
@@ -287,7 +271,6 @@ export const SwapCard: React.FC<SwapCardProps> = ({
             setToBalance("0");
           }
         } else {
-          console.log("No balances in response");
           setToBalance("0");
         }
       } catch (error) {
@@ -664,7 +647,7 @@ export const SwapCard: React.FC<SwapCardProps> = ({
               ) : fromBalance !== null ? (
                 <span className="font-medium text-zinc-700 dark:text-zinc-300">
                   {parseFloat(fromBalance).toLocaleString(undefined, {
-                    minimumFractionDigits: 0,
+                    minimumFractionDigits: 2,
                     maximumFractionDigits: 6,
                   })}{" "}
                   {fromToken}
@@ -762,7 +745,7 @@ export const SwapCard: React.FC<SwapCardProps> = ({
               ) : toBalance !== null ? (
                 <span className="font-medium text-zinc-700 dark:text-zinc-300">
                   {parseFloat(toBalance).toLocaleString(undefined, {
-                    minimumFractionDigits: 0,
+                    minimumFractionDigits: 2,
                     maximumFractionDigits: 6,
                   })}{" "}
                   {toToken}
