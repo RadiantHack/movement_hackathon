@@ -6,14 +6,15 @@ import { useEffect, useState, useMemo } from "react";
 import { Sidebar } from "../components/sidebar";
 import { RightSidebar } from "../components/right-sidebar";
 import { ThemeToggle } from "../components/themeToggle";
-import { SwapCard } from "../components/features/swap";
-import BorrowForm from "../components/borrowForm";
+import { LendCard } from "../components/features/lend";
+import { BorrowCard } from "../components/features/borrow";
 
 export default function LendPage() {
   const { ready, authenticated, user } = usePrivy();
   const router = useRouter();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isRightSidebarOpen, setIsRightSidebarOpen] = useState(false);
+  const [activeMode, setActiveMode] = useState<"lend" | "borrow">("lend");
 
   // Get Movement wallet address (chainType is "aptos" for Movement wallets)
   const movementWallet = useMemo(() => {
@@ -94,7 +95,7 @@ export default function LendPage() {
             </svg>
           </button>
           <span className="font-semibold text-zinc-900 dark:text-zinc-100">
-            Lend/Borrow
+            {activeMode === "lend" ? "Lend" : "Borrow"}
           </span>
           <button
             onClick={() => setIsRightSidebarOpen(true)}
@@ -121,18 +122,50 @@ export default function LendPage() {
           <div className="flex flex-row items-center justify-between w-full">
             <div>
               <h1 className="text-xl font-semibold text-zinc-950 dark:text-zinc-50">
-                Lend/Borrow tokens
+                Lend & Borrow
               </h1>
               <p className="text-sm text-zinc-600 dark:text-zinc-400">
-                Lend or Borrow coins
+                Supply, withdraw, borrow, or repay tokens on Movement Network
               </p>
             </div>
             <ThemeToggle />
           </div>
         </div>
 
+        {/* Content */}
         <div className="flex flex-1 items-center justify-center overflow-y-auto p-4 md:p-8">
-          <BorrowForm />
+          <div className="w-full max-w-md">
+            {/* Mode Tabs */}
+            <div className="flex gap-2 mb-6 p-1 rounded-lg bg-zinc-100 dark:bg-zinc-800 max-w-md mx-auto">
+              <button
+                onClick={() => setActiveMode("lend")}
+                className={`flex-1 py-2.5 text-sm font-medium rounded-md transition-all ${
+                  activeMode === "lend"
+                    ? "bg-white dark:bg-zinc-700 text-green-600 dark:text-green-400 shadow-sm"
+                    : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200"
+                }`}
+              >
+                Lend
+              </button>
+              <button
+                onClick={() => setActiveMode("borrow")}
+                className={`flex-1 py-2.5 text-sm font-medium rounded-md transition-all ${
+                  activeMode === "borrow"
+                    ? "bg-white dark:bg-zinc-700 text-blue-600 dark:text-blue-400 shadow-sm"
+                    : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200"
+                }`}
+              >
+                Borrow
+              </button>
+            </div>
+
+            {/* Card Component */}
+            {activeMode === "lend" ? (
+              <LendCard walletAddress={walletAddress} />
+            ) : (
+              <BorrowCard walletAddress={walletAddress} />
+            )}
+          </div>
         </div>
       </div>
 
