@@ -176,11 +176,35 @@ const ChatInner = ({ walletAddress }: MovementChatProps) => {
         t.symbol.toUpperCase()
       );
 
+      // Normalize tokens: USDC -> USDC.e, USDT -> USDT.e
       const fromTokenUpper = fromToken?.toUpperCase() || "";
       const toTokenUpper = toToken?.toUpperCase() || "";
 
-      // Validate tokens are in the allowed list
-      if (fromTokenUpper && !availableSymbols.includes(fromTokenUpper)) {
+      // Map USDC to USDC.e and USDT to USDT.e for validation
+      const normalizedFromToken =
+        fromTokenUpper === "USDC"
+          ? "USDC.E"
+          : fromTokenUpper === "USDT"
+            ? "USDT.E"
+            : fromTokenUpper;
+      const normalizedToToken =
+        toTokenUpper === "USDC"
+          ? "USDC.E"
+          : toTokenUpper === "USDT"
+            ? "USDT.E"
+            : toTokenUpper;
+
+      // Validate tokens are in the allowed list (check both original and normalized)
+      const isValidFromToken =
+        normalizedFromToken &&
+        (availableSymbols.includes(normalizedFromToken) ||
+          availableSymbols.includes(fromTokenUpper));
+      const isValidToToken =
+        normalizedToToken &&
+        (availableSymbols.includes(normalizedToToken) ||
+          availableSymbols.includes(toTokenUpper));
+
+      if (fromTokenUpper && !isValidFromToken) {
         return (
           <div className="p-4 bg-red-50 border border-red-200 rounded-lg my-3">
             <p className="text-sm text-red-800 font-medium mb-2">
@@ -194,7 +218,7 @@ const ChatInner = ({ walletAddress }: MovementChatProps) => {
         );
       }
 
-      if (toTokenUpper && !availableSymbols.includes(toTokenUpper)) {
+      if (toTokenUpper && !isValidToToken) {
         return (
           <div className="p-4 bg-red-50 border border-red-200 rounded-lg my-3">
             <p className="text-sm text-red-800 font-medium mb-2">
@@ -208,11 +232,25 @@ const ChatInner = ({ walletAddress }: MovementChatProps) => {
         );
       }
 
+      // Use normalized tokens (USDC -> USDC.e, USDT -> USDT.e) for SwapCard
+      const finalFromToken =
+        fromTokenUpper === "USDC"
+          ? "USDC.e"
+          : fromTokenUpper === "USDT"
+            ? "USDT.e"
+            : fromTokenUpper || "MOVE";
+      const finalToToken =
+        toTokenUpper === "USDC"
+          ? "USDC.e"
+          : toTokenUpper === "USDT"
+            ? "USDT.e"
+            : toTokenUpper || "USDC";
+
       return (
         <SwapCard
           walletAddress={walletAddress}
-          initialFromToken={fromTokenUpper || "MOVE"}
-          initialToToken={toTokenUpper || "USDC"}
+          initialFromToken={finalFromToken}
+          initialToToken={finalToToken}
         />
       );
     },

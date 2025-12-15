@@ -58,6 +58,18 @@ const aptos = new Aptos(
   })
 );
 
+// Helper to normalize token symbol for display (USDC.e -> USDC, USDT.e -> USDT)
+const normalizeTokenForDisplay = (symbol: string): string => {
+  const upperSymbol = symbol?.toUpperCase() || "";
+  if (upperSymbol === "USDC" || upperSymbol === "USDC.E") {
+    return "USDC"; // Display as USDC
+  }
+  if (upperSymbol === "USDT" || upperSymbol === "USDT.E") {
+    return "USDT"; // Display as USDT
+  }
+  return upperSymbol;
+};
+
 export const SwapCard: React.FC<SwapCardProps> = ({
   walletAddress,
   initialFromToken,
@@ -65,22 +77,25 @@ export const SwapCard: React.FC<SwapCardProps> = ({
 }) => {
   const { ready, authenticated, user } = usePrivy();
   const { signRawHash } = useSignRawHash();
+
   const [fromToken, setFromToken] = useState<string>(
-    initialFromToken || "MOVE"
+    normalizeTokenForDisplay(initialFromToken || "MOVE")
   );
-  const [toToken, setToToken] = useState<string>(initialToToken || "USDC");
+  const [toToken, setToToken] = useState<string>(
+    normalizeTokenForDisplay(initialToToken || "USDC")
+  );
   const [fromAmount, setFromAmount] = useState<string>("");
 
-  // Update tokens when initial props change
+  // Update tokens when initial props change (normalize for display)
   useEffect(() => {
     if (initialFromToken) {
-      setFromToken(initialFromToken);
+      setFromToken(normalizeTokenForDisplay(initialFromToken));
     }
   }, [initialFromToken]);
 
   useEffect(() => {
     if (initialToToken) {
-      setToToken(initialToToken);
+      setToToken(normalizeTokenForDisplay(initialToToken));
     }
   }, [initialToToken]);
   const [toAmount, setToAmount] = useState<string>("");
@@ -96,25 +111,47 @@ export const SwapCard: React.FC<SwapCardProps> = ({
   const [quote, setQuote] = useState<MosaicQuoteResponse | null>(null);
 
   // Get all available tokens from token-constants
-  // Store both original symbol and uppercase for display
+  // Map USDC.e -> USDC and USDT.e -> USDT for display, but use .e versions internally
   const availableTokens = useMemo(() => {
     const allTokens = getAllTokens();
-    // Extract unique symbols - keep original case for API calls, but display uppercase
+    // Extract unique symbols - map USDC.e -> USDC and USDT.e -> USDT for display
     const symbolMap = new Map<string, string>();
     allTokens.forEach((token) => {
       const upperSymbol = token.symbol.toUpperCase();
-      // Store original symbol for the uppercase key
-      if (!symbolMap.has(upperSymbol)) {
-        symbolMap.set(upperSymbol, token.symbol);
+      // Map USDC.e -> USDC and USDT.e -> USDT for display
+      let displaySymbol = upperSymbol;
+      if (upperSymbol === "USDC.E") {
+        displaySymbol = "USDC";
+      } else if (upperSymbol === "USDT.E") {
+        displaySymbol = "USDT";
+      }
+      // Store original symbol for the display key
+      if (!symbolMap.has(displaySymbol)) {
+        symbolMap.set(displaySymbol, token.symbol);
       }
     });
     return Array.from(symbolMap.keys()).sort();
   }, []);
 
+  // Helper to normalize token symbol for lookup
+  // Maps USDC -> USDC.e and USDT -> USDT.e for internal use
+  const normalizeTokenForLookup = (symbol: string): string => {
+    const upperSymbol = symbol.toUpperCase();
+    if (upperSymbol === "USDC") {
+      return "USDC.e";
+    }
+    if (upperSymbol === "USDT") {
+      return "USDT.e";
+    }
+    return symbol;
+  };
+
   // Helper to get original symbol case from token-constants
   const getOriginalSymbol = (upperSymbol: string): string => {
-    const token = getTokenBySymbol(upperSymbol);
-    return token?.symbol || upperSymbol;
+    // Normalize first (USDC -> USDC.e)
+    const normalized = normalizeTokenForLookup(upperSymbol);
+    const token = getTokenBySymbol(normalized);
+    return token?.symbol || normalized;
   };
 
   const fromTokenInfo = useMemo(() => {
@@ -126,12 +163,15 @@ export const SwapCard: React.FC<SwapCardProps> = ({
   }, [toToken]);
 
   // Get full token info from token-constants for Mosaic API
+  // Normalize USDC -> USDC.e and USDT -> USDT.e before lookup
   const fromTokenFullInfo = useMemo(() => {
-    return getTokenBySymbol(fromToken);
+    const normalized = normalizeTokenForLookup(fromToken);
+    return getTokenBySymbol(normalized);
   }, [fromToken]);
 
   const toTokenFullInfo = useMemo(() => {
-    return getTokenBySymbol(toToken);
+    const normalized = normalizeTokenForLookup(toToken);
+    return getTokenBySymbol(normalized);
   }, [toToken]);
 
   // Get Movement wallet from user's linked accounts

@@ -861,15 +861,40 @@ export function getTokenById(id: string): TokenInfo | null {
 }
 
 /**
+ * Normalize token symbol - maps USDC -> USDC.e and USDT -> USDT.e
+ */
+export function normalizeTokenSymbol(symbol: string): string {
+  const upperSymbol = symbol.toUpperCase();
+  // Map USDC to USDC.e and USDT to USDT.e
+  if (upperSymbol === "USDC") {
+    return "USDC.e";
+  }
+  if (upperSymbol === "USDT") {
+    return "USDT.e";
+  }
+  return upperSymbol;
+}
+
+/**
  * Get token by symbol
+ * Automatically maps USDC -> USDC.e and USDT -> USDT.e
  */
 export function getTokenBySymbol(symbol: string): TokenInfo | null {
   const upperSymbol = symbol.toUpperCase();
-  return (
-    Object.values(ALL_TOKENS).find(
-      (token) => token.symbol.toUpperCase() === upperSymbol
-    ) || null
+  // First try direct match
+  let token = Object.values(ALL_TOKENS).find(
+    (token) => token.symbol.toUpperCase() === upperSymbol
   );
+
+  // If not found, try normalized symbol (USDC -> USDC.e, USDT -> USDT.e)
+  if (!token) {
+    const normalizedSymbol = normalizeTokenSymbol(symbol);
+    token = Object.values(ALL_TOKENS).find(
+      (token) => token.symbol.toUpperCase() === normalizedSymbol
+    );
+  }
+
+  return token || null;
 }
 
 /**
