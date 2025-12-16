@@ -1,6 +1,6 @@
 "use client";
 
-import { usePrivy, WalletWithMetadata } from "@privy-io/react-auth";
+import { usePrivy } from "@privy-io/react-auth";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useMemo } from "react";
 import { Sidebar } from "../components/sidebar";
@@ -60,29 +60,17 @@ interface MarketPosition {
   supplyApy: number;
   boostedApy?: number;
   tvlUsd: number;
-}
-
-interface AssetPosition {
-  token: TokenInfo;
-  inWallet: number;
-  supplied: number;
-  utilization: number;
-  totalSupplied: number;
-  totalSuppliedMax: number;
-  totalSuppliedUSD: number;
-  supplyApy: number;
-  boostedAPY?: number;
-  borrowAPY?: number;
+  maxCapacity: number;
+  borrowApy: number; // %
 }
 
 export default function PositionsPage() {
-  const { ready, authenticated, user } = usePrivy();
+  const { ready, authenticated } = usePrivy();
   const router = useRouter();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isRightSidebarOpen, setIsRightSidebarOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<"supply" | "borrow">("supply");
   const [searchQuery, setSearchQuery] = useState("");
-  const [walletAddress, setWalletAddress] = useState<string | null>(null);
   const [brokers, setBrokers] = useState<BrokerEntry[]>([]);
   const [loadingBrokers, setLoadingBrokers] = useState<boolean>(false);
   const [brokerError, setBrokerError] = useState<string | null>(null);
@@ -105,34 +93,6 @@ export default function PositionsPage() {
     const withoutE = symbol.replace(".E", "");
     return getTokenBySymbol(withoutE) || null;
   };
-
-  // Get Movement wallet address
-  const movementWallet = useMemo(() => {
-    if (!ready || !authenticated || !user?.linkedAccounts) {
-      return null;
-    }
-
-    const aptosWallet = user.linkedAccounts.find(
-      (account): account is WalletWithMetadata => {
-        if (account.type !== "wallet") return false;
-        const walletAccount = account as WalletWithMetadata & {
-          chainType?: string;
-        };
-        return walletAccount.chainType === "aptos";
-      }
-    ) as (WalletWithMetadata & { chainType?: string }) | undefined;
-
-    return aptosWallet || null;
-  }, [user, ready, authenticated]);
-
-  useEffect(() => {
-    if (movementWallet?.address) {
-      const addr = movementWallet.address;
-      if (addr && addr.startsWith("0x") && addr.length >= 42) {
-        setWalletAddress(addr);
-      }
-    }
-  }, [movementWallet]);
 
   // Fetch brokers data
   useEffect(() => {
@@ -169,40 +129,62 @@ export default function PositionsPage() {
 
   const marketPositions: MarketPosition[] = useMemo(() => {
     const verified = getVerifiedTokens();
-    return brokers.map((entry) => {
-      const symbol = getSymbolFromName(entry.underlyingAsset.name);
-      const token =
-        resolveToken(symbol) ||
-        verified.find((t) => t.symbol === symbol) ||
-        null;
-      const availableLiquidity = formatAmount(
-        entry.availableLiquidityUnderlying,
-        entry.underlyingAsset.decimals
-      );
-      const totalBorrowed = formatAmount(
-        entry.totalBorrowedUnderlying,
-        entry.underlyingAsset.decimals
-      );
-      const totalSupplied = availableLiquidity + totalBorrowed;
-      const tvlUsd = totalSupplied * entry.underlyingAsset.price;
 
-      return {
-        token,
-        symbol,
-        name: entry.underlyingAsset.name,
-        price: entry.underlyingAsset.price,
-        utilization: entry.utilization * 100,
-        availableLiquidity,
-        totalBorrowed,
-        totalSupplied,
-        supplyApy: entry.interestRate * 100,
-        boostedApy:
+    return brokers
+      .map((entry) => {
+        const symbol = getSymbolFromName(entry.underlyingAsset.name);
+        const token =
+          resolveToken(symbol) ||
+          verified.find((t) => t.symbol === symbol) ||
+          null;
+
+        const price = entry.underlyingAsset.price;
+
+        const decimals = entry.underlyingAsset.decimals;
+        const scale = 10 ** decimals;
+
+        const totalSupplied =
+          Number(entry.scaledAvailableLiquidityUnderlying) +
+          Number(entry.scaledTotalBorrowedUnderlying);
+
+        const available = Number(entry.scaledAvailableLiquidityUnderlying) || 0;
+        const borrowed = Number(entry.scaledTotalBorrowedUnderlying) || 0;
+
+        const maxCapacity = Number(entry.maxDeposit) / scale;
+        const utilizationPct = entry.utilization * 100;
+
+        // APYs
+        const supplyApy = entry.interestRate * 100;
+
+        const borrowApy =
+          entry.interestFeeRate < 1
+            ? (entry.interestRate / (1 - entry.interestFeeRate)) * 100
+            : entry.interestRate * 100; // fallback
+
+        const boostedApy =
           entry.depositNoteExchangeRate > 1
             ? (entry.depositNoteExchangeRate - 1) * 100
-            : undefined,
-        tvlUsd,
-      };
-    });
+            : undefined;
+
+        const tvlUsd = totalSupplied * entry.underlyingAsset.price;
+
+        return {
+          token,
+          symbol,
+          name: entry.underlyingAsset.name,
+          price,
+          utilization: utilizationPct,
+          availableLiquidity: available,
+          totalBorrowed: borrowed,
+          totalSupplied,
+          maxCapacity,
+          supplyApy,
+          borrowApy,
+          boostedApy,
+          tvlUsd,
+        };
+      })
+      .sort((a, b) => b.tvlUsd - a.tvlUsd); // optional: sort by TVL
   }, [brokers]);
 
   const filteredAssets = useMemo(() => {
@@ -215,9 +197,29 @@ export default function PositionsPage() {
     );
   }, [marketPositions, searchQuery]);
 
+  const formatCompact = (v: number): string => {
+    if (!Number.isFinite(v)) return "0";
+    if (v >= 1_000_000_000) return (v / 1_000_000_000).toFixed(1) + "B";
+    if (v >= 1_000_000) return (v / 1_000_000).toFixed(1) + "M";
+    if (v >= 1_000) return (v / 1_000).toFixed(1) + "k";
+    return v.toFixed(2);
+  };
+
   const totalSuppliedValue = useMemo(() => {
     return marketPositions.reduce((sum, asset) => sum + asset.tvlUsd, 0);
   }, [marketPositions]);
+
+  const totalCollateralUsd = totalSuppliedValue;
+  const totalDebtUsd = marketPositions.reduce(
+    (sum, asset) => sum + asset.totalBorrowed * asset.price,
+    0
+  );
+
+  const marketCollateral = totalCollateralUsd;
+  const marketDebt = totalDebtUsd;
+
+  const collateralToDebt =
+    totalDebtUsd > 0 ? marketCollateral / marketDebt : null;
 
   const supplyComposition = useMemo(() => {
     const total = marketPositions.reduce(
@@ -335,7 +337,7 @@ export default function PositionsPage() {
                   Equity
                 </div>
                 <div className="text-lg font-semibold text-green-600 dark:text-green-400">
-                  ${equity.toFixed(2)}
+                  ${marketCollateral}
                 </div>
                 <div className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">
                   100%
@@ -409,7 +411,7 @@ export default function PositionsPage() {
             <div className="space-y-3 mb-6">
               <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4 flex items-start gap-3">
                 <svg
-                  className="w-5 h-5 text-yellow-600 dark:text-yellow-400 mt-0.5 flex-shrink-0"
+                  className="w-5 h-5 text-yellow-600 dark:text-yellow-400 mt-0.5 shrink-0"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -431,7 +433,7 @@ export default function PositionsPage() {
               </div>
               <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 flex items-start gap-3">
                 <svg
-                  className="w-5 h-5 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0"
+                  className="w-5 h-5 text-blue-600 dark:text-blue-400 mt-0.5 shrink-0"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -559,20 +561,14 @@ export default function PositionsPage() {
                         </td>
                         <td className="px-4 py-3">
                           <div className="text-sm text-zinc-900 dark:text-zinc-50">
-                            {asset.totalSupplied > 0 ? (
-                              <>
-                                {asset.totalSupplied.toFixed(4)}
-                                <div className="text-xs text-zinc-500 dark:text-zinc-400">
-                                  $
-                                  {asset.tvlUsd.toLocaleString(undefined, {
-                                    minimumFractionDigits: 2,
-                                    maximumFractionDigits: 2,
-                                  })}
-                                </div>
-                              </>
-                            ) : (
-                              "0"
-                            )}
+                            0
+                            <div className="text-xs text-zinc-500 dark:text-zinc-400">
+                              $
+                              {asset.tvlUsd.toLocaleString(undefined, {
+                                minimumFractionDigits: 2,
+                                maximumFractionDigits: 2,
+                              })}
+                            </div>
                           </div>
                         </td>
                         <td className="px-4 py-3">
@@ -582,13 +578,14 @@ export default function PositionsPage() {
                         </td>
                         <td className="px-4 py-3">
                           <div className="text-sm text-zinc-900 dark:text-zinc-50">
-                            {asset.availableLiquidity.toFixed(4)} /{" "}
-                            {asset.totalSupplied.toFixed(4)}
+                            {formatCompact(asset.totalSupplied)} /{" "}
+                            {formatCompact(asset.maxCapacity)}
                             <div className="text-xs text-zinc-500 dark:text-zinc-400">
-                              Liquidity / Total
+                              Pool supplied / Max
                             </div>
                           </div>
                         </td>
+
                         <td className="px-4 py-3">
                           <div className="text-sm text-zinc-900 dark:text-zinc-50">
                             {asset.supplyApy.toFixed(2)}%
