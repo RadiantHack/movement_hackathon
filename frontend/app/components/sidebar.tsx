@@ -21,6 +21,7 @@ export function Sidebar({
   const navItems = [
     { href: "/overview", label: "Overview" },
     { href: "/chat", label: "New Chat" },
+    { href: "/transfer", label: "Transfer" },
     { href: "/swap", label: "Swap" },
     { href: "/positions", label: "Move Position" },
     { href: "/echelon", label: "Echelon" },

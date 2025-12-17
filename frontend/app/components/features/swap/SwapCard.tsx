@@ -621,12 +621,17 @@ export const SwapCard: React.FC<SwapCardProps> = ({
   ]);
 
   return (
-    <div className="w-full max-w-md mx-auto">
-      <div className="rounded-2xl p-6 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-lg">
-        <div className="flex items-center gap-3 mb-6">
-          <div className="w-10 h-10 rounded-xl bg-linear-to-br from-purple-500 to-purple-600 flex items-center justify-center">
+    <div className="w-full max-w-[440px] mx-auto">
+      <div className="relative rounded-2xl p-5 sm:p-6 bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-700/50 shadow-xl shadow-zinc-200/50 dark:shadow-zinc-950/50 overflow-hidden">
+        {/* Background decoration */}
+        <div className="absolute -top-24 -right-24 w-48 h-48 bg-gradient-to-br from-purple-500/10 to-violet-500/10 rounded-full blur-3xl" />
+        <div className="absolute -bottom-24 -left-24 w-48 h-48 bg-gradient-to-tr from-purple-500/10 to-violet-500/10 rounded-full blur-3xl" />
+
+        {/* Header */}
+        <div className="relative flex items-center gap-3 mb-5">
+          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-purple-500 to-violet-600 shadow-lg shadow-purple-500/30">
             <svg
-              className="w-6 h-6 text-white"
+              className="w-5 h-5 text-white"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -640,91 +645,79 @@ export const SwapCard: React.FC<SwapCardProps> = ({
             </svg>
           </div>
           <div>
-            <h2 className="text-xl font-semibold text-zinc-950 dark:text-zinc-50">
+            <h2 className="text-lg font-bold text-zinc-900 dark:text-zinc-50">
               Swap Tokens
             </h2>
-            <p className="text-sm text-zinc-600 dark:text-zinc-400">
-              Exchange tokens on Movement Network
+            <p className="text-xs text-zinc-500 dark:text-zinc-400">
+              Exchange tokens on Movement
             </p>
           </div>
         </div>
 
         {/* From Token */}
-        <div className="mb-4">
-          <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2">
-            From
+        <div className="relative mb-1">
+          <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400 mb-2">
+            You Pay
           </label>
-          <div className="flex gap-2">
-            <div className="flex-1">
+          <div className="rounded-xl border border-zinc-200 dark:border-zinc-700/50 bg-zinc-50/50 dark:bg-zinc-800/50 p-3">
+            <div className="flex items-center gap-2">
               <input
                 type="text"
                 inputMode="decimal"
                 value={fromAmount}
                 onChange={(e) => handleFromAmountChange(e.target.value)}
                 placeholder="0.0"
-                className="w-full px-4 py-3 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-950 dark:text-zinc-50 placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                className="flex-1 min-w-0 bg-transparent text-xl font-semibold text-zinc-900 dark:text-zinc-50 placeholder-zinc-400 focus:outline-none"
                 disabled={swapping}
               />
+              <select
+                value={fromToken}
+                onChange={(e) => setFromToken(e.target.value)}
+                className="flex-shrink-0 w-[100px] px-2 py-2 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-50 font-semibold focus:outline-none focus:ring-2 focus:ring-purple-500/50 cursor-pointer text-xs"
+                disabled={swapping}
+              >
+                {availableTokens.map((token) => (
+                  <option key={token} value={token}>
+                    {token}
+                  </option>
+                ))}
+              </select>
             </div>
-            <select
-              value={fromToken}
-              onChange={(e) => setFromToken(e.target.value)}
-              className="px-4 py-3 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-950 dark:text-zinc-50 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent cursor-pointer"
-              disabled={swapping}
-            >
-              {availableTokens.map((token) => (
-                <option key={token} value={token}>
-                  {token}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="mt-1 flex items-center justify-between">
-            <p className="text-xs text-zinc-500 dark:text-zinc-400">
-              Balance:{" "}
-              {loadingFromBalance ? (
-                <span className="inline-block animate-pulse">Loading...</span>
-              ) : fromBalance !== null ? (
-                <span className="font-medium text-zinc-700 dark:text-zinc-300">
-                  {parseFloat(fromBalance).toLocaleString(undefined, {
-                    minimumFractionDigits: 2,
-                    maximumFractionDigits: 6,
-                  })}{" "}
-                  {fromToken}
-                </span>
-              ) : (
-                <span>-- {fromToken}</span>
-              )}
-            </p>
-            {
-              fromBalance !== null && parseFloat(fromBalance) > 0 && (
+            <div className="mt-2 flex items-center justify-between">
+              <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                Balance:{" "}
+                {loadingFromBalance ? (
+                  <span className="inline-block animate-pulse">...</span>
+                ) : fromBalance !== null ? (
+                  <span className="font-medium text-zinc-700 dark:text-zinc-300">
+                    {parseFloat(fromBalance).toLocaleString(undefined, {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 6,
+                    })}
+                  </span>
+                ) : (
+                  <span>--</span>
+                )}
+              </p>
+              {fromBalance !== null && parseFloat(fromBalance) > 0 && (
                 <button
                   onClick={() => setFromAmount(fromBalance)}
-                  className="text-xs font-medium text-purple-600 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300 transition-colors"
+                  className="px-2 py-0.5 rounded-md bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 text-xs font-bold uppercase tracking-wider hover:bg-purple-200 dark:hover:bg-purple-900/50 transition-colors"
                   disabled={swapping}
                 >
                   Max
                 </button>
-              )
-              // : (
-              // <button
-              // onClick={() => setFromAmount("0.000000")}
-              // className="text-xs font-medium text-purple-600 dark:text-purple-400 hover:text-purple-700 dark:hover:text-purple-300 transition-colors"
-              // disabled={swapping}
-              // >
-              // NONE
-              // </button>
-              // )
-            }
+              )}
+            </div>
           </div>
         </div>
 
-        {/* Swap Button */}
-        <div className="flex justify-center my-2">
+        {/* Swap Direction Button */}
+        <div className="relative flex justify-center py-1 z-10">
           <button
             onClick={handleSwapTokens}
             disabled={swapping}
-            className="p-2 rounded-full bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-zinc-600 dark:text-zinc-400 transition-colors disabled:opacity-50"
+            className="p-2 rounded-lg bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 shadow-md hover:shadow-lg text-zinc-600 dark:text-zinc-400 hover:text-purple-600 dark:hover:text-purple-400 transition-all duration-200 hover:scale-110 disabled:opacity-50"
             aria-label="Swap tokens"
           >
             <svg
@@ -744,66 +737,70 @@ export const SwapCard: React.FC<SwapCardProps> = ({
         </div>
 
         {/* To Token */}
-        <div className="mb-4">
-          <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-2">
-            To
+        <div className="relative mb-4">
+          <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400 mb-2">
+            You Receive
           </label>
-          <div className="flex gap-2">
-            <div className="flex-1 relative">
-              <input
-                type="text"
-                inputMode="decimal"
-                value={loadingQuote ? "..." : toAmount}
-                readOnly
-                placeholder={loadingQuote ? "Loading quote..." : "0.0"}
-                className="w-full px-4 py-3 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800 text-zinc-950 dark:text-zinc-50 placeholder-zinc-400 focus:outline-none"
-              />
-              {loadingQuote && (
-                <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                  <div className="w-4 h-4 border-2 border-purple-500 border-t-transparent rounded-full animate-spin"></div>
-                </div>
-              )}
+          <div className="rounded-xl border border-zinc-200 dark:border-zinc-700/50 bg-zinc-50/50 dark:bg-zinc-800/50 p-3">
+            <div className="flex items-center gap-2">
+              <div className="flex-1 min-w-0 relative">
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={loadingQuote ? "" : toAmount}
+                  readOnly
+                  placeholder={loadingQuote ? "Getting quote..." : "0.0"}
+                  className="w-full bg-transparent text-xl font-semibold text-zinc-900 dark:text-zinc-50 placeholder-zinc-400 focus:outline-none"
+                />
+                {loadingQuote && (
+                  <div className="absolute right-0 top-1/2 -translate-y-1/2">
+                    <div className="w-5 h-5 border-2 border-purple-500 border-t-transparent rounded-full animate-spin"></div>
+                  </div>
+                )}
+              </div>
+              <select
+                value={toToken}
+                onChange={(e) => setToToken(e.target.value)}
+                className="flex-shrink-0 w-[100px] px-2 py-2 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-50 font-semibold focus:outline-none focus:ring-2 focus:ring-purple-500/50 cursor-pointer text-xs"
+                disabled={swapping}
+              >
+                {availableTokens.map((token) => (
+                  <option key={token} value={token}>
+                    {token}
+                  </option>
+                ))}
+              </select>
             </div>
-            <select
-              value={toToken}
-              onChange={(e) => setToToken(e.target.value)}
-              className="px-4 py-3 rounded-lg border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-950 dark:text-zinc-50 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent cursor-pointer"
-              disabled={swapping}
-            >
-              {availableTokens.map((token) => (
-                <option key={token} value={token}>
-                  {token}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="mt-1">
-            <p className="text-xs text-zinc-500 dark:text-zinc-400">
-              Balance:{" "}
-              {loadingToBalance ? (
-                <span className="inline-block animate-pulse">Loading...</span>
-              ) : toBalance !== null ? (
-                <span className="font-medium text-zinc-700 dark:text-zinc-300">
-                  {parseFloat(toBalance).toLocaleString(undefined, {
-                    minimumFractionDigits: 2,
-                    maximumFractionDigits: 6,
-                  })}{" "}
-                  {toToken}
-                </span>
-              ) : (
-                <span>-- {toToken}</span>
-              )}
-            </p>
+            <div className="mt-2">
+              <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                Balance:{" "}
+                {loadingToBalance ? (
+                  <span className="inline-block animate-pulse">...</span>
+                ) : toBalance !== null ? (
+                  <span className="font-medium text-zinc-700 dark:text-zinc-300">
+                    {parseFloat(toBalance).toLocaleString(undefined, {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 6,
+                    })}
+                  </span>
+                ) : (
+                  <span>--</span>
+                )}
+              </p>
+            </div>
           </div>
         </div>
 
         {/* Slippage Tolerance */}
-        <div className="mb-4 p-3 rounded-lg bg-zinc-50 dark:bg-zinc-800/50">
+        <div className="relative mb-4 p-3 rounded-xl bg-zinc-50/80 dark:bg-zinc-800/30 border border-zinc-100 dark:border-zinc-800">
           <div className="flex items-center justify-between mb-2">
-            <label className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
-              Slippage Tolerance
+            <label className="text-xs font-medium text-zinc-700 dark:text-zinc-300 flex items-center gap-1.5">
+              <svg className="w-3.5 h-3.5 text-zinc-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+              </svg>
+              Slippage
             </label>
-            <span className="text-sm text-zinc-600 dark:text-zinc-400">
+            <span className="px-2 py-0.5 rounded-md bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 text-xs font-bold">
               {slippage}%
             </span>
           </div>
@@ -814,10 +811,10 @@ export const SwapCard: React.FC<SwapCardProps> = ({
             step="0.1"
             value={slippage}
             onChange={(e) => setSlippage(parseFloat(e.target.value))}
-            className="w-full h-2 bg-zinc-200 dark:bg-zinc-700 rounded-lg appearance-none cursor-pointer accent-purple-500"
+            className="w-full h-2 bg-zinc-200 dark:bg-zinc-700 rounded-full appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-gradient-to-r [&::-webkit-slider-thumb]:from-purple-500 [&::-webkit-slider-thumb]:to-violet-500 [&::-webkit-slider-thumb]:shadow-lg [&::-webkit-slider-thumb]:shadow-purple-500/30 [&::-webkit-slider-thumb]:cursor-pointer"
             disabled={swapping}
           />
-          <div className="flex justify-between text-xs text-zinc-500 dark:text-zinc-400 mt-1">
+          <div className="flex justify-between text-xs text-zinc-400 mt-2">
             <span>0.1%</span>
             <span>5%</span>
           </div>
@@ -825,27 +822,36 @@ export const SwapCard: React.FC<SwapCardProps> = ({
 
         {/* Error Message */}
         {swapError && (
-          <div className="mb-4 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-sm text-red-700 dark:text-red-400">
+          <div className="relative mb-4 p-3 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/50 text-xs text-red-700 dark:text-red-400 flex items-center gap-2">
+            <svg className="w-5 h-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
             {swapError}
           </div>
         )}
 
         {/* Transaction Hash */}
         {txHash && (
-          <div className="mb-4 p-3 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800">
-            <p className="text-xs font-medium text-green-800 dark:text-green-300 mb-1">
-              Transaction Hash
-            </p>
-            <p className="text-xs font-mono text-green-700 dark:text-green-400 break-all mb-2">
+          <div className="relative mb-4 p-3 rounded-xl bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800/50">
+            <div className="flex items-center gap-2 mb-1.5">
+              <svg className="w-4 h-4 text-green-600 dark:text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <span className="text-xs font-semibold text-green-800 dark:text-green-300">Swap Successful!</span>
+            </div>
+            <p className="text-[10px] font-mono text-green-700 dark:text-green-400 break-all mb-2 bg-green-100 dark:bg-green-900/30 p-1.5 rounded-md">
               {txHash}
             </p>
             <a
               href={`https://explorer.movementnetwork.xyz/txn/${txHash}?network=mainnet`}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-xs font-medium text-green-700 dark:text-green-400 hover:underline"
+              className="text-xs font-semibold text-green-700 dark:text-green-400 hover:underline flex items-center gap-1"
             >
-              View on Explorer →
+              View on Explorer
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+              </svg>
             </a>
           </div>
         )}
@@ -854,18 +860,45 @@ export const SwapCard: React.FC<SwapCardProps> = ({
         <button
           onClick={handleSwap}
           disabled={!canSwap}
-          className={`w-full py-3.5 rounded-xl font-semibold transition-all duration-200 shadow-md ${
+          className={`relative w-full py-3 rounded-xl font-bold text-sm transition-all duration-300 overflow-hidden ${
             canSwap
-              ? "bg-purple-600 text-white hover:bg-purple-700 hover:shadow-lg active:scale-[0.98]"
-              : "bg-zinc-300 dark:bg-zinc-700 text-zinc-500 dark:text-zinc-400 cursor-not-allowed"
+              ? "bg-gradient-to-r from-purple-600 to-violet-600 text-white shadow-xl shadow-purple-500/30 hover:shadow-2xl hover:shadow-purple-500/40 hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
+              : "bg-zinc-100 dark:bg-zinc-800 text-zinc-400 dark:text-zinc-500 cursor-not-allowed"
           }`}
         >
-          {swapping ? "Swapping..." : txHash ? "Swap Complete" : "Swap"}
+          {canSwap && (
+            <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/20 to-white/0 translate-x-[-100%] hover:translate-x-[100%] transition-transform duration-700" />
+          )}
+          <span className="relative flex items-center justify-center gap-2">
+            {swapping ? (
+              <>
+                <svg className="w-5 h-5 animate-spin" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                </svg>
+                Swapping...
+              </>
+            ) : txHash ? (
+              <>
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                </svg>
+                Swap Complete
+              </>
+            ) : (
+              <>
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" />
+                </svg>
+                Swap {fromToken} → {toToken}
+              </>
+            )}
+          </span>
         </button>
 
         {!walletAddress && (
-          <p className="mt-3 text-xs text-center text-zinc-500 dark:text-zinc-400">
-            Please connect your Movement wallet to swap tokens
+          <p className="relative mt-4 text-sm text-center text-zinc-500 dark:text-zinc-400">
+            Connect your Movement wallet to swap tokens
           </p>
         )}
       </div>
