@@ -104,7 +104,6 @@ export function SupplyModal({
   const [simulatedRiskData, setSimulatedRiskData] = useState<any | null>(null);
   const [loadingSimulation, setLoadingSimulation] = useState(false);
   const [loadingPortfolio, setLoadingPortfolio] = useState(false);
-  const [showCalculation, setShowCalculation] = useState(false);
   const [submissionStep, setSubmissionStep] = useState<string>("");
 
   const movementWallet = useMemo(() => {
@@ -688,15 +687,6 @@ export function SupplyModal({
             <div className="flex justify-between items-center">
               <span className="text-zinc-500 dark:text-zinc-400 text-sm">
                 Health factor
-                {getRiskSimulated && (
-                  <button
-                    onClick={() => setShowCalculation(!showCalculation)}
-                    className="ml-2 text-xs text-yellow-500 dark:text-yellow-400 hover:underline"
-                    title="Show calculation details"
-                  >
-                    {showCalculation ? "Hide" : "Show"} calculation
-                  </button>
-                )}
                 {loadingSimulation && (
                   <span className="ml-2 text-xs text-zinc-400">
                     (simulating...)
@@ -731,40 +721,6 @@ export function SupplyModal({
                 )}
               </span>
             </div>
-
-            {/* Calculation Details */}
-            {showCalculation && getRiskSimulated && (
-              <div className="mt-4 p-4 rounded-lg bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700">
-                <h4 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50 mb-3">
-                  Risk Calculation Steps:
-                </h4>
-                <div className="space-y-1 text-xs font-mono text-zinc-700 dark:text-zinc-300">
-                  {getRiskSimulated.calculationSteps.map((step, index) => (
-                    <div key={index} className={step === "" ? "h-2" : ""}>
-                      {step}
-                    </div>
-                  ))}
-                </div>
-                <div className="mt-3 pt-3 border-t border-zinc-200 dark:border-zinc-700">
-                  <div className="flex justify-between items-center text-xs">
-                    <span className="text-zinc-600 dark:text-zinc-400">
-                      Health Factor Change:
-                    </span>
-                    <span
-                      className={`font-semibold ${
-                        getRiskSimulated.newHealthFactor > (healthFactor ?? 0)
-                          ? "text-green-600 dark:text-green-400"
-                          : "text-red-600 dark:text-red-400"
-                      }`}
-                    >
-                      {healthFactor
-                        ? `${getRiskSimulated.newHealthFactor > healthFactor ? "+" : ""}${(getRiskSimulated.newHealthFactor - healthFactor).toFixed(2)}x`
-                        : "N/A"}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            )}
             <div className="flex justify-between items-center">
               <span className="text-zinc-500 dark:text-zinc-400 text-sm">
                 Supplied
