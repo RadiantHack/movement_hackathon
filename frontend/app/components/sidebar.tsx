@@ -23,6 +23,7 @@ export function Sidebar({
     { href: "/chat", label: "New Chat" },
     { href: "/transfer", label: "Transfer" },
     { href: "/swap", label: "Swap" },
+    { href: "/bridge", label: "Bridge" },
     { href: "/positions", label: "Move Position" },
     { href: "/echelon", label: "Echelon" },
   ];
