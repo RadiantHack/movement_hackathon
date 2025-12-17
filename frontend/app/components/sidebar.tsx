@@ -23,6 +23,7 @@ export function Sidebar({
     { href: "/chat", label: "New Chat" },
     { href: "/swap", label: "Swap" },
     { href: "/positions", label: "Move Position" },
+    { href: "/echelon", label: "Echelon" },
   ];
 
   const agents = [
