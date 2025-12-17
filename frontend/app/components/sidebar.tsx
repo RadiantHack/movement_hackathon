@@ -21,11 +21,8 @@ export function Sidebar({
   const navItems = [
     { href: "/chat", label: "New Chat" },
     { href: "/swap", label: "Swap" },
-    { href: "/positions?view=lend", label: "Lend/Borrow" },
     { href: "/overview", label: "Overview" },
-    { href: "/positions", label: "Live Positions" },
-    { href: "/wallets", label: "Wallets" },
-    { href: "/risk", label: "Risk Controls" },
+    { href: "/positions", label: "Move Position" },
   ];
 
   const agents = [

@@ -454,4 +454,3 @@ export const BorrowCard: React.FC<BorrowCardProps> = ({ walletAddress }) => {
     </div>
   );
 };
-

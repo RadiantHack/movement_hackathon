@@ -7,6 +7,7 @@ import { type TokenInfo } from "../utils/tokens";
 import { getBrokerName } from "../utils/lending-transaction";
 import { getCoinDecimals, convertAmountToRaw } from "../utils/token-utils";
 import { executeLendV2, executeRedeemV2 } from "../utils/lend-v2-utils";
+import * as superJsonApiClient from "../../lib/super-json-api-client/src";
 
 interface SupplyModalProps {
   isOpen: boolean;
@@ -100,10 +101,10 @@ export function SupplyModal({
   const [portfolioData, setPortfolioData] = useState<PortfolioResponse | null>(
     null
   );
-  const [loadingPortfolio, setLoadingPortfolio] = useState(false);
-  const [showCalculation, setShowCalculation] = useState(false);
   const [simulatedRiskData, setSimulatedRiskData] = useState<any | null>(null);
   const [loadingSimulation, setLoadingSimulation] = useState(false);
+  const [loadingPortfolio, setLoadingPortfolio] = useState(false);
+  const [showCalculation, setShowCalculation] = useState(false);
   const [submissionStep, setSubmissionStep] = useState<string>("");
 
   const movementWallet = useMemo(() => {
@@ -205,14 +206,11 @@ export function SupplyModal({
     const fetchPortfolio = async () => {
       setLoadingPortfolio(true);
       try {
-        const response = await fetch(
-          `https://api.moveposition.xyz/portfolios/${walletAddress}`
-        );
-        if (!response.ok) {
-          throw new Error(`Failed to fetch portfolio (${response.status})`);
-        }
-        const data: PortfolioResponse = await response.json();
-        setPortfolioData(data);
+        const superClient = new superJsonApiClient.SuperClient({
+          BASE: "https://api.moveposition.xyz",
+        });
+        const data = await superClient.default.getPortfolio(walletAddress);
+        setPortfolioData(data as unknown as PortfolioResponse);
       } catch (error) {
         console.error("Error fetching portfolio:", error);
         setPortfolioData(null);
@@ -233,6 +231,35 @@ export function SupplyModal({
         : numericValue;
     setAmount(formattedValue);
   };
+
+  /**
+   * Get user's current supplied amount from portfolio data
+   */
+  const userSuppliedAmount = useMemo(() => {
+    if (!portfolioData || !asset) return 0;
+
+    const brokerName = getBrokerName(asset.symbol);
+    const depositNoteName = `${brokerName}-super-aptos-deposit-note`;
+
+    const collateral = portfolioData.collaterals.find(
+      (c) => c.instrument.name === depositNoteName
+    );
+
+    if (!collateral) return 0;
+
+    const decimals = getCoinDecimals(asset.symbol);
+    return parseFloat(collateral.amount) / Math.pow(10, decimals);
+  }, [portfolioData, asset]);
+
+  /**
+   * Get current health factor from portfolio data
+   */
+  const currentHealthFactor = useMemo(() => {
+    if (portfolioData?.evaluation?.health_ratio) {
+      return portfolioData.evaluation.health_ratio;
+    }
+    return healthFactor;
+  }, [portfolioData, healthFactor]);
 
   /**
    * Build next portfolio state for risk simulation API
@@ -325,26 +352,15 @@ export function SupplyModal({
 
       setLoadingSimulation(true);
       try {
-        // Call MovePosition risk simulation API
-        // This is independent of wallet provider (Privy vs injected)
-        const response = await fetch(
-          "https://api.moveposition.xyz/risk/simulated",
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify(buildNextPortfolioState),
-          }
-        );
+        // Call MovePosition risk simulation API via SuperClient
+        const superClient = new superJsonApiClient.SuperClient({
+          BASE: "https://api.moveposition.xyz",
+        });
 
-        if (!response.ok) {
-          throw new Error(
-            `Failed to fetch simulated risk (${response.status})`
-          );
-        }
-
-        const data = await response.json();
+        const data = await superClient.default.getRiskSimulated({
+          collaterals: buildNextPortfolioState.collaterals,
+          liabilities: buildNextPortfolioState.liabilities,
+        });
         setSimulatedRiskData(data);
         console.log("Simulated risk data:", data);
       } catch (error) {
@@ -477,7 +493,7 @@ export function SupplyModal({
   const displayHealthFactor =
     simulatedRiskData?.health_ratio ??
     getRiskSimulated?.newHealthFactor ??
-    healthFactor;
+    currentHealthFactor;
 
   const handleSubmit = async () => {
     if (!movementWallet || !walletAddress || !asset) {
@@ -687,26 +703,31 @@ export function SupplyModal({
                   </span>
                 )}
               </span>
-              <span
-                className={`text-sm font-medium ${
-                  displayHealthFactor && displayHealthFactor >= 1.2
-                    ? "text-green-600 dark:text-green-400"
-                    : displayHealthFactor && displayHealthFactor >= 1.0
-                      ? "text-yellow-600 dark:text-yellow-400"
-                      : "text-red-600 dark:text-red-400"
-                }`}
-              >
-                {loadingSimulation ? (
-                  <span className="text-zinc-400">--</span>
-                ) : displayHealthFactor ? (
-                  `${displayHealthFactor.toFixed(2)}x`
-                ) : (
-                  "N/A"
-                )}
-                {getRiskSimulated && healthFactor && !loadingSimulation && (
-                  <span className="ml-2 text-xs text-zinc-400">
-                    (was {healthFactor.toFixed(2)}x)
-                  </span>
+              <span className="text-sm font-medium flex items-center gap-2">
+                <span className="text-zinc-500 dark:text-zinc-400">
+                  {currentHealthFactor
+                    ? `${currentHealthFactor.toFixed(2)}x`
+                    : "N/A"}
+                </span>
+                {amount && parseFloat(amount) > 0 && (
+                  <>
+                    <span className="text-yellow-500">→</span>
+                    <span
+                      className={`${
+                        displayHealthFactor && displayHealthFactor >= 1.2
+                          ? "text-green-600 dark:text-green-400"
+                          : displayHealthFactor && displayHealthFactor >= 1.0
+                            ? "text-yellow-600 dark:text-yellow-400"
+                            : "text-red-600 dark:text-red-400"
+                      }`}
+                    >
+                      {loadingSimulation
+                        ? "--"
+                        : displayHealthFactor
+                          ? `${displayHealthFactor.toFixed(2)}x`
+                          : "N/A"}
+                    </span>
+                  </>
                 )}
               </span>
             </div>
@@ -748,16 +769,40 @@ export function SupplyModal({
               <span className="text-zinc-500 dark:text-zinc-400 text-sm">
                 Supplied
               </span>
-              <span className="text-zinc-900 dark:text-zinc-50 text-sm font-medium">
-                {asset.totalSupplied.toFixed(4)} {asset.symbol}
+              <span className="text-sm font-medium flex items-center gap-2">
+                <span className="text-zinc-500 dark:text-zinc-400">
+                  {userSuppliedAmount.toFixed(4)} {asset.symbol}
+                </span>
+                {amount && parseFloat(amount) > 0 && (
+                  <>
+                    <span className="text-yellow-500">→</span>
+                    <span className="text-zinc-900 dark:text-zinc-50">
+                      {(activeTab === "supply"
+                        ? userSuppliedAmount + parseFloat(amount)
+                        : userSuppliedAmount - parseFloat(amount)
+                      ).toFixed(4)}{" "}
+                      {asset.symbol}
+                    </span>
+                  </>
+                )}
               </span>
             </div>
             <div className="flex justify-between items-center">
               <span className="text-zinc-500 dark:text-zinc-400 text-sm">
                 Supply APY
               </span>
-              <span className="text-green-600 dark:text-green-400 text-sm font-medium">
-                {asset.supplyApy.toFixed(2)}%
+              <span className="text-sm font-medium flex items-center gap-2">
+                <span className="text-zinc-500 dark:text-zinc-400">
+                  {asset.supplyApy.toFixed(2)}%
+                </span>
+                {amount && parseFloat(amount) > 0 && simulatedRiskData && (
+                  <>
+                    <span className="text-yellow-500">→</span>
+                    <span className="text-green-600 dark:text-green-400">
+                      {asset.supplyApy.toFixed(2)}%
+                    </span>
+                  </>
+                )}
               </span>
             </div>
           </div>
@@ -878,11 +923,27 @@ export function SupplyModal({
             <span className="text-zinc-500 dark:text-zinc-400 text-sm">
               Wallet balance
             </span>
-            <span className="text-zinc-900 dark:text-zinc-50 text-sm font-medium">
+            <span className="text-sm font-medium flex items-center gap-2">
               {loadingBalance ? (
                 <span className="text-zinc-400">Loading...</span>
               ) : balance ? (
-                `${parseFloat(balance).toFixed(4)} ${asset.symbol}`
+                <>
+                  <span className="text-zinc-500 dark:text-zinc-400">
+                    {parseFloat(balance).toFixed(4)} {asset.symbol}
+                  </span>
+                  {amount && parseFloat(amount) > 0 && (
+                    <>
+                      <span className="text-yellow-500">→</span>
+                      <span className="text-zinc-900 dark:text-zinc-50">
+                        {(activeTab === "supply"
+                          ? parseFloat(balance) - parseFloat(amount)
+                          : parseFloat(balance) + parseFloat(amount)
+                        ).toFixed(4)}{" "}
+                        {asset.symbol}
+                      </span>
+                    </>
+                  )}
+                </>
               ) : (
                 "0.0000"
               )}

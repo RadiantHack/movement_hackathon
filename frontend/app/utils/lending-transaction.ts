@@ -10,6 +10,7 @@ import {
   Hex,
 } from "@aptos-labs/ts-sdk";
 import { toHex } from "viem";
+import * as superJsonApiClient from "../../lib/super-json-api-client/src";
 
 // Movement Network configuration
 const MOVEMENT_NETWORK = Network.MAINNET;
@@ -189,13 +190,11 @@ async function checkAPTBalance(
 async function fetchPortfolioState(
   address: string
 ): Promise<PortfolioResponse> {
-  const response = await fetch(`${MOVEMENT_API_BASE}/portfolios/${address}`);
-  if (!response.ok) {
-    throw new Error(
-      `Network Overload! We're currently unable to load the portfolio data due to the immense amount of traffic occurring on the Movement network at this time. This increased load can lead to temporary limitations, which is why some requests aren't going through as expected. Please refresh or try again later.`
-    );
-  }
-  return response.json();
+  const superClient = new superJsonApiClient.SuperClient({
+    BASE: MOVEMENT_API_BASE,
+  });
+  const data = await superClient.default.getPortfolio(address);
+  return data as unknown as PortfolioResponse;
 }
 
 /**

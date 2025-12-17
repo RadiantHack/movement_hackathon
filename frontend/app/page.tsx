@@ -44,8 +44,18 @@ export default function Home() {
       <main className="relative z-10 flex w-full max-w-md flex-col items-center gap-10 px-8 py-16">
         {/* Logo/Icon */}
         <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-zinc-900 dark:bg-zinc-100 shadow-xl animate-[bounce_3s_ease-in-out_infinite]">
-          <svg className="h-10 w-10 text-white dark:text-zinc-900" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+          <svg
+            className="h-10 w-10 text-white dark:text-zinc-900"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth={2}
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M13 10V3L4 14h7v7l9-11h-7z"
+            />
           </svg>
         </div>
 
@@ -55,7 +65,8 @@ export default function Home() {
             Welcome to Movement
           </h1>
           <p className="text-lg leading-relaxed text-zinc-600 dark:text-zinc-400 max-w-sm">
-            Your gateway to decentralized finance. Swap, lend, and manage your assets with AI assistance.
+            Your gateway to decentralized finance. Swap, lend, and manage your
+            assets with AI assistance.
           </p>
 
           {/* Animated feature pills */}
@@ -75,8 +86,18 @@ export default function Home() {
             onClick={handleEmailLogin}
             className="flex h-14 w-full items-center justify-center gap-3 rounded-full bg-zinc-900 dark:bg-zinc-100 px-8 font-medium text-white dark:text-zinc-900 transition-all duration-300 hover:scale-[1.02] hover:shadow-xl active:scale-[0.98]"
           >
-            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+            <svg
+              className="h-5 w-5"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth={2}
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
+              />
             </svg>
             Continue with Email
           </button>

@@ -11,6 +11,7 @@ import { getTokenBySymbol, getVerifiedTokens } from "../utils/token-constants";
 import { type TokenInfo } from "../utils/tokens";
 import { LendCard } from "../components/features/lend";
 import { BorrowCard } from "../components/features/borrow";
+import * as superJsonApiClient from "../../lib/super-json-api-client/src";
 
 interface BrokerAssetInfo {
   network: string;
@@ -202,14 +203,11 @@ function PositionsPageContent() {
       setLoadingPortfolio(true);
       setPortfolioError(null);
       try {
-        const response = await fetch(
-          `https://api.moveposition.xyz/portfolios/${walletAddress}`
-        );
-        if (!response.ok) {
-          throw new Error(`Failed to fetch portfolio (${response.status})`);
-        }
-        const data: PortfolioResponse = await response.json();
-        setPortfolioData(data);
+        const superClient = new superJsonApiClient.SuperClient({
+          BASE: "https://api.moveposition.xyz",
+        });
+        const data = await superClient.default.getPortfolio(walletAddress);
+        setPortfolioData(data as unknown as PortfolioResponse);
       } catch (error) {
         const message =
           error instanceof Error
@@ -231,12 +229,11 @@ function PositionsPageContent() {
       setLoadingBrokers(true);
       setBrokerError(null);
       try {
-        const response = await fetch("https://api.moveposition.xyz/brokers");
-        if (!response.ok) {
-          throw new Error(`Failed to fetch brokers (${response.status})`);
-        }
-        const data: BrokerEntry[] = await response.json();
-        setBrokers(data);
+        const superClient = new superJsonApiClient.SuperClient({
+          BASE: "https://api.moveposition.xyz",
+        });
+        const data = await superClient.default.getBrokers();
+        setBrokers(data as unknown as BrokerEntry[]);
       } catch (error) {
         const message =
           error instanceof Error
@@ -407,29 +404,6 @@ function PositionsPageContent() {
               </p>
             </div>
             <div className="flex items-center gap-3">
-              {/* View Mode Toggle */}
-              <div className="flex gap-1 p-1 rounded-lg bg-zinc-100 dark:bg-zinc-800">
-                <button
-                  onClick={() => setViewMode("positions")}
-                  className={`px-3 py-1.5 text-sm font-medium rounded-md transition-all ${
-                    viewMode === "positions"
-                      ? "bg-white dark:bg-zinc-700 text-zinc-900 dark:text-zinc-50 shadow-sm"
-                      : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200"
-                  }`}
-                >
-                  Positions
-                </button>
-                <button
-                  onClick={() => setViewMode("lend")}
-                  className={`px-3 py-1.5 text-sm font-medium rounded-md transition-all ${
-                    viewMode === "lend"
-                      ? "bg-white dark:bg-zinc-700 text-zinc-900 dark:text-zinc-50 shadow-sm"
-                      : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200"
-                  }`}
-                >
-                  Lend & Borrow
-                </button>
-              </div>
               <ThemeToggle />
             </div>
           </div>
@@ -567,62 +541,6 @@ function PositionsPageContent() {
                   >
                     Borrow
                   </button>
-                </div>
-
-                {/* Total Supplied Value */}
-                <div className="mb-4 text-sm text-zinc-600 dark:text-zinc-400">
-                  Total Supplied Value:{" "}
-                  <span className="font-semibold text-zinc-900 dark:text-zinc-50">
-                    ${totalSuppliedValue.toFixed(2)} USD
-                  </span>
-                </div>
-
-                {/* Information Banners */}
-                <div className="space-y-3 mb-6">
-                  <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4 flex items-start gap-3">
-                    <svg
-                      className="w-5 h-5 text-yellow-600 dark:text-yellow-400 mt-0.5 flex-shrink-0"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z"
-                      />
-                    </svg>
-                    <div className="flex-1">
-                      <p className="text-sm text-yellow-800 dark:text-yellow-200">
-                        Week 33 rewards have been distributed! The MOVE rewards
-                        spanning the week of December 4, 2025 through December
-                        10, 2025 have been deposited to all eligible portfolios.
-                      </p>
-                    </div>
-                  </div>
-                  <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4 flex items-start gap-3">
-                    <svg
-                      className="w-5 h-5 text-blue-600 dark:text-blue-400 mt-0.5 flex-shrink-0"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                      />
-                    </svg>
-                    <div className="flex-1">
-                      <p className="text-sm text-blue-800 dark:text-blue-200">
-                        We distribute yield incentives weekly! Earn boosted
-                        yield by maintaining open positions in incentivized
-                        pools.
-                      </p>
-                    </div>
-                  </div>
                 </div>
 
                 {/* Search Bar */}
@@ -878,7 +796,13 @@ function PositionsPageContent() {
 
 export default function PositionsPage() {
   return (
-    <Suspense fallback={<div className="flex items-center justify-center min-h-screen">Loading...</div>}>
+    <Suspense
+      fallback={
+        <div className="flex items-center justify-center min-h-screen">
+          Loading...
+        </div>
+      }
+    >
       <PositionsPageContent />
     </Suspense>
   );
