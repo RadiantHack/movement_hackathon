@@ -583,7 +583,7 @@ function PositionsPageContent() {
                         <th className="px-4 py-3 text-left text-xs font-semibold text-zinc-600 dark:text-zinc-400 uppercase tracking-wider">
                           Chain/Asset
                         </th>
-                        <th className="px-4 py-3 text-left text-xs font-semibold text-zinc-600 dark:text-zinc-400 uppercase tracking-wider hidden md:table-cell">
+                        <th className="px-4 py-3 text-left text-xs font-semibold text-zinc-600 dark:text-zinc-400 uppercase tracking-wider">
                           Supplied
                         </th>
                         <th className="px-4 py-3 text-left text-xs font-semibold text-zinc-600 dark:text-zinc-400 uppercase tracking-wider hidden md:table-cell">
@@ -639,7 +639,7 @@ function PositionsPageContent() {
                               </div>
                             </div>
                           </td>
-                          <td className="px-4 py-3 hidden md:table-cell">
+                          <td className="px-4 py-3">
                             <div className="text-sm text-zinc-900 dark:text-zinc-50">
                               {asset.totalSupplied > 0 ? (
                                 <>
