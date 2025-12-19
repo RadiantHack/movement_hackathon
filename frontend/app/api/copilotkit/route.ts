@@ -35,14 +35,7 @@ export async function POST(request: NextRequest) {
   // Make sure backend is running and agents are accessible at these URLs
   const balanceAgentUrl = `${baseUrl}/balance`;
   const bridgeAgentUrl = `${baseUrl}/bridge`;
-  const orderbookAgentUrl = `${baseUrl}/orderbook`;
-  const predictionAgentUrl = `${baseUrl}/prediction`;
-  const liquidityAgentUrl = `${baseUrl}/liquidity`;
-  const yieldOptimizerAgentUrl = `${baseUrl}/yield_optimizer`;
   const lendingAgentUrl = `${baseUrl}/lending`;
-  const bitcoinDefiAgentUrl = `${baseUrl}/bitcoin_defi`;
-  const stablecoinAgentUrl = `${baseUrl}/stablecoin`;
-  const analyticsAgentUrl = `${baseUrl}/analytics`;
   // Orchestrator URL needs trailing slash to avoid 307 redirect (POST -> GET conversion)
   // This works for both local (localhost:8000) and Railway (https://backend.railway.app)
   const orchestratorUrl = `${baseUrl}/orchestrator/`;
@@ -64,14 +57,7 @@ export async function POST(request: NextRequest) {
     agentUrls: [
       balanceAgentUrl, // Maps to agentName: "balance"
       bridgeAgentUrl, // Maps to agentName: "bridge"
-      orderbookAgentUrl, // Maps to agentName: "orderbook"
-      predictionAgentUrl, // Maps to agentName: "prediction"
-      liquidityAgentUrl, // Maps to agentName: "liquidity"
-      yieldOptimizerAgentUrl, // Maps to agentName: "yield_optimizer"
       lendingAgentUrl, // Maps to agentName: "lending"
-      bitcoinDefiAgentUrl, // Maps to agentName: "bitcoin_defi"
-      stablecoinAgentUrl, // Maps to agentName: "stablecoin"
-      analyticsAgentUrl, // Maps to agentName: "analytics"
     ],
     orchestrationAgent,
     instructions: `
@@ -97,53 +83,11 @@ export async function POST(request: NextRequest) {
          - Can initiate bridge transactions, check status, and estimate fees
          - Requires source chain, destination chain, asset, amount, and recipient address
 
-      3. **OrderBook Agent** (LangGraph) - Trading on ClobX on-chain order book
-         - Place limit and market orders on Movement Network's ClobX DEX
-         - Cancel existing orders and check order status
-         - View order book depth and spreads
-         - Requires trading pair, side (buy/sell), price (for limit), and quantity
-
-      4. **Prediction Agent** (LangGraph) - BRKT prediction markets
-         - Create new prediction markets
-         - Place predictions on existing markets
-         - Check market odds and status
-         - Resolve markets (for creators)
-
-      5. **Liquidity Agent** (LangGraph) - Liquidity management for Meridian and Coral Finance
-         - Add/remove liquidity from pools
-         - Check pool information (APY, TVL, fees)
-         - Calculate impermanent loss
-         - Requires pool name and token amounts
-
-      6. **Yield Optimizer Agent** (LangGraph) - Canopy yield marketplace
-         - Find best yield opportunities for assets
-         - Deposit to and withdraw from yield vaults
-         - Track APY history
-         - Auto-compounding strategies
-
-      7. **Lending Agent** (LangGraph) - MovePosition and Echelon lending protocols
+      3. **Lending Agent** (LangGraph) - MovePosition and Echelon lending protocols
          - Supply collateral and borrow assets
          - Repay loans
          - Check health factors and liquidation risks
          - Requires asset, amount, and protocol selection
-
-      8. **Bitcoin DeFi Agent** (LangGraph) - Avalon Labs Bitcoin DeFi
-         - Wrap/unwrap BTC for DeFi use
-         - Discover Bitcoin DeFi products
-         - Stake BTC for yields
-         - Requires BTC amounts
-
-      9. **Stablecoin Agent** (LangGraph) - Ethena stablecoin protocol
-         - Mint synthetic stablecoins (USDe)
-         - Redeem stablecoins for collateral
-         - Check peg stability
-         - Monitor collateral ratios
-
-      10. **Analytics Agent** (LangGraph) - Flipside analytics
-          - Get protocol TVL and metrics
-          - Analyze trading volumes
-          - Track user statistics
-          - Generate custom reports
 
       CRITICAL CONSTRAINTS:
       - You MUST call agents ONE AT A TIME, never make multiple tool calls simultaneously
