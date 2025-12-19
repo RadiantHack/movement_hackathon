@@ -2,23 +2,47 @@
 
 import { PrivyProvider } from "@privy-io/react-auth";
 import { CopilotKit } from "@copilotkit/react-core";
-import { ReactNode } from "react";
+import { ReactNode, useEffect } from "react";
 import { MovementWalletModal } from "./components/movement-wallet-modal";
+import {
+  Provider as ReduxProvider,
+  useDispatch,
+  useSelector,
+} from "react-redux";
+import { store, type RootState, type AppDispatch } from "../store";
+import { loadConfig } from "../store/configSlice";
+import { useMovementConfig } from "./hooks/useMovementConfig";
 
 interface ProvidersProps {
   children: ReactNode;
 }
 
-export function Providers({ children }: ProvidersProps) {
-  const appId = process.env.NEXT_PUBLIC_PRIVY_APP_ID;
-  const clientId = process.env.NEXT_PUBLIC_PRIVY_CLIENT_ID;
-  const copilotApiKey = process.env.NEXT_PUBLIC_COPILOTKIT_API_KEY;
+function ConfigGate({ children }: { children: ReactNode }) {
+  const dispatch = useDispatch<AppDispatch>();
+  const loaded = useSelector((s: RootState) => s.config.loaded);
+  const error = useSelector((s: RootState) => s.config.error);
 
-  if (!appId) {
-    throw new Error(
-      "NEXT_PUBLIC_PRIVY_APP_ID is not set. Please add it to your .env.local file."
-    );
-  }
+  useEffect(() => {
+    dispatch(loadConfig());
+  }, [dispatch]);
+
+  if (!loaded) return null;
+  if (error) return <div>Failed to load config: {error}</div>;
+  return <>{children}</>;
+}
+
+function PrivyProviderWithConfig({
+  children,
+  appId,
+  clientId,
+  copilotApiKey,
+}: {
+  children: ReactNode;
+  appId: string;
+  clientId: string | undefined;
+  copilotApiKey: string | undefined;
+}) {
+  const config = useMovementConfig();
 
   return (
     <PrivyProvider
@@ -35,7 +59,7 @@ export function Providers({ children }: ProvidersProps) {
         // Configure Movement blockchain (EVM-compatible)
         supportedChains: [
           {
-            id: 2024, // Movement mainnet chain ID
+            id: config.movementChainId || 126, // Movement mainnet chain ID from config
             name: "Movement",
             network: "movement",
             nativeCurrency: {
@@ -45,13 +69,17 @@ export function Providers({ children }: ProvidersProps) {
             },
             rpcUrls: {
               default: {
-                http: ["https://mainnet.movementlabs.xyz"],
+                http: [
+                  config.movementLabsUrl || "https://mainnet.movementlabs.xyz",
+                ],
               },
             },
             blockExplorers: {
               default: {
                 name: "Movement Explorer",
-                url: "https://explorer.movementlabs.xyz",
+                url:
+                  config.movementExplorerUrl ||
+                  "https://explorer.movementlabs.xyz",
               },
             },
           },
@@ -64,9 +92,35 @@ export function Providers({ children }: ProvidersProps) {
         agent="a2a_chat"
         publicApiKey={copilotApiKey}
       >
-        {children}
-        <MovementWalletModal />
+        <ConfigGate>
+          {children}
+          <MovementWalletModal />
+        </ConfigGate>
       </CopilotKit>
     </PrivyProvider>
+  );
+}
+
+export function Providers({ children }: ProvidersProps) {
+  const appId = process.env.NEXT_PUBLIC_PRIVY_APP_ID;
+  const clientId = process.env.NEXT_PUBLIC_PRIVY_CLIENT_ID;
+  const copilotApiKey = process.env.NEXT_PUBLIC_COPILOTKIT_API_KEY;
+
+  if (!appId) {
+    throw new Error(
+      "NEXT_PUBLIC_PRIVY_APP_ID is not set. Please add it to your .env.local file."
+    );
+  }
+
+  return (
+    <ReduxProvider store={store}>
+      <PrivyProviderWithConfig
+        appId={appId}
+        clientId={clientId}
+        copilotApiKey={copilotApiKey}
+      >
+        {children}
+      </PrivyProviderWithConfig>
+    </ReduxProvider>
   );
 }

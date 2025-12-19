@@ -5,7 +5,7 @@
  * Documentation: https://docs.mosaic.ag/swap-integration/api
  */
 
-const MOSAIC_API_BASE_URL = "https://api.mosaic.ag/v1";
+const DEFAULT_MOSAIC_API_BASE_URL = "https://api.mosaic.ag/v1";
 
 /**
  * Get Mosaic API key from environment variable
@@ -21,6 +21,17 @@ function getMosaicApiKey(): string {
     );
   }
   return apiKey;
+}
+
+/**
+ * Get Mosaic API base URL from environment or use default
+ * The URL should come from Redux config, but as a fallback use the default
+ *
+ * @returns Mosaic API base URL
+ */
+export function getMosaicApiBaseUrl(): string {
+  // Default Mosaic API base URL
+  return "https://api.mosaic.ag/v1";
 }
 
 /**
@@ -97,11 +108,15 @@ export interface GetTokensParams {
  * Get a quote from Mosaic Aggregator API
  *
  * @param params - Quote parameters
+ * @param baseUrl - Optional custom Mosaic API base URL (defaults to config or hardcoded default)
  * @returns Promise resolving to quote response
  */
 export async function getQuote(
-  params: GetQuoteParams
+  params: GetQuoteParams,
+  baseUrl?: string
 ): Promise<MosaicQuoteResponse> {
+  const MOSAIC_API_BASE_URL = baseUrl || DEFAULT_MOSAIC_API_BASE_URL;
+
   const queryParams = new URLSearchParams();
   queryParams.append("srcAsset", params.srcAsset);
   queryParams.append("dstAsset", params.dstAsset);
@@ -151,11 +166,15 @@ export async function getQuote(
  * Get tokens from Mosaic API
  *
  * @param params - Token list parameters
+ * @param baseUrl - Optional custom Mosaic API base URL (defaults to config or hardcoded default)
  * @returns Promise resolving to token response
  */
 export async function getTokens(
-  params: GetTokensParams = {}
+  params: GetTokensParams = {},
+  baseUrl?: string
 ): Promise<MosaicTokenResponse> {
+  const MOSAIC_API_BASE_URL = baseUrl || DEFAULT_MOSAIC_API_BASE_URL;
+
   const queryParams = new URLSearchParams();
 
   if (params.ids && params.ids.length > 0) {

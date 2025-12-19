@@ -25,6 +25,8 @@ import {
 } from "@aptos-labs/ts-sdk";
 import { toHex } from "viem";
 import { useSignRawHash } from "@privy-io/react-auth/extended-chains";
+import { requireMovementChainId } from "@/lib/super-aptos-sdk/src/globals";
+import { useMovementConfig } from "@/app/hooks/useMovementConfig";
 
 interface SwapCardProps {
   walletAddress: string | null;
@@ -44,19 +46,7 @@ interface TokenBalance {
   isNative: boolean;
 }
 
-// Movement Network configuration - Mainnet
-const MOVEMENT_NETWORK = Network.MAINNET;
-const MOVEMENT_FULLNODE = "https://full.mainnet.movementinfra.xyz/v1";
-const MOVEMENT_CHAIN_ID = 126; // Mainnet chain ID
-
 // Mosaic API is used for quotes and routing - no hardcoded routes needed
-
-const aptos = new Aptos(
-  new AptosConfig({
-    network: MOVEMENT_NETWORK,
-    fullnode: MOVEMENT_FULLNODE,
-  })
-);
 
 // Helper to normalize token symbol for display (USDC.e -> USDC, USDT.e -> USDT)
 const normalizeTokenForDisplay = (symbol: string): string => {
@@ -77,6 +67,22 @@ export const SwapCard: React.FC<SwapCardProps> = ({
 }) => {
   const { ready, authenticated, user } = usePrivy();
   const { signRawHash } = useSignRawHash();
+  const config = useMovementConfig();
+
+  // Create Aptos instance with config from Redux store
+  const aptos = useMemo(() => {
+    if (!config.movementFullNode) return null;
+    return new Aptos(
+      new AptosConfig({
+        network: Network.MAINNET,
+        fullnode: config.movementFullNode,
+      })
+    );
+  }, [config.movementFullNode]);
+
+  const movementChainId = useMemo(() => {
+    return config.movementChainId || 126;
+  }, [config.movementChainId]);
 
   const [fromToken, setFromToken] = useState<string>(
     normalizeTokenForDisplay(initialFromToken || "MOVE")
@@ -360,13 +366,16 @@ export const SwapCard: React.FC<SwapCardProps> = ({
         const dstAsset = getMosaicAssetFormat(toTokenFullInfo);
         const slippageBps = Math.floor(slippage * 100); // Convert percentage to basis points
 
-        const quoteResponse = await getQuote({
-          srcAsset,
-          dstAsset,
-          amount: amountInSmallestUnit.toString(),
-          sender: walletAddress,
-          slippage: slippageBps,
-        });
+        const quoteResponse = await getQuote(
+          {
+            srcAsset,
+            dstAsset,
+            amount: amountInSmallestUnit.toString(),
+            sender: walletAddress,
+            slippage: slippageBps,
+          },
+          config.mosaicApiBaseUrl
+        );
 
         setQuote(quoteResponse);
 
@@ -375,8 +384,8 @@ export const SwapCard: React.FC<SwapCardProps> = ({
         const dstAmountFormatted =
           dstAmount / Math.pow(10, toTokenFullInfo.decimals);
         setToAmount(dstAmountFormatted.toFixed(6));
-      } catch (error: any) {
-        console.error("Error fetching quote:", error);
+      } catch (error: unknown) {
+        console.error("Error fetching quote:", (error as Error).message);
         setToAmount("");
         setQuote(null);
         // Don't show error to user for quote failures - just clear the output
@@ -396,6 +405,7 @@ export const SwapCard: React.FC<SwapCardProps> = ({
     toTokenFullInfo,
     walletAddress,
     slippage,
+    config.mosaicApiBaseUrl,
   ]);
 
   const handleFromAmountChange = (value: string) => {
@@ -452,7 +462,7 @@ export const SwapCard: React.FC<SwapCardProps> = ({
       // Get Aptos wallet from user's linked accounts
       const aptosWallet = user?.linkedAccounts?.find(
         (a) => a.type === "wallet" && a.chainType === "aptos"
-      ) as any;
+      ) as WalletWithMetadata | undefined;
 
       if (!aptosWallet) {
         throw new Error("Aptos wallet not found");
@@ -482,7 +492,7 @@ export const SwapCard: React.FC<SwapCardProps> = ({
       const mosaicTx = quote.data.tx;
 
       // Build the swap transaction using Mosaic's transaction data
-      const rawTxn = await aptos.transaction.build.simple({
+      const rawTxn = await aptos!.transaction.build.simple({
         sender: senderAddress,
         data: {
           function: mosaicTx.function as `${string}::${string}::${string}`,
@@ -492,10 +502,14 @@ export const SwapCard: React.FC<SwapCardProps> = ({
       });
 
       // Override chain ID to match Movement Network mainnet
-      const txnObj = rawTxn as any;
+      const txnObj = rawTxn as unknown as Record<
+        string,
+        Record<string, unknown>
+      >;
       if (txnObj.rawTransaction) {
-        const movementChainId = new ChainId(MOVEMENT_CHAIN_ID);
-        txnObj.rawTransaction.chain_id = movementChainId;
+        const chainIdObj = new ChainId(movementChainId);
+        (txnObj.rawTransaction as Record<string, unknown>).chain_id =
+          chainIdObj;
       }
 
       // Generate signing message and hash
@@ -518,13 +532,13 @@ export const SwapCard: React.FC<SwapCardProps> = ({
       );
 
       // Submit transaction
-      const pending = await aptos.transaction.submit.simple({
+      const pending = await aptos!.transaction.submit.simple({
         transaction: rawTxn,
         senderAuthenticator,
       });
 
       // Wait for transaction to be executed
-      const executed = await aptos.waitForTransaction({
+      const executed = await aptos!.waitForTransaction({
         transactionHash: pending.hash,
       });
 
@@ -585,10 +599,10 @@ export const SwapCard: React.FC<SwapCardProps> = ({
           }
         }
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Swap error:", err);
       setSwapError(
-        err.message ||
+        (err as Error).message ||
           "Swap failed. Please check your connection and try again."
       );
     } finally {

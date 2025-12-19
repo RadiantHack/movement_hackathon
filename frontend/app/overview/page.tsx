@@ -8,6 +8,7 @@ import { RightSidebar } from "../components/right-sidebar";
 import { ThemeToggle } from "../components/themeToggle";
 import { getTokenBySymbol, getVerifiedTokens } from "../utils/token-constants";
 import { type TokenInfo } from "../utils/tokens";
+import { getMovementPositionBrokerUrl } from "@/lib/super-aptos-sdk/src/globals";
 
 interface BrokerAssetInfo {
   network: string;
@@ -72,6 +73,8 @@ export default function OverviewPage() {
   const [loadingBrokers, setLoadingBrokers] = useState<boolean>(false);
   const [brokerError, setBrokerError] = useState<string | null>(null);
 
+  const movementPositionBrokerUrl = getMovementPositionBrokerUrl();
+
   const formatAmount = (value: string, decimals: number): number => {
     const parsed = Number(value);
     if (Number.isNaN(parsed)) return 0;
@@ -125,7 +128,7 @@ export default function OverviewPage() {
       setLoadingBrokers(true);
       setBrokerError(null);
       try {
-        const response = await fetch("https://api.moveposition.xyz/brokers");
+        const response = await fetch(movementPositionBrokerUrl);
         if (!response.ok) {
           throw new Error(`Failed to fetch brokers (${response.status})`);
         }

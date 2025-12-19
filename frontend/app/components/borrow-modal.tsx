@@ -8,6 +8,7 @@ import { getBrokerName } from "../utils/lending-transaction";
 import { getCoinDecimals, convertAmountToRaw } from "../utils/token-utils";
 import { executeBorrowV2, executeRepayV2 } from "../utils/borrow-v2-utils";
 import * as superJsonApiClient from "../../lib/super-json-api-client/src";
+import { getMovementApiBase } from "@/lib/super-aptos-sdk/src/globals";
 
 interface BorrowModalProps {
   isOpen: boolean;
@@ -78,6 +79,9 @@ export function BorrowModal({
 }: BorrowModalProps) {
   const { user, ready, authenticated } = usePrivy();
   const { signRawHash } = useSignRawHash();
+
+  const movementApiBase = getMovementApiBase();
+
   const [activeTab, setActiveTab] = useState<"borrow" | "repay">("borrow");
   const [amount, setAmount] = useState("");
   const [showMore, setShowMore] = useState(false);
@@ -193,7 +197,7 @@ export function BorrowModal({
       setLoadingPortfolio(true);
       try {
         const superClient = new superJsonApiClient.SuperClient({
-          BASE: "https://api.moveposition.xyz",
+          BASE: movementApiBase,
         });
         const data = await superClient.default.getPortfolio(walletAddress);
         setPortfolioData(data as unknown as PortfolioResponse);
@@ -206,7 +210,7 @@ export function BorrowModal({
     };
 
     fetchPortfolio();
-  }, [walletAddress, isOpen]);
+  }, [walletAddress, isOpen, movementApiBase]);
 
   const handleAmountChange = (value: string) => {
     const numericValue = value.replace(/[^0-9.]/g, "");
@@ -327,7 +331,7 @@ export function BorrowModal({
       setLoadingSimulation(true);
       try {
         const superClient = new superJsonApiClient.SuperClient({
-          BASE: "https://api.moveposition.xyz",
+          BASE: movementApiBase,
         });
 
         const data = await superClient.default.getRiskSimulated({

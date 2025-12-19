@@ -21,17 +21,27 @@ import {
   getCoinType,
   getBrokerAddress,
 } from "./token-utils";
+import {
+  requireMovementChainId,
+  requireMovementApiBase,
+  requireMovementRpc,
+} from "@/lib/super-aptos-sdk/src/globals";
 
-const MOVEMENT_RPC = "https://rpc.sentio.xyz/movement/v1";
-const MOVEMENT_CHAIN_ID = 126;
-const API_BASE = "https://api.moveposition.xyz";
+// Lazy initialization of Aptos instances
+let aptosInstance: Aptos | null = null;
 
-const aptos = new Aptos(
-  new AptosConfig({
-    network: Network.MAINNET,
-    fullnode: MOVEMENT_RPC,
-  })
-);
+function getAptosInstance(): Aptos {
+  if (!aptosInstance) {
+    const movementRpc = requireMovementRpc();
+    aptosInstance = new Aptos(
+      new AptosConfig({
+        network: Network.MAINNET,
+        fullnode: movementRpc,
+      })
+    );
+  }
+  return aptosInstance;
+}
 
 export interface LendV2Params {
   amount: string; // Raw amount as string
@@ -83,6 +93,14 @@ export async function executeLendV2(params: LendV2Params): Promise<string> {
   if (onProgress) {
     onProgress("Initializing SDK...");
   }
+
+  const movementApiBase = requireMovementApiBase();
+  const movementChainId = requireMovementChainId();
+
+  const MOVEMENT_CHAIN_ID = movementChainId;
+  const API_BASE = movementApiBase;
+
+  const aptos = getAptosInstance();
 
   const coinType = getCoinType(coinSymbol);
   const brokerAddress = getBrokerAddress(coinType);
@@ -151,8 +169,8 @@ export async function executeLendV2(params: LendV2Params): Promise<string> {
   // Override chain ID to match Movement Network
   const txnObj = rawTxn as any;
   if (txnObj.rawTransaction) {
-    const movementChainId = new ChainId(MOVEMENT_CHAIN_ID);
-    txnObj.rawTransaction.chain_id = movementChainId;
+    const movementChainIdObj = new ChainId(MOVEMENT_CHAIN_ID);
+    txnObj.rawTransaction.chain_id = movementChainIdObj;
   }
 
   // Generate signing message and hash
@@ -234,6 +252,15 @@ export async function executeRedeemV2(params: LendV2Params): Promise<string> {
     onProgress("Initializing SDK...");
   }
 
+  // Load config at function call time, not module load time
+  const movementApiBase = requireMovementApiBase();
+  const movementChainId = requireMovementChainId();
+
+  const MOVEMENT_CHAIN_ID = movementChainId;
+  const API_BASE = movementApiBase;
+
+  const aptos = getAptosInstance();
+
   const coinType = getCoinType(coinSymbol);
   const brokerAddress = getBrokerAddress(coinType);
 
@@ -301,8 +328,8 @@ export async function executeRedeemV2(params: LendV2Params): Promise<string> {
   // Override chain ID to match Movement Network
   const txnObj = rawTxn as any;
   if (txnObj.rawTransaction) {
-    const movementChainId = new ChainId(MOVEMENT_CHAIN_ID);
-    txnObj.rawTransaction.chain_id = movementChainId;
+    const movementChainIdObj = new ChainId(MOVEMENT_CHAIN_ID);
+    txnObj.rawTransaction.chain_id = movementChainIdObj;
   }
 
   // Generate signing message and hash

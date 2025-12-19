@@ -1,0 +1,11 @@
+{
+  "movementApiBase": "https://api.moveposition.xyz",
+  "movementFullNode": "https://full.mainnet.movementinfra.xyz/v1",
+  "movementRpc": "https://rpc.sentio.xyz/movement/v1",
+  "movementChainId": 126,
+  "movementTestNetChainId": 250,
+  "mosaicApiBaseUrl": "https://api.mosaic.ag/v1",
+  "movementLabsUrl": "https://mainnet.movementlabs.xyz",
+  "movementExplorerUrl": "https://explorer.movementlabs.xyz",
+  "movementPositionBrokerUrl": "https://api.moveposition.xyz/brokers"
+}

@@ -11,19 +11,32 @@ import {
 } from "@aptos-labs/ts-sdk";
 import { toHex } from "viem";
 import * as superJsonApiClient from "../../lib/super-json-api-client/src";
+import { store } from "../../store";
 
-// Movement Network configuration
+// Movement Network configuration via runtime Redux config
 const MOVEMENT_NETWORK = Network.MAINNET;
-const MOVEMENT_RPC = "https://rpc.sentio.xyz/movement/v1";
-const MOVEMENT_CHAIN_ID = 126;
-const MOVEMENT_API_BASE = "https://api.moveposition.xyz";
 
-const aptos = new Aptos(
-  new AptosConfig({
-    network: MOVEMENT_NETWORK,
-    fullnode: MOVEMENT_RPC,
-  })
-);
+function getRuntimeConfig() {
+  const state = store.getState() as any;
+  const cfg = state.config || {};
+  if (!cfg.loaded) throw new Error("Runtime config not loaded");
+  return cfg as {
+    movementApiBase: string;
+    movementRpc: string;
+    movementChainId: number;
+  };
+}
+
+function getAptos() {
+  const { movementRpc } = getRuntimeConfig();
+  const aptos = new Aptos(
+    new AptosConfig({
+      network: MOVEMENT_NETWORK,
+      fullnode: movementRpc,
+    })
+  );
+  return aptos;
+}
 
 // Transaction types
 export const DEPOSIT_TAB = "Supply";
@@ -168,7 +181,7 @@ async function checkAPTBalance(
       accountAddress,
     };
 
-    const resources = await aptos.getAccountResources(accountArgs);
+    const resources = await getAptos().getAccountResources(accountArgs);
     const gasToken: any = resources.find((t: any) => t.type === aptResource);
     const gasBal = gasToken?.data?.coin?.value || 0;
     const hasGas = gasBal > 0;
@@ -190,8 +203,9 @@ async function checkAPTBalance(
 async function fetchPortfolioState(
   address: string
 ): Promise<PortfolioResponse> {
+  const { movementApiBase } = getRuntimeConfig();
   const superClient = new superJsonApiClient.SuperClient({
-    BASE: MOVEMENT_API_BASE,
+    BASE: movementApiBase,
   });
   const data = await superClient.default.getPortfolio(address);
   return data as unknown as PortfolioResponse;
@@ -215,16 +229,16 @@ async function fetchPacket(
   let endpoint: string;
   switch (txType) {
     case SUPPLY_COLLATERAL:
-      endpoint = `${MOVEMENT_API_BASE}/brokers/lend/v2`;
+      endpoint = `${getRuntimeConfig().movementApiBase}/brokers/lend/v2`;
       break;
     case WITHDRAW:
-      endpoint = `${MOVEMENT_API_BASE}/brokers/redeem/v2`;
+      endpoint = `${getRuntimeConfig().movementApiBase}/brokers/redeem/v2`;
       break;
     case BORROW:
-      endpoint = `${MOVEMENT_API_BASE}/brokers/borrow/v2`;
+      endpoint = `${getRuntimeConfig().movementApiBase}/brokers/borrow/v2`;
       break;
     case REPAY:
-      endpoint = `${MOVEMENT_API_BASE}/brokers/repay/v2`;
+      endpoint = `${getRuntimeConfig().movementApiBase}/brokers/repay/v2`;
       break;
     default:
       throw new Error(`Invalid transaction type: ${txType}`);
@@ -287,7 +301,7 @@ async function signAndSubmitTransaction(
     const functionArguments = packet.arguments || [];
 
     // Build transaction
-    const rawTxn = await aptos.transaction.build.simple({
+    const rawTxn = await getAptos().transaction.build.simple({
       sender: address,
       data: {
         function: functionName as `${string}::${string}::${string}`,
@@ -299,7 +313,7 @@ async function signAndSubmitTransaction(
     // Override chain ID to match Movement Network
     const txnObj = rawTxn as any;
     if (txnObj.rawTransaction) {
-      const movementChainId = new ChainId(MOVEMENT_CHAIN_ID);
+      const movementChainId = new ChainId(getRuntimeConfig().movementChainId);
       txnObj.rawTransaction.chain_id = movementChainId;
     }
 
@@ -345,7 +359,7 @@ async function signAndSubmitTransaction(
       onProgress("Submitting transaction to network...");
     }
 
-    const pending = await aptos.transaction.submit.simple({
+    const pending = await getAptos().transaction.submit.simple({
       transaction: rawTxn,
       senderAuthenticator,
     });

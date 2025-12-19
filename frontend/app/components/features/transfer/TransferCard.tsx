@@ -25,24 +25,12 @@ import {
 } from "@aptos-labs/ts-sdk";
 import { toHex } from "viem";
 import { useSignRawHash } from "@privy-io/react-auth/extended-chains";
+import { useMovementConfig } from "../../../hooks/useMovementConfig";
 
 interface TransferCardProps {
   data: TransferData;
   onTransferInitiate?: () => void;
 }
-
-// Movement Network configuration - Testnet
-// Movement Network testnet uses chain ID 250 (not the standard Aptos testnet chain ID)
-const MOVEMENT_NETWORK = Network.TESTNET;
-const MOVEMENT_FULLNODE = "https://testnet.movementnetwork.xyz/v1";
-const MOVEMENT_CHAIN_ID = 250;
-
-const aptos = new Aptos(
-  new AptosConfig({
-    network: MOVEMENT_NETWORK,
-    fullnode: MOVEMENT_FULLNODE,
-  })
-);
 
 export const TransferCard: React.FC<TransferCardProps> = ({
   data,
@@ -52,6 +40,25 @@ export const TransferCard: React.FC<TransferCardProps> = ({
   const { amount, token, tokenSymbol, toAddress, fromAddress, network, error } =
     data;
   const { user, ready, authenticated } = usePrivy();
+  const config = useMovementConfig();
+
+  // Create Aptos instance with config from Redux store
+  // Use testnet network since TransferCard is for testnet operations
+  const aptos = useMemo(() => {
+    if (!config.movementFullNode) return null;
+    return new Aptos(
+      new AptosConfig({
+        network: Network.TESTNET,
+        fullnode: config.movementFullNode,
+      })
+    );
+  }, [config.movementFullNode]);
+
+  const movementChainId = useMemo(() => {
+    // Use testnet chain ID from config
+    return config.movementTestNetChainId || 250;
+  }, [config.movementTestNetChainId]);
+
   const [transferring, setTransferring] = useState(false);
   const [transferError, setTransferError] = useState<string | null>(null);
   const [txHash, setTxHash] = useState<string | null>(null);
@@ -87,10 +94,15 @@ export const TransferCard: React.FC<TransferCardProps> = ({
     setTxHash(null);
 
     try {
+      if (!aptos) {
+        throw new Error("Aptos client not initialized");
+      }
+
       // Get Aptos wallet from user's linked accounts
-      const aptosWallet = user?.linkedAccounts?.find(
-        (a) => a.type === "wallet" && a.chainType === "aptos"
-      ) as any;
+      const aptosWallet = user?.linkedAccounts?.find((a: unknown) => {
+        const account = a as Record<string, unknown>;
+        return account.type === "wallet" && account.chainType === "aptos";
+      }) as WalletWithMetadata | undefined;
 
       if (!aptosWallet) {
         throw new Error("Aptos wallet not found");
@@ -133,14 +145,17 @@ export const TransferCard: React.FC<TransferCardProps> = ({
         },
       });
 
-      // Override chain ID to match Movement Network testnet (250)
-      // The SDK uses Aptos testnet chain ID, but Movement uses 250
+      // Override chain ID to match Movement Network testnet
       // Create a proper ChainId instance and replace the chain_id in rawTransaction
-      const txnObj = rawTxn as any;
+      const txnObj = rawTxn as unknown as Record<
+        string,
+        Record<string, unknown>
+      >;
       if (txnObj.rawTransaction) {
-        // Create a new ChainId instance with the Movement Network chain ID
-        const movementChainId = new ChainId(MOVEMENT_CHAIN_ID);
-        txnObj.rawTransaction.chain_id = movementChainId;
+        // Use the chain ID from config
+        const chainIdObj = new ChainId(movementChainId);
+        (txnObj.rawTransaction as Record<string, unknown>).chain_id =
+          chainIdObj;
       }
 
       // Generate signing message and hash
@@ -176,9 +191,13 @@ export const TransferCard: React.FC<TransferCardProps> = ({
       console.log("Transaction executed:", executed.hash);
       setTxHash(executed.hash);
       onTransferInitiate?.();
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error("Transfer error:", err);
-      setTransferError(err.message || "Transfer failed. Please try again.");
+      const errorMessage =
+        err instanceof Error
+          ? err.message
+          : "Transfer failed. Please try again.";
+      setTransferError(errorMessage);
     } finally {
       setTransferring(false);
     }
@@ -252,7 +271,7 @@ export const TransferCard: React.FC<TransferCardProps> = ({
             {txHash}
           </p>
           <a
-            href={`https://explorer.movementlabs.xyz/txn/${txHash}`}
+            href={`${config.movementExplorerUrl || "https://explorer.movementlabs.xyz"}/txn/${txHash}`}
             target="_blank"
             rel="noopener noreferrer"
             className="text-xs font-medium text-green-700 hover:text-green-900 underline"

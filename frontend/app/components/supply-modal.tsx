@@ -8,6 +8,7 @@ import { getBrokerName } from "../utils/lending-transaction";
 import { getCoinDecimals, convertAmountToRaw } from "../utils/token-utils";
 import { executeLendV2, executeRedeemV2 } from "../utils/lend-v2-utils";
 import * as superJsonApiClient from "../../lib/super-json-api-client/src";
+import { getMovementApiBase } from "@/lib/super-aptos-sdk/src/globals";
 
 interface SupplyModalProps {
   isOpen: boolean;
@@ -107,6 +108,8 @@ export function SupplyModal({
   const [loadingPortfolio, setLoadingPortfolio] = useState(false);
   const [submissionStep, setSubmissionStep] = useState<string>("");
 
+  const movementApiBase = getMovementApiBase();
+
   const movementWallet = useMemo(() => {
     if (!ready || !authenticated || !user?.linkedAccounts) {
       return null;
@@ -124,9 +127,22 @@ export function SupplyModal({
       setAmount("");
       setShowMore(false);
       setActiveTab("supply");
+      setSubmitError(null);
+      setTxHash(null);
+      setSubmissionStep("");
+      setSimulatedRiskData(null);
       return;
     }
   }, [isOpen]);
+
+  const handleTabSwitch = (tab: "supply" | "withdraw") => {
+    setActiveTab(tab);
+    setAmount("");
+    setSubmitError(null);
+    setTxHash(null);
+    setSubmissionStep("");
+    setSimulatedRiskData(null);
+  };
 
   useEffect(() => {
     if (isOpen) {
@@ -207,7 +223,7 @@ export function SupplyModal({
       setLoadingPortfolio(true);
       try {
         const superClient = new superJsonApiClient.SuperClient({
-          BASE: "https://api.moveposition.xyz",
+          BASE: movementApiBase,
         });
         const [portfolioRes, brokersRes] = await Promise.all([
           superClient.default.getPortfolio(walletAddress),
@@ -225,7 +241,7 @@ export function SupplyModal({
     };
 
     fetchPortfolioAndBrokers();
-  }, [walletAddress, isOpen]);
+  }, [walletAddress, isOpen, movementApiBase]);
 
   const handleAmountChange = (value: string) => {
     const numericValue = value.replace(/[^0-9.]/g, "");
@@ -366,7 +382,7 @@ export function SupplyModal({
       try {
         // Call MovePosition risk simulation API via SuperClient
         const superClient = new superJsonApiClient.SuperClient({
-          BASE: "https://api.moveposition.xyz",
+          BASE: movementApiBase,
         });
 
         const data = await superClient.default.getRiskSimulated({
@@ -389,11 +405,23 @@ export function SupplyModal({
     }, 500); // Wait 500ms after user stops typing
 
     return () => clearTimeout(timeoutId);
-  }, [buildNextPortfolioState, amount]);
+  }, [buildNextPortfolioState, amount, movementApiBase]);
 
+  /**
+   * Handle Max button click - works for both Supply and Withdraw tabs
+   */
   const handleMax = () => {
-    if (balance && parseFloat(balance) > 0) {
-      setAmount(balance);
+    if (activeTab === "supply") {
+      // For supply: use wallet balance
+      if (balance && parseFloat(balance) > 0) {
+        setAmount(balance);
+      }
+    } else {
+      // For withdraw: use supplied amount (max withdrawable)
+      if (userSuppliedAmount > 0) {
+        // Format to avoid floating point issues
+        setAmount(userSuppliedAmount.toFixed(6));
+      }
     }
   };
 
@@ -507,6 +535,17 @@ export function SupplyModal({
     getRiskSimulated?.newHealthFactor ??
     currentHealthFactor;
 
+  /**
+   * Check if Max button should be shown
+   */
+  const showMaxButton = useMemo(() => {
+    if (activeTab === "supply") {
+      return balance && parseFloat(balance) > 0;
+    } else {
+      return userSuppliedAmount > 0;
+    }
+  }, [activeTab, balance, userSuppliedAmount]);
+
   const handleSubmit = async () => {
     if (!movementWallet || !walletAddress || !asset) {
       setSubmitError("Wallet not connected");
@@ -524,6 +563,14 @@ export function SupplyModal({
       parseFloat(amount) > parseFloat(balance)
     ) {
       setSubmitError("Insufficient balance");
+      return;
+    }
+    const EPSILON = 0.000001;
+    if (
+      activeTab === "withdraw" &&
+      parseFloat(amount) > userSuppliedAmount + EPSILON
+    ) {
+      setSubmitError("Insufficient supplied balance");
       return;
     }
 
@@ -597,12 +644,12 @@ export function SupplyModal({
   }
 
   return (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80 backdrop-blur-sm">
+    <div className="fixed inset-0 z-9999 flex items-center justify-center bg-black/80 backdrop-blur-sm">
       <div className="relative w-full max-w-md rounded-2xl bg-white dark:bg-zinc-900 shadow-2xl">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-zinc-200 dark:border-zinc-800">
           <h2 className="text-xl font-semibold text-zinc-950 dark:text-zinc-50">
-            Supply {asset.symbol}
+            {activeTab === "supply" ? "Supply" : "Withdraw"} {asset.symbol}
           </h2>
           <button
             onClick={onClose}
@@ -628,8 +675,9 @@ export function SupplyModal({
         <div className="flex p-2 gap-2 border-b border-zinc-200 dark:border-zinc-800">
           <button
             onClick={() => {
-              setActiveTab("supply");
-              setAmount("");
+              handleTabSwitch("supply");
+              // setActiveTab("supply");
+              // setAmount("");
             }}
             className={`flex-1 py-3 text-sm rounded-md font-medium transition-colors ${
               activeTab === "supply"
@@ -641,8 +689,9 @@ export function SupplyModal({
           </button>
           <button
             onClick={() => {
-              setActiveTab("withdraw");
-              setAmount("");
+              handleTabSwitch("withdraw");
+              // setActiveTab("withdraw");
+              // setAmount("");
             }}
             className={`flex-1 py-3 text-sm font-medium rounded-md transition-colors ${
               activeTab === "withdraw"
@@ -684,7 +733,7 @@ export function SupplyModal({
                   ${usdValue.toFixed(2)}
                 </div>
               </div>
-              {activeTab === "supply" && balance && parseFloat(balance) > 0 && (
+              {showMaxButton && (
                 <button
                   onClick={handleMax}
                   className="px-4 py-1 bg-yellow-500 text-black text-sm font-medium rounded hover:bg-yellow-400 transition-colors"
@@ -693,6 +742,20 @@ export function SupplyModal({
                 </button>
               )}
             </div>
+
+            {/* Available balance hint for withdraw */}
+            {activeTab === "withdraw" && (
+              <div className="text-xs text-zinc-500 dark:text-zinc-400 mt-2">
+                Available to withdraw:{" "}
+                {loadingPortfolio ? (
+                  <span className="text-zinc-400">Loading...</span>
+                ) : (
+                  <span className="text-zinc-700 dark:text-zinc-300 font-medium">
+                    {userSuppliedAmount.toFixed(6)} {asset.symbol}
+                  </span>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Stats */}
@@ -748,7 +811,7 @@ export function SupplyModal({
                     <span className="text-zinc-900 dark:text-zinc-50">
                       {(activeTab === "supply"
                         ? userSuppliedAmount + parseFloat(amount)
-                        : userSuppliedAmount - parseFloat(amount)
+                        : Math.max(0, userSuppliedAmount - parseFloat(amount))
                       ).toFixed(4)}{" "}
                       {asset.symbol}
                     </span>

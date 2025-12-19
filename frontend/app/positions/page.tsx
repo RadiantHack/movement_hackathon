@@ -11,6 +11,7 @@ import { BorrowModal } from "../components/borrow-modal";
 import { getTokenBySymbol, getVerifiedTokens } from "../utils/token-constants";
 import { type TokenInfo } from "../utils/tokens";
 import * as superJsonApiClient from "../../lib/super-json-api-client/src";
+import { getMovementApiBase } from "@/lib/super-aptos-sdk/src/globals";
 
 interface BrokerAssetInfo {
   network: string;
@@ -115,6 +116,9 @@ interface PortfolioResponse {
 function PositionsPageContent() {
   const { ready, authenticated, user } = usePrivy();
   const router = useRouter();
+
+  const movementApiBase = getMovementApiBase();
+
   const searchParams = useSearchParams();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isRightSidebarOpen, setIsRightSidebarOpen] = useState(false);
@@ -196,7 +200,7 @@ function PositionsPageContent() {
       setPortfolioError(null);
       try {
         const superClient = new superJsonApiClient.SuperClient({
-          BASE: "https://api.moveposition.xyz",
+          BASE: movementApiBase,
         });
         const data = await superClient.default.getPortfolio(walletAddress);
         setPortfolioData(data as unknown as PortfolioResponse);
@@ -213,7 +217,7 @@ function PositionsPageContent() {
     };
 
     fetchPortfolio();
-  }, [walletAddress]);
+  }, [walletAddress, movementApiBase]);
 
   // Fetch brokers data
   useEffect(() => {
@@ -222,7 +226,7 @@ function PositionsPageContent() {
       setBrokerError(null);
       try {
         const superClient = new superJsonApiClient.SuperClient({
-          BASE: "https://api.moveposition.xyz",
+          BASE: movementApiBase,
         });
         const data = await superClient.default.getBrokers();
         setBrokers(data as unknown as BrokerEntry[]);
@@ -238,7 +242,7 @@ function PositionsPageContent() {
     };
 
     fetchBrokers();
-  }, []);
+  }, [movementApiBase]);
 
   // Redirect to home if not authenticated
   useEffect(() => {
