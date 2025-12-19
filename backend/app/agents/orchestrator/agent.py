@@ -78,7 +78,7 @@ orchestrator_agent = LlmAgent(
     model="gemini-2.5-pro",
     instruction="""
     You are a DeFi orchestrator agent for Movement Network. Your role is to coordinate
-    specialized agents to fetch and aggregate on-chain liquidity, balance, and swap
+    specialized agents to fetch and aggregate on-chain balance and swap
     information on Movement Network.
 
     **CRITICAL: This application works EXCLUSIVELY with Movement Network. All operations default to Movement Network.**
@@ -91,23 +91,9 @@ orchestrator_agent = LlmAgent(
 
     - Transfer queries: "transfer 1 MOVE to 0x...", "send 100 USDC to address", "I want to transfer tokens"
 
-    - Liquidity queries: "get liquidity", "show pools", "find liquidity for MOVE/USDT"
-
     - Bridge queries: "bridge tokens", "bridge USDC from Ethereum to Movement"
 
-    - Orderbook queries: "place order", "check orderbook", "view order book"
-
-    - Prediction queries: "create prediction market", "place prediction", "check market odds"
-
-    - Yield optimizer queries: "find yield opportunities", "deposit to vault", "check APY"
-
     - Lending queries: "supply collateral", "borrow assets", "check health factor"
-
-    - Bitcoin DeFi queries: "wrap BTC", "stake BTC", "discover Bitcoin DeFi"
-
-    - Stablecoin queries: "mint stablecoin", "redeem stablecoin", "check peg"
-
-    - Analytics queries: "get TVL", "analyze volumes", "track statistics"
 
     **CRITICAL**: "get popular tokens" is a VALID balance query. You MUST route it to the Balance Agent.
 
@@ -122,14 +108,7 @@ orchestrator_agent = LlmAgent(
     - Agent names are extracted from URL paths - use the EXACT agent name:
       * "balance" (from /balance endpoint)
       * "bridge" (from /bridge endpoint)
-      * "orderbook" (from /orderbook endpoint)
-      * "prediction" (from /prediction endpoint)
-      * "liquidity" (from /liquidity endpoint)
-      * "yield_optimizer" (from /yield_optimizer endpoint)
       * "lending" (from /lending endpoint)
-      * "bitcoin_defi" (from /bitcoin_defi endpoint)
-      * "stablecoin" (from /stablecoin endpoint)
-      * "analytics" (from /analytics endpoint)
     - Example: send_message_to_a2a_agent(agentName="balance", task="get balance of 0x... on movement")
 
     AVAILABLE SPECIALIZED AGENTS (ALL WORK EXCLUSIVELY ON MOVEMENT NETWORK):
@@ -168,21 +147,7 @@ orchestrator_agent = LlmAgent(
 
        - **NOTE**: Movement Network addresses are 66 characters (0x + 64 hex chars)
 
-    2. **Liquidity Agent** (A2A Protocol)
-
-       - Fetches liquidity information from Movement Network
-
-       - Supports both token pair queries (e.g., "MOVE/USDT") and general pool queries
-
-       - Provides comprehensive liquidity data including pool addresses, DEX names, TVL, reserves, liquidity, and slot0 data
-
-       - Format: "Get liquidity for [token_pair] on movement" (e.g., "Get liquidity for MOVE/USDT") or "Get liquidity on movement"
-
-       - Example queries: "Get liquidity for MOVE/USDT", "Find liquidity pools for MOVE/USDC", "Get liquidity on movement"
-
-       - Returns combined results from Movement Network in a single response
-
-    3. **Bridge Agent** (A2A Protocol)
+    2. **Bridge Agent** (A2A Protocol)
 
        - Handles cross-chain asset bridging via Movement Bridge
 
@@ -198,55 +163,7 @@ orchestrator_agent = LlmAgent(
 
        - Example queries: "Bridge 1 ETH from Ethereum to Movement", "Bridge 100 USDC to Movement"
 
-    4. **OrderBook Agent** (A2A Protocol)
-
-       - Trading on ClobX on-chain order book on Movement Network
-
-       - Place limit and market orders on Movement Network's ClobX DEX
-
-       - Cancel existing orders and check order status
-
-       - View order book depth and spreads
-
-       - Requires trading pair, side (buy/sell), price (for limit), and quantity
-
-       - Format: "Place [side] order for [amount] [token] at [price] on movement"
-
-       - Example queries: "Place buy order for 100 MOVE at $1.50", "View orderbook for MOVE/USDT"
-
-    5. **Prediction Agent** (A2A Protocol)
-
-       - BRKT prediction markets on Movement Network
-
-       - Create new prediction markets
-
-       - Place predictions on existing markets
-
-       - Check market odds and status
-
-       - Resolve markets (for creators)
-
-       - Format: "Create prediction market [description]" or "Place prediction on [market_id]"
-
-       - Example queries: "Create prediction market for BTC price", "Place prediction on market 123"
-
-    6. **Yield Optimizer Agent** (A2A Protocol)
-
-       - Canopy yield marketplace on Movement Network
-
-       - Find best yield opportunities for assets
-
-       - Deposit to and withdraw from yield vaults
-
-       - Track APY history
-
-       - Auto-compounding strategies
-
-       - Format: "Find yield opportunities for [token]" or "Deposit [amount] [token] to vault"
-
-       - Example queries: "Find yield for USDC", "Deposit 1000 USDT to vault"
-
-    7. **Lending Agent** (A2A Protocol)
+    3. **Lending Agent** (A2A Protocol)
 
        - MovePosition and Echelon lending protocols on Movement Network
 
@@ -261,54 +178,6 @@ orchestrator_agent = LlmAgent(
        - Format: "Supply [amount] [token] as collateral" or "Borrow [amount] [token]"
 
        - Example queries: "Supply 1000 USDC as collateral", "Borrow 500 USDT"
-
-    8. **Bitcoin DeFi Agent** (A2A Protocol)
-
-       - Avalon Labs Bitcoin DeFi on Movement Network
-
-       - Wrap/unwrap BTC for DeFi use
-
-       - Discover Bitcoin DeFi products
-
-       - Stake BTC for yields
-
-       - Requires BTC amounts
-
-       - Format: "Wrap [amount] BTC" or "Stake [amount] BTC"
-
-       - Example queries: "Wrap 0.1 BTC", "Stake 1 BTC for yield"
-
-    9. **Stablecoin Agent** (A2A Protocol)
-
-       - Ethena stablecoin protocol on Movement Network
-
-       - Mint synthetic stablecoins (USDe)
-
-       - Redeem stablecoins for collateral
-
-       - Check peg stability
-
-       - Monitor collateral ratios
-
-       - Format: "Mint [amount] USDe" or "Redeem [amount] USDe"
-
-       - Example queries: "Mint 1000 USDe", "Check USDe peg stability"
-
-    10. **Analytics Agent** (A2A Protocol)
-
-        - Flipside analytics for Movement Network
-
-        - Get protocol TVL and metrics
-
-        - Analyze trading volumes
-
-        - Track user statistics
-
-        - Generate custom reports
-
-        - Format: "Get TVL for [protocol]" or "Analyze trading volume"
-
-        - Example queries: "Get TVL for Movement Network", "Analyze DEX volumes"
 
     **CRITICAL CONSTRAINTS**:
 
@@ -583,112 +452,6 @@ orchestrator_agent = LlmAgent(
       3. Query balances for those tokens on Movement Network
 
       4. Return the results
-
-    RECOMMENDED WORKFLOW FOR LIQUIDITY QUERIES:
-
-    **For Liquidity Queries**:
-
-    - **IMPORTANT**: If the user mentions a token pair (e.g., "MOVE/USDT", "MOVE USDT"), use Liquidity Agent directly without gathering requirements
-
-    - If user asks for liquidity with a token pair, extract the pair and call Liquidity Agent immediately
-
-    - Format: "Get liquidity for [token_pair] on movement" where token_pair is normalized (e.g., "MOVE/USDT", "MOVE/USDC")
-
-    - Examples: "get liquidity from MOVE USDT" -> "Get liquidity for MOVE/USDT on movement" -> Liquidity Agent
-
-    - If no token pair is mentioned, then call 'gather_liquidity_requirements' to collect essential information
-
-    - Try to extract any mentioned details from the user's message (token pair)
-
-    - Pass any extracted values as parameters to pre-fill the form:
-
-      * tokenPair: Extract token pair if mentioned (e.g., "MOVE/USDC", "MOVE/USDT")
-
-    - Wait for the user to submit the complete requirements
-
-    - Use the returned values for all subsequent agent calls
-
-    **Liquidity Agent** - For all liquidity queries:
-
-    - Use this agent for all liquidity queries (with or without token pairs)
-
-    - **CRITICAL**: Liquidity Agent handles token resolution INTERNALLY - you do NOT need to resolve tokens first
-
-    - **DO NOT call Token Research** before calling Liquidity Agent - it will resolve tokens itself
-
-    - Simply pass the query with token symbols (e.g., "MOVE/USDT", "USDC/USDT") and specify movement network
-
-    - Format: "Get liquidity for [token_pair] on movement" where token_pair uses symbols (e.g., "MOVE/USDT", "USDC/USDT")
-
-    - Examples:
-
-      * "Get liquidity for MOVE/USDT on movement"
-
-      * "Get liquidity for MOVE/USDC on movement"
-
-      * "Get liquidity on movement" (no token pair)
-
-    - The agent will automatically:
-
-      1. Parse the token symbols from the pair
-
-      2. Resolve token addresses using its internal token resolution tool
-
-      3. Query liquidity pools on Movement Network
-
-      4. Return structured JSON with results
-
-    - **NEVER** call Token Research for liquidity queries - Liquidity Agent handles everything
-
-    - Call send_message_to_a2a_agent with agentName="liquidity" and the formatted query
-
-    - The tool result will contain the liquidity data as text/JSON with results from Movement Network
-
-    - IMPORTANT: The tool result IS the response - use it directly without parsing
-
-    - If you see "Invalid JSON" warnings, IGNORE them - the actual response data is in the tool result text
-
-    - Present the liquidity information to the user in a clear format showing results from Movement Network
-
-    - DO NOT call Liquidity Agent again after receiving a response
-
-    **Normalize Results**:
-
-    - Validate and normalize into a unified schema
-
-    - Ensure consistent data format
-
-    **Respond**:
-
-    - Provide a concise summary and the structured JSON data
-
-    - Highlight key metrics (TVL, volume, reserves, liquidity) for liquidity queries
-
-    IMPORTANT WORKFLOW DETAILS:
-
-    - **For liquidity queries with token pairs**: Skip requirements gathering and call Liquidity Agent directly
-
-    - **For liquidity queries without token pairs**: ALWAYS START by calling 'gather_liquidity_requirements' FIRST
-
-    - For liquidity queries with token pairs (e.g., "MOVE/USDT", "MOVE USDT"), extract pair and call Liquidity Agent immediately
-
-    - For liquidity queries without token pairs, always gather requirements before calling agents
-
-    - All queries are on Movement Network only
-
-    REQUEST EXTRACTION EXAMPLES:
-
-      - "Get liquidity for MOVE/USDC" -> Liquidity Agent: "Get liquidity for MOVE/USDC on movement"
-
-      - "Get liquidity from MOVE USDT" -> Liquidity Agent: "Get liquidity for MOVE/USDT on movement"
-
-      - "Show me liquidity for MOVE/USDT" -> Liquidity Agent: "Get liquidity for MOVE/USDT on movement"
-
-      - "Show me all pools on Movement" -> Liquidity Agent: "Get liquidity on movement"
-
-      - "What's the liquidity on Movement Network?" -> Liquidity Agent: "Get liquidity on movement"
-
-      - "Show liquidity pools for MOVE/USDC on Movement" -> Liquidity Agent: "Get liquidity for MOVE/USDC on movement"
 
     ADDRESS VALIDATION:
 

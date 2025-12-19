@@ -101,6 +101,7 @@ export function SupplyModal({
   const [portfolioData, setPortfolioData] = useState<PortfolioResponse | null>(
     null
   );
+  const [brokerData, setBrokerData] = useState<any[]>([]);
   const [simulatedRiskData, setSimulatedRiskData] = useState<any | null>(null);
   const [loadingSimulation, setLoadingSimulation] = useState(false);
   const [loadingPortfolio, setLoadingPortfolio] = useState(false);
@@ -202,23 +203,28 @@ export function SupplyModal({
       return;
     }
 
-    const fetchPortfolio = async () => {
+    const fetchPortfolioAndBrokers = async () => {
       setLoadingPortfolio(true);
       try {
         const superClient = new superJsonApiClient.SuperClient({
           BASE: "https://api.moveposition.xyz",
         });
-        const data = await superClient.default.getPortfolio(walletAddress);
-        setPortfolioData(data as unknown as PortfolioResponse);
+        const [portfolioRes, brokersRes] = await Promise.all([
+          superClient.default.getPortfolio(walletAddress),
+          superClient.default.getBrokers(),
+        ]);
+        setPortfolioData(portfolioRes as unknown as PortfolioResponse);
+        setBrokerData(brokersRes as unknown as any[]);
       } catch (error) {
-        console.error("Error fetching portfolio:", error);
+        console.error("Error fetching portfolio/brokers:", error);
         setPortfolioData(null);
+        setBrokerData([]);
       } finally {
         setLoadingPortfolio(false);
       }
     };
 
-    fetchPortfolio();
+    fetchPortfolioAndBrokers();
   }, [walletAddress, isOpen]);
 
   const handleAmountChange = (value: string) => {
@@ -233,6 +239,7 @@ export function SupplyModal({
 
   /**
    * Get user's current supplied amount from portfolio data
+   * Formula: scaledAmount × depositNoteExchangeRate
    */
   const userSuppliedAmount = useMemo(() => {
     if (!portfolioData || !asset) return 0;
@@ -246,9 +253,15 @@ export function SupplyModal({
 
     if (!collateral) return 0;
 
-    const decimals = getCoinDecimals(asset.symbol);
-    return parseFloat(collateral.amount) / Math.pow(10, decimals);
-  }, [portfolioData, asset]);
+    // Get deposit note exchange rate from broker data
+    const broker = brokerData.find(
+      (b: any) => b.depositNote?.name === depositNoteName
+    );
+    const exchangeRate = broker?.depositNoteExchangeRate || 1;
+
+    // scaledAmount × depositNoteExchangeRate = actual underlying amount
+    return parseFloat(collateral.scaledAmount) * exchangeRate;
+  }, [portfolioData, asset, brokerData]);
 
   /**
    * Get current health factor from portfolio data

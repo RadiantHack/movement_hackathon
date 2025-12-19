@@ -144,6 +144,8 @@ function PositionsPageContent() {
   const getSymbolFromName = (name: string): string => {
     if (!name) return "UNKNOWN";
     const trimmed = name.replace(/^movement[- ]/i, "");
+    // MOVE-FA is the main MOVE market, AptosCoin MOVE is legacy
+    if (trimmed.toLowerCase() === "move-fa") return "MOVE";
     return trimmed.replace(/-/g, "").toUpperCase();
   };
 
@@ -247,7 +249,11 @@ function PositionsPageContent() {
 
   const marketPositions: MarketPosition[] = useMemo(() => {
     const verified = getVerifiedTokens();
-    return brokers.map((entry) => {
+    // Filter out legacy AptosCoin MOVE (use MOVE-FA instead which has higher utilization)
+    const filteredBrokers = brokers.filter(
+      (entry) => entry.underlyingAsset.name !== "movement-move"
+    );
+    return filteredBrokers.map((entry) => {
       const symbol = getSymbolFromName(entry.underlyingAsset.name);
       const token =
         resolveToken(symbol) ||
@@ -264,6 +270,18 @@ function PositionsPageContent() {
       const totalSupplied = availableLiquidity + totalBorrowed;
       const tvlUsd = totalSupplied * entry.underlyingAsset.price;
 
+      // Calculate Supply APY using formula matching moveposition.xyz
+      // For high utilization: interestRate × (1 - protocolFee) where protocolFee ~= 0.17
+      // For normal: utilization × interestRate × (1 - interestFeeRate)
+      const interestFeeRate = entry.interestFeeRate ?? 0.22;
+      const currentSupplyApy =
+        entry.utilization * entry.interestRate * (1 - interestFeeRate);
+
+      // Historical/boosted APY from exchange rate
+      const exchangeRate = entry.depositNoteExchangeRate || 1;
+      const totalReturn = exchangeRate - 1;
+      const boostedApy = totalReturn > 0 ? totalReturn * 100 : undefined;
+
       return {
         token,
         symbol,
@@ -273,11 +291,8 @@ function PositionsPageContent() {
         availableLiquidity,
         totalBorrowed,
         totalSupplied,
-        supplyApy: entry.interestRate * 100,
-        boostedApy:
-          entry.depositNoteExchangeRate > 1
-            ? (entry.depositNoteExchangeRate - 1) * 100
-            : undefined,
+        supplyApy: currentSupplyApy * 100,
+        boostedApy,
         tvlUsd,
       };
     });
@@ -578,112 +593,182 @@ function PositionsPageContent() {
               <div className="bg-white dark:bg-zinc-900 rounded-lg border border-zinc-200 dark:border-zinc-800 overflow-hidden">
                 <div className="overflow-x-auto">
                   <table className="w-full table-fixed">
-                    <thead className="bg-zinc-50 dark:bg-zinc-800 border-b border-zinc-200 dark:border-zinc-700">
+                    <thead className="bg-gradient-to-r from-zinc-50 to-zinc-100 dark:from-zinc-800/80 dark:to-zinc-800/40 border-b border-zinc-200 dark:border-zinc-700">
                       <tr>
-                        <th className="px-4 py-3 text-left text-xs font-semibold text-zinc-600 dark:text-zinc-400 uppercase tracking-wider">
-                          Asset
+                        <th className="px-5 py-4 text-left">
+                          <span className="text-xs font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-widest">
+                            Asset
+                          </span>
                         </th>
-                        <th className="px-4 py-3 text-left text-xs font-semibold text-zinc-600 dark:text-zinc-400 uppercase tracking-wider">
-                          Supplied
+                        <th className="px-5 py-4 text-left">
+                          <span className="text-xs font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-widest">
+                            Supplied
+                          </span>
                         </th>
-                        <th className="px-4 py-3 text-left text-xs font-semibold text-zinc-600 dark:text-zinc-400 uppercase tracking-wider hidden md:table-cell">
-                          Utilization
+                        <th className="px-5 py-4 text-left hidden md:table-cell">
+                          <span className="text-xs font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-widest">
+                            Utilization
+                          </span>
                         </th>
-                        <th className="px-4 py-3 text-left text-xs font-semibold text-zinc-600 dark:text-zinc-400 uppercase tracking-wider hidden md:table-cell">
-                          Total Supplied
+                        <th className="px-5 py-4 text-left hidden md:table-cell">
+                          <span className="text-xs font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-widest">
+                            Total Supplied
+                          </span>
                         </th>
-                        <th className="px-4 py-3 text-left text-xs font-semibold text-zinc-600 dark:text-zinc-400 uppercase tracking-wider hidden md:table-cell">
-                          Supply APY
+                        <th className="px-5 py-4 text-left hidden md:table-cell">
+                          <span className="text-xs font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-widest">
+                            Supply APY
+                          </span>
                         </th>
-                        <th className="px-4 py-3 text-center text-xs font-semibold text-zinc-600 dark:text-zinc-400 uppercase tracking-wider">
-                          Actions
+                        <th className="px-5 py-4 text-center">
+                          <span className="text-xs font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-widest">
+                            Actions
+                          </span>
                         </th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-zinc-200 dark:divide-zinc-700">
+                    <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
                       {filteredAssets.map((asset) => (
                         <tr
                           key={asset.token?.id ?? asset.symbol}
-                          className="hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors"
+                          className="group hover:bg-gradient-to-r hover:from-zinc-50 hover:to-transparent dark:hover:from-zinc-800/30 dark:hover:to-transparent transition-all duration-200"
                         >
-                          <td className="px-4 py-3">
-                            <div className="flex items-center gap-3">
-                              {asset.token?.iconUri ? (
-                                <img
-                                  src={asset.token.iconUri}
-                                  alt={asset.token?.symbol ?? asset.symbol}
-                                  className="w-8 h-8 rounded-full"
-                                  onError={(e) => {
-                                    (e.target as HTMLImageElement).src =
-                                      "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='16' fill='%23fbbf24'/%3E%3Ctext x='16' y='22' font-size='16' font-weight='bold' text-anchor='middle' fill='black'%3E" +
-                                      encodeURIComponent(
-                                        asset.symbol.charAt(0)
-                                      ) +
-                                      "%3C/text%3E%3C/svg%3E";
-                                  }}
-                                />
-                              ) : (
-                                <div className="w-8 h-8 rounded-full bg-yellow-500 flex items-center justify-center">
-                                  <span className="text-black font-bold text-xs">
+                          <td className="px-5 py-4">
+                            <div className="flex items-center gap-4">
+                              <div className="relative flex-shrink-0">
+                                {asset.token?.iconUri ? (
+                                  <img
+                                    src={asset.token.iconUri}
+                                    alt={asset.token?.symbol ?? asset.symbol}
+                                    className="w-11 h-11 rounded-2xl shadow-md group-hover:shadow-lg transition-shadow"
+                                    onError={(e) => {
+                                      (
+                                        e.target as HTMLImageElement
+                                      ).style.display = "none";
+                                      (
+                                        e.target as HTMLImageElement
+                                      ).nextElementSibling?.classList.remove(
+                                        "hidden"
+                                      );
+                                    }}
+                                  />
+                                ) : null}
+                                <div
+                                  className={`w-11 h-11 rounded-2xl bg-gradient-to-br from-purple-500 via-violet-500 to-indigo-600 flex items-center justify-center shadow-md ${asset.token?.iconUri ? "hidden" : ""}`}
+                                >
+                                  <span className="text-white font-bold text-lg">
                                     {asset.symbol.charAt(0)}
                                   </span>
                                 </div>
-                              )}
-                              <div>
-                                <div className="font-medium text-zinc-900 dark:text-zinc-50">
+                              </div>
+                              <div className="min-w-0">
+                                <div className="font-bold text-base text-zinc-900 dark:text-zinc-50 group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors">
                                   {asset.symbol}
                                 </div>
-                                <div className="text-xs text-zinc-500 dark:text-zinc-400">
-                                  ${asset.price.toFixed(4)}
+                                <div className="text-sm text-zinc-500 dark:text-zinc-400 tabular-nums">
+                                  $
+                                  {asset.price < 1
+                                    ? asset.price.toFixed(4)
+                                    : asset.price.toLocaleString(undefined, {
+                                        minimumFractionDigits: 2,
+                                        maximumFractionDigits: 2,
+                                      })}
                                 </div>
                               </div>
                             </div>
                           </td>
-                          <td className="px-4 py-3">
-                            <div className="text-sm text-zinc-900 dark:text-zinc-50">
-                              {asset.totalSupplied > 0 ? (
-                                <>
-                                  {asset.totalSupplied.toFixed(4)}
-                                  <div className="text-xs text-zinc-500 dark:text-zinc-400">
-                                    $
-                                    {asset.tvlUsd.toLocaleString(undefined, {
+                          <td className="px-5 py-4">
+                            <div className="text-sm font-medium text-zinc-900 dark:text-zinc-50 tabular-nums tracking-tight">
+                              {asset.totalSupplied > 0
+                                ? asset.totalSupplied.toLocaleString(
+                                    undefined,
+                                    {
                                       minimumFractionDigits: 2,
                                       maximumFractionDigits: 2,
-                                    })}
-                                  </div>
-                                </>
-                              ) : (
-                                "0"
-                              )}
+                                    }
+                                  )
+                                : "—"}
                             </div>
                           </td>
-                          <td className="px-4 py-3 hidden md:table-cell">
-                            <div className="text-sm text-zinc-900 dark:text-zinc-50">
-                              {asset.utilization.toFixed(2)}%
+                          <td className="px-5 py-4 hidden md:table-cell">
+                            <div className="flex items-center gap-2">
+                              <div className="flex-1 h-2 bg-zinc-200 dark:bg-zinc-700 rounded-full overflow-hidden">
+                                <div
+                                  className={`h-full rounded-full transition-all ${
+                                    asset.utilization >= 90
+                                      ? "bg-gradient-to-r from-red-500 to-orange-500"
+                                      : asset.utilization >= 70
+                                        ? "bg-gradient-to-r from-yellow-500 to-amber-500"
+                                        : "bg-gradient-to-r from-emerald-500 to-green-500"
+                                  }`}
+                                  style={{
+                                    width: `${Math.min(asset.utilization, 100)}%`,
+                                  }}
+                                />
+                              </div>
+                              <span
+                                className={`text-sm font-semibold min-w-[52px] text-right ${
+                                  asset.utilization >= 90
+                                    ? "text-red-600 dark:text-red-400"
+                                    : asset.utilization >= 70
+                                      ? "text-yellow-600 dark:text-yellow-400"
+                                      : "text-emerald-600 dark:text-emerald-400"
+                                }`}
+                              >
+                                {asset.utilization.toFixed(1)}%
+                              </span>
                             </div>
                           </td>
-                          <td className="px-4 py-3 hidden md:table-cell">
-                            <div className="text-sm text-zinc-900 dark:text-zinc-50">
-                              {asset.availableLiquidity.toFixed(4)} /{" "}
-                              {asset.totalSupplied.toFixed(4)}
-                              <div className="text-xs text-zinc-500 dark:text-zinc-400">
-                                Liquidity / Total
+                          <td className="px-5 py-4 hidden md:table-cell">
+                            <div>
+                              <div className="font-semibold text-zinc-900 dark:text-zinc-50">
+                                {asset.availableLiquidity.toLocaleString(
+                                  undefined,
+                                  {
+                                    minimumFractionDigits: 2,
+                                    maximumFractionDigits: 2,
+                                  }
+                                )}
+                              </div>
+                              <div className="text-xs text-zinc-400 dark:text-zinc-500">
+                                of{" "}
+                                {asset.totalSupplied.toLocaleString(undefined, {
+                                  minimumFractionDigits: 2,
+                                  maximumFractionDigits: 2,
+                                })}{" "}
+                                available
                               </div>
                             </div>
                           </td>
-                          <td className="px-4 py-3 hidden md:table-cell">
-                            <div className="text-sm text-zinc-900 dark:text-zinc-50">
+                          <td className="px-5 py-4 hidden md:table-cell">
+                            <div
+                              className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-sm font-medium ${
+                                asset.supplyApy >= 50
+                                  ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
+                                  : asset.supplyApy >= 10
+                                    ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                                    : asset.supplyApy >= 1
+                                      ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
+                                      : "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400"
+                              }`}
+                            >
+                              <span
+                                className={`w-1.5 h-1.5 rounded-full ${
+                                  asset.supplyApy >= 50
+                                    ? "bg-emerald-500 animate-pulse"
+                                    : asset.supplyApy >= 10
+                                      ? "bg-green-500"
+                                      : asset.supplyApy >= 1
+                                        ? "bg-blue-500"
+                                        : "bg-zinc-400"
+                                }`}
+                              />
                               {asset.supplyApy.toFixed(2)}%
-                              {asset.boostedApy && asset.boostedApy > 0 && (
-                                <div className="text-xs text-green-600 dark:text-green-400">
-                                  +{asset.boostedApy.toFixed(2)}%
-                                </div>
-                              )}
                             </div>
                           </td>
-                          <td className="px-4 py-3">
-                            <div className="flex items-center justify-center gap-2">
-                              {/* Supply - Coin going into wallet */}
+                          <td className="px-5 py-4">
+                            <div className="flex items-center justify-center gap-3">
+                              {/* Supply */}
                               <button
                                 className="group relative w-9 h-9 rounded-xl overflow-hidden bg-gradient-to-br from-emerald-50 to-teal-100 dark:from-emerald-900/30 dark:to-teal-900/30 border border-emerald-200 dark:border-emerald-700/50 flex items-center justify-center transition-all duration-300 hover:scale-105 hover:shadow-lg hover:shadow-emerald-500/20 hover:border-emerald-400"
                                 onClick={() => {
