@@ -43,14 +43,7 @@ Access these agents through the chat interface:
 
 - **Balance Agent** - Check cryptocurrency balances
 - **Bridge Agent** - Cross-chain asset bridging
-- **OrderBook Agent** - Trade on ClobX DEX
-- **Prediction Agent** - BRKT prediction markets
-- **Liquidity Agent** - Manage liquidity pools
-- **Yield Optimizer** - Optimize yield strategies
 - **Lending Agent** - Lending & borrowing
-- **Bitcoin DeFi** - Bitcoin DeFi operations
-- **Stablecoin Agent** - Stablecoin management
-- **Analytics Agent** - Protocol analytics
 
 ## Tech Stack
 

@@ -1,0 +1,523 @@
+"use client";
+
+import { useState, useMemo } from "react";
+import { usePrivy, WalletWithMetadata } from "@privy-io/react-auth";
+import { useSignRawHash } from "@privy-io/react-auth/extended-chains";
+import {
+  Aptos,
+  AptosConfig,
+  Network,
+  AccountAuthenticatorEd25519,
+  Ed25519PublicKey,
+  Ed25519Signature,
+  generateSigningMessageForTransaction,
+  ChainId,
+} from "@aptos-labs/ts-sdk";
+import { toHex } from "viem";
+
+interface EchelonAsset {
+  symbol: string;
+  name: string;
+  icon: string;
+  price: number;
+  supplyApr: number;
+  faAddress?: string;
+  decimals?: number;
+}
+
+interface EchelonSupplyModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  asset: EchelonAsset | null;
+  availableBalance?: number;
+}
+
+// Echelon contract address
+const ECHELON_CONTRACT =
+  "0x6a01d5761d43a5b5a0ccbfc42edf2d02c0611464aae99a2ea0e0d4819f0550b5";
+
+// Market addresses for each asset
+const MARKET_ADDRESSES: Record<string, string> = {
+  MOVE: "0x568f96c4ed010869d810abcf348f4ff6b66d14ff09672fb7b5872e4881a25db7",
+  USDC: "0x789d7711b7979d47a1622692559ccd221ef7c35bb04f8762dadb5cc70222a0a0",
+  USDT: "0x8191d4b8c0fc0af511b3c56c555528a3e74b7f3cfab3047df9ebda803f3bc3d2",
+  WBTC: "0xa24e2eaacf9603538af362f44dfcf9d411363923b9206260474abfaa8abebee4",
+  WETH: "0x6889932d2ff09c9d299e72b23a62a7f07af807789c98141d08475701e7b21b7c",
+  LBTC: "0x62cb5f64b5a9891c57ff12d38fbab141e18c3d63e859a595ff6525b4221eaf23",
+  SolvBTC: "0x185f42070ab2ca5910ebfdea83c9f26f4015ad2c0f5c8e6ca1566d07c6c60aca",
+  ezETH: "0x8dd513b2bb41f0180f807ecaa1e0d2ddfacd57bf739534201247deca13f3542",
+  sUSDe: "0x481fe68db505bc15973d0014c35217726efd6ee353d91a2a9faaac201f3423d",
+  rsETH: "0x4cbeca747528f340ef9065c93dea0cc1ac8a46b759e31fc8b8d04bc52a86614b",
+};
+
+// Type arguments for each asset
+const TYPE_ARGUMENTS: Record<string, string> = {
+  MOVE: "0x1::aptos_coin::AptosCoin",
+  USDC: "0x83121c9f9b0527d1f056e21a950d6bf3b9e9e2e8353d0e95ccea726713cbea39",
+  USDT: "0x447721a30109c662dde9c73a0c2c9c9c459fb5e5a9c92f03c50fa69737f5d08d",
+  WBTC: "0xb06f29f24dde9c6daeec1f930f14a441a8d6c0fbea590725e88b340af3e1939c",
+  WETH: "0x908828f4fb0213d4034c3ded1630bbd904e8a3a6bf3c63270887f0b06653a376",
+  LBTC: "0x658f4ef6f76c8eeffdc06a30946f3f06723a7f9532e2413312b2a612183759c",
+  SolvBTC: "0x527c43638a6c389a9ad702e7085f31c48223624d5102a5207dfab861f482c46d",
+  ezETH: "0x2f6af255328fe11b88d840d1e367e946ccd16bd7ebddd6ee7e2ef9f7ae0c53ef",
+  sUSDe: "0x74f0c7504507f7357f8a218cc70ce3fc0f4b4e9eb8474e53ca778cb1e0c6dcc5",
+  rsETH: "0x51ffc9885233adf3dd411078cad57535ed1982013dc82d9d6c433a55f2e0035d",
+};
+
+const MOVEMENT_RPC = "https://mainnet.movementnetwork.xyz/v1";
+const MOVEMENT_CHAIN_ID = 126;
+
+const aptos = new Aptos(
+  new AptosConfig({
+    network: Network.CUSTOM,
+    fullnode: MOVEMENT_RPC,
+  })
+);
+
+export function EchelonSupplyModal({
+  isOpen,
+  onClose,
+  asset,
+  availableBalance = 49.15281732,
+}: EchelonSupplyModalProps) {
+  const [amount, setAmount] = useState("");
+  const [percentage, setPercentage] = useState(0);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [txHash, setTxHash] = useState<string | null>(null);
+  const [step, setStep] = useState<string>("");
+
+  const { user, ready, authenticated } = usePrivy();
+  const { signRawHash } = useSignRawHash();
+
+  const movementWallet = useMemo(() => {
+    if (!ready || !authenticated || !user?.linkedAccounts) {
+      return null;
+    }
+    return (
+      user.linkedAccounts.find(
+        (account): account is WalletWithMetadata =>
+          account.type === "wallet" && account.chainType === "aptos"
+      ) || null
+    );
+  }, [user, ready, authenticated]);
+
+  if (!isOpen || !asset) return null;
+
+  const numericAmount = parseFloat(amount) || 0;
+  const usdValue = numericAmount * asset.price;
+
+  const handlePercentageChange = (pct: number) => {
+    setPercentage(pct);
+    const newAmount = (availableBalance * pct) / 100;
+    setAmount(newAmount.toFixed(8));
+  };
+
+  const handleAmountChange = (value: string) => {
+    setAmount(value);
+    const num = parseFloat(value) || 0;
+    const pct = availableBalance > 0 ? (num / availableBalance) * 100 : 0;
+    setPercentage(Math.min(pct, 100));
+  };
+
+  const handleMax = () => {
+    setAmount(availableBalance.toFixed(8));
+    setPercentage(100);
+  };
+
+  const handlePresetPercentage = (pct: number) => {
+    handlePercentageChange(pct);
+  };
+
+  const handleSupply = async () => {
+    if (!asset || numericAmount <= 0) return;
+
+    if (!movementWallet) {
+      setError("Please connect a Movement wallet");
+      return;
+    }
+
+    setSubmitting(true);
+    setError(null);
+    setTxHash(null);
+
+    try {
+      const senderAddress = movementWallet.address as string;
+      const publicKey = (movementWallet as any).publicKey as string;
+
+      if (!senderAddress || !publicKey) {
+        throw new Error("Wallet address or public key not found");
+      }
+
+      // Get market address and type argument for the asset
+      const marketAddress = MARKET_ADDRESSES[asset.symbol];
+      const typeArgument = TYPE_ARGUMENTS[asset.symbol];
+
+      if (!marketAddress || !typeArgument) {
+        throw new Error(`Unsupported asset: ${asset.symbol}`);
+      }
+
+      // Convert amount to smallest unit (8 decimals for most assets)
+      const decimals = asset.decimals || 8;
+      const rawAmount = Math.floor(
+        numericAmount * Math.pow(10, decimals)
+      ).toString();
+
+      setStep("Building transaction...");
+
+      // Build the transaction payload
+      const functionName =
+        `${ECHELON_CONTRACT}::scripts::supply` as `${string}::${string}::${string}`;
+
+      const rawTxn = await aptos.transaction.build.simple({
+        sender: senderAddress,
+        data: {
+          function: functionName,
+          typeArguments: [typeArgument],
+          functionArguments: [marketAddress, rawAmount],
+        },
+      });
+
+      // Override chain ID
+      const txnObj = rawTxn as any;
+      if (txnObj.rawTransaction) {
+        txnObj.rawTransaction.chain_id = new ChainId(MOVEMENT_CHAIN_ID);
+      }
+
+      setStep("Waiting for signature...");
+
+      // Generate signing message
+      const message = generateSigningMessageForTransaction(rawTxn);
+      const hash = toHex(message);
+
+      // Sign using Privy
+      const signatureResponse = await signRawHash({
+        address: senderAddress,
+        chainType: "aptos",
+        hash: hash as `0x${string}`,
+      });
+
+      setStep("Submitting transaction...");
+
+      // Create authenticator
+      // Privy public key format: "004a4b8e35..." or "0x004a4b8e35..."
+      // We need to drop the "00" prefix to get the actual 32-byte key
+      let pubKeyNoScheme = publicKey.startsWith("0x")
+        ? publicKey.slice(2)
+        : publicKey;
+      // Remove leading "00" if present (Privy adds this prefix)
+      if (pubKeyNoScheme.startsWith("00") && pubKeyNoScheme.length > 64) {
+        pubKeyNoScheme = pubKeyNoScheme.slice(2);
+      }
+      // Ensure we have exactly 64 hex characters (32 bytes)
+      if (pubKeyNoScheme.length !== 64) {
+        throw new Error(
+          `Invalid public key length: expected 64 hex characters (32 bytes), got ${pubKeyNoScheme.length}`
+        );
+      }
+      const publicKeyObj = new Ed25519PublicKey(`0x${pubKeyNoScheme}`);
+      const sig = new Ed25519Signature(signatureResponse.signature.slice(2));
+      const senderAuthenticator = new AccountAuthenticatorEd25519(
+        publicKeyObj,
+        sig
+      );
+
+      // Submit transaction
+      const pending = await aptos.transaction.submit.simple({
+        transaction: rawTxn,
+        senderAuthenticator,
+      });
+
+      setStep("Waiting for confirmation...");
+
+      // Wait for transaction
+      await aptos.waitForTransaction({
+        transactionHash: pending.hash,
+        options: { checkSuccess: true },
+      });
+
+      setTxHash(pending.hash);
+      setStep("");
+
+      // Close modal after success
+      setTimeout(() => {
+        onClose();
+        setAmount("");
+        setTxHash(null);
+      }, 2000);
+    } catch (err: any) {
+      console.error("Supply error:", err);
+      setError(err.message || "Transaction failed");
+      setStep("");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      {/* Backdrop */}
+      <div
+        className="absolute inset-0 bg-black/70 backdrop-blur-md"
+        onClick={onClose}
+      />
+
+      {/* Modal */}
+      <div className="relative w-full max-w-md rounded-3xl border border-zinc-200 dark:border-zinc-700/50 bg-white dark:bg-zinc-900 shadow-2xl overflow-hidden">
+        {/* Header */}
+        <div className="flex items-center justify-between p-6 pb-4">
+          <div>
+            <h2 className="text-2xl font-bold text-zinc-950 dark:text-zinc-50">
+              Supply
+            </h2>
+            <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">
+              Select the amount you&apos;d like to supply
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            className="w-10 h-10 rounded-full bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center text-zinc-500 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700 hover:text-zinc-700 dark:hover:text-zinc-200 transition-all duration-200"
+          >
+            <svg
+              className="w-5 h-5"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M6 18L18 6M6 6l12 12"
+              />
+            </svg>
+          </button>
+        </div>
+
+        <div className="px-6 pb-6">
+          {/* Input Section */}
+          <div className="rounded-2xl border border-zinc-200 dark:border-zinc-700/50 bg-zinc-50 dark:bg-zinc-800/50 p-5 mb-5">
+            <div className="flex items-start justify-between gap-4">
+              <div className="flex items-center gap-4">
+                <div className="relative">
+                  {asset.icon ? (
+                    <img
+                      src={
+                        asset.icon.startsWith("/")
+                          ? `https://app.echelon.market${asset.icon}`
+                          : asset.icon
+                      }
+                      alt={asset.symbol}
+                      className="w-12 h-12 rounded-full ring-2 ring-white dark:ring-zinc-800 shadow-lg"
+                    />
+                  ) : (
+                    <div className="w-12 h-12 rounded-full bg-gradient-to-br from-purple-500 via-violet-500 to-indigo-600 flex items-center justify-center ring-2 ring-white dark:ring-zinc-800 shadow-lg">
+                      <span className="text-white font-bold text-lg">
+                        {asset.symbol.charAt(0)}
+                      </span>
+                    </div>
+                  )}
+                  <div className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-green-500 border-2 border-white dark:border-zinc-800 flex items-center justify-center">
+                    <svg
+                      className="w-3 h-3 text-white"
+                      fill="currentColor"
+                      viewBox="0 0 20 20"
+                    >
+                      <path
+                        fillRule="evenodd"
+                        d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+                        clipRule="evenodd"
+                      />
+                    </svg>
+                  </div>
+                </div>
+                <div>
+                  <input
+                    type="text"
+                    value={amount}
+                    onChange={(e) => handleAmountChange(e.target.value)}
+                    placeholder="0.00"
+                    className="bg-transparent text-zinc-950 dark:text-zinc-50 text-2xl font-bold outline-none w-full placeholder:text-zinc-300 dark:placeholder:text-zinc-600"
+                  />
+                  <div className="text-zinc-500 dark:text-zinc-400 text-sm mt-0.5">
+                    ≈ $
+                    {usdValue.toLocaleString(undefined, {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    })}
+                  </div>
+                </div>
+              </div>
+              <div className="text-right shrink-0">
+                <button
+                  onClick={handleMax}
+                  className="px-4 py-2 rounded-xl bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 text-sm font-semibold hover:bg-purple-200 dark:hover:bg-purple-900/50 transition-colors"
+                >
+                  MAX
+                </button>
+                <div className="text-zinc-400 dark:text-zinc-500 text-xs mt-2">
+                  Available:{" "}
+                  <span className="text-zinc-600 dark:text-zinc-300 font-medium">
+                    {availableBalance.toFixed(4)}
+                  </span>{" "}
+                  {asset.symbol}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Percentage Presets */}
+          <div className="flex gap-2 mb-4">
+            {[25, 50, 75, 100].map((pct) => (
+              <button
+                key={pct}
+                onClick={() => handlePresetPercentage(pct)}
+                className={`flex-1 py-2 rounded-xl text-sm font-medium transition-all duration-200 ${
+                  percentage === pct
+                    ? "bg-purple-600 text-white shadow-lg shadow-purple-500/25"
+                    : "bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700"
+                }`}
+              >
+                {pct}%
+              </button>
+            ))}
+          </div>
+
+          {/* Slider */}
+          <div className="mb-6">
+            <div className="relative h-2 bg-zinc-200 dark:bg-zinc-700 rounded-full overflow-hidden">
+              <div
+                className="absolute h-full bg-gradient-to-r from-purple-500 to-violet-500 rounded-full transition-all duration-200"
+                style={{ width: `${percentage}%` }}
+              />
+            </div>
+            <input
+              type="range"
+              min="0"
+              max="100"
+              value={percentage}
+              onChange={(e) => handlePercentageChange(Number(e.target.value))}
+              className="absolute w-full h-2 opacity-0 cursor-pointer"
+              style={{ marginTop: "-8px" }}
+            />
+          </div>
+
+          {/* Stats */}
+          <div className="rounded-2xl border border-zinc-200 dark:border-zinc-700/50 bg-zinc-50 dark:bg-zinc-800/30 p-4 mb-6 space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-zinc-600 dark:text-zinc-400">
+                <svg
+                  className="w-4 h-4"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"
+                  />
+                </svg>
+                <span className="text-sm">Supply APR</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-lg font-bold text-purple-600 dark:text-purple-400">
+                  {asset.supplyApr.toFixed(2)}%
+                </span>
+                <span className="text-purple-400">✨</span>
+              </div>
+            </div>
+            <div className="h-px bg-zinc-200 dark:bg-zinc-700/50" />
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-zinc-600 dark:text-zinc-400">
+                <svg
+                  className="w-4 h-4"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"
+                  />
+                </svg>
+                <span className="text-sm">Health factor</span>
+              </div>
+              <span className="text-lg font-bold text-green-500">∞</span>
+            </div>
+          </div>
+
+          {/* Error Message */}
+          {error && (
+            <div className="mb-4 p-3 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-sm text-red-700 dark:text-red-400">
+              {error}
+            </div>
+          )}
+
+          {/* Success Message */}
+          {txHash && (
+            <div className="mb-4 p-3 rounded-xl bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-sm text-green-700 dark:text-green-400">
+              <div className="flex items-center gap-2">
+                <span>Transaction submitted!</span>
+                <a
+                  href={`https://explorer.movementnetwork.xyz/txn/${txHash}?network=mainnet`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-green-600 dark:text-green-400 hover:underline"
+                >
+                  View →
+                </a>
+              </div>
+            </div>
+          )}
+
+          {/* Progress Step */}
+          {step && (
+            <div className="mb-4 p-3 rounded-xl bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 text-sm text-blue-700 dark:text-blue-400 flex items-center gap-2">
+              <svg
+                className="w-4 h-4 animate-spin"
+                fill="none"
+                viewBox="0 0 24 24"
+              >
+                <circle
+                  className="opacity-25"
+                  cx="12"
+                  cy="12"
+                  r="10"
+                  stroke="currentColor"
+                  strokeWidth="4"
+                />
+                <path
+                  className="opacity-75"
+                  fill="currentColor"
+                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                />
+              </svg>
+              {step}
+            </div>
+          )}
+
+          {/* Supply Button */}
+          <button
+            onClick={handleSupply}
+            disabled={numericAmount <= 0 || submitting}
+            className={`w-full py-4 rounded-2xl font-semibold text-lg transition-all duration-200 ${
+              numericAmount > 0 && !submitting
+                ? "bg-gradient-to-r from-purple-600 to-violet-600 text-white shadow-lg shadow-purple-500/30 hover:shadow-xl hover:shadow-purple-500/40 hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
+                : "bg-zinc-100 dark:bg-zinc-800 text-zinc-400 dark:text-zinc-500 cursor-not-allowed"
+            }`}
+          >
+            {submitting
+              ? "Processing..."
+              : numericAmount > 0
+                ? `Supply ${asset.symbol}`
+                : "Enter an amount"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}

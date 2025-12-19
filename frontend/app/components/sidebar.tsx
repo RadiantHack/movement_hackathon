@@ -21,21 +21,17 @@ export function Sidebar({
   const navItems = [
     { href: "/overview", label: "Overview" },
     { href: "/chat", label: "New Chat" },
+    { href: "/transfer", label: "Transfer" },
     { href: "/swap", label: "Swap" },
+    { href: "/bridge", label: "Bridge" },
     { href: "/positions", label: "Move Position" },
+    { href: "/echelon", label: "Echelon" },
   ];
 
   const agents = [
     { name: "Balance Agent", description: "Check cryptocurrency balances" },
     { name: "Bridge Agent", description: "Cross-chain asset bridging" },
-    { name: "OrderBook Agent", description: "Trade on ClobX DEX" },
-    { name: "Prediction Agent", description: "BRKT prediction markets" },
-    { name: "Liquidity Agent", description: "Manage liquidity pools" },
-    { name: "Yield Optimizer", description: "Optimize yield strategies" },
     { name: "Lending Agent", description: "Lending & borrowing" },
-    { name: "Bitcoin DeFi", description: "Bitcoin DeFi operations" },
-    { name: "Stablecoin Agent", description: "Stablecoin management" },
-    { name: "Analytics Agent", description: "Protocol analytics" },
   ];
 
   return (
