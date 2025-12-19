@@ -22,6 +22,7 @@ from app.agents.prediction.agent import create_prediction_agent_app
 from app.agents.liquidity.agent import create_liquidity_agent_app
 from app.agents.yield_optimizer.agent import create_yield_optimizer_agent_app
 from app.agents.lending.agent import create_lending_agent_app
+from app.agents.lending_comparison.agent import create_lending_comparison_agent_app
 from app.agents.bitcoin_defi.agent import create_bitcoin_defi_agent_app
 from app.agents.stablecoin.agent import create_stablecoin_agent_app
 from app.agents.analytics.agent import create_analytics_agent_app
@@ -82,6 +83,10 @@ def register_agents(app: FastAPI) -> None:
     # Lending Agent (A2A Protocol)
     lending_agent_app = create_lending_agent_app(card_url=f"{base_url}/lending")
     app.mount("/lending", lending_agent_app.build())
+    
+    # Lending Comparison Agent (A2A Protocol)
+    lending_comparison_agent_app = create_lending_comparison_agent_app(card_url=f"{base_url}/lending_comparison")
+    app.mount("/lending_comparison", lending_comparison_agent_app.build())
     
     # Bitcoin DeFi Agent (A2A Protocol)
     bitcoin_defi_agent_app = create_bitcoin_defi_agent_app(card_url=f"{base_url}/bitcoin_defi")
