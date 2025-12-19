@@ -17,9 +17,13 @@ from fastapi.responses import JSONResponse
 
 from app.agents.balance.agent import create_balance_agent_app
 from app.agents.bridge.agent import create_bridge_agent_app
-from app.agents.lending.agent import create_lending_agent_app
-from app.agents.lending_comparison.agent import create_lending_comparison_agent_app
+from app.agents.lending_comparison.agent import (
+    create_lending_agent_app,
+    create_lending_comparison_agent_app,  # Backward compatibility alias
+)
 from app.agents.orchestrator.agent import create_orchestrator_agent_app
+from app.agents.swap.agent import create_swap_agent_app
+from app.agents.transfer.agent import create_transfer_agent_app
 
 # Configuration constants
 DEFAULT_AGENTS_PORT = 8000
@@ -57,13 +61,22 @@ def register_agents(app: FastAPI) -> None:
     bridge_agent_app = create_bridge_agent_app(card_url=f"{base_url}/bridge")
     app.mount("/bridge", bridge_agent_app.build())
     
-    # Lending Agent (A2A Protocol)
+    # Unified Lending Agent (A2A Protocol) - Combines comparison and operations
+    # Both endpoints point to the same unified agent for backward compatibility
     lending_agent_app = create_lending_agent_app(card_url=f"{base_url}/lending")
     app.mount("/lending", lending_agent_app.build())
     
-    # Lending Comparison Agent (A2A Protocol)
+    # Lending Comparison endpoint (same unified agent, different route for backward compatibility)
     lending_comparison_agent_app = create_lending_comparison_agent_app(card_url=f"{base_url}/lending_comparison")
     app.mount("/lending_comparison", lending_comparison_agent_app.build())
+    
+    # Swap Agent (A2A Protocol)
+    swap_agent_app = create_swap_agent_app(card_url=f"{base_url}/swap")
+    app.mount("/swap", swap_agent_app.build())
+    
+    # Transfer Agent (A2A Protocol)
+    transfer_agent_app = create_transfer_agent_app(card_url=f"{base_url}/transfer")
+    app.mount("/transfer", transfer_agent_app.build())
     
     # Orchestrator Agent (AG-UI ADK Protocol)
     orchestrator_agent_app = create_orchestrator_agent_app()

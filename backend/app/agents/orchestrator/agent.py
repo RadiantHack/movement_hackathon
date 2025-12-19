@@ -173,11 +173,21 @@ orchestrator_agent = LlmAgent(
 
        - Check health factors and liquidation risks
 
+       - Compare lending/borrowing rates between protocols
+
        - Requires asset, amount, and protocol selection
 
        - Format: "Supply [amount] [token] as collateral" or "Borrow [amount] [token]"
 
-       - Example queries: "Supply 1000 USDC as collateral", "Borrow 500 USDT"
+       - Example queries: "Supply 1000 USDC as collateral", "Borrow 500 USDT", "which platform has lower APR for borrowing MOVE"
+
+       - **CRITICAL**: When user asks about comparing rates (e.g., "which platform has lower APR", "compare borrowing rates"), call the Lending Agent with: "compare borrowing rates for [asset]" or "recommend best protocol for borrowing [asset]"
+
+       - After receiving a recommendation response from Lending Agent, you MUST call the frontend action: **show_lending_platform_selection**
+
+       - The recommendation response will contain: action, asset, recommended_protocol, echelon_rate, moveposition_rate, reason
+
+       - Extract these fields and call: show_lending_platform_selection(action="borrow", asset="MOVE", recommendedProtocol="MovePosition", echelonRate="62.00%", movepositionRate="30.91%", reason="Lower borrow APY...")
 
     **CRITICAL CONSTRAINTS**:
 
@@ -364,6 +374,74 @@ orchestrator_agent = LlmAgent(
     - DO NOT execute the swap - just call initiate_swap action and let frontend handle execution
 
     - The SwapCard will automatically fetch balances and quotes
+
+    RECOMMENDED WORKFLOW FOR LENDING COMPARISON QUERIES:
+
+    **For Lending Comparison Queries** (CRITICAL - Use Lending Agent + Frontend Action):
+
+    When a user asks about comparing lending/borrowing rates (e.g., "which platform has lower APR for borrowing MOVE", "compare borrowing rates for MOVE", "where should I borrow MOVE"):
+
+    1. **Call Lending Agent**:
+
+       - Use: send_message_to_a2a_agent(agentName="lending", task="recommend best protocol for borrowing MOVE")
+
+       - Or: send_message_to_a2a_agent(agentName="lending", task="compare borrowing rates for MOVE")
+
+       - The agent will return a JSON response with recommendation data
+
+    2. **Parse Recommendation Response**:
+
+       - The response will contain fields like:
+         * action: "borrow" or "lend"
+         * asset: "MOVE" (or other asset)
+         * recommended_protocol: "Echelon" or "MovePosition"
+         * echelon_rate: "62.00%"
+         * moveposition_rate: "30.91%"
+         * reason: "Lower borrow APY..."
+
+    3. **Call Frontend Platform Selection Action**:
+
+       - Use the action: **show_lending_platform_selection**
+
+       - Parameters:
+         * action: The action type ("borrow" or "lend")
+         * asset: The asset symbol (e.g., "MOVE", "USDC")
+         * recommendedProtocol: The recommended protocol ("Echelon" or "MovePosition")
+         * echelonRate: The Echelon rate (e.g., "62.00%")
+         * movepositionRate: The MovePosition rate (e.g., "30.91%")
+         * reason: The reason for recommendation
+
+       - Example: show_lending_platform_selection(action="borrow", asset="MOVE", recommendedProtocol="MovePosition", echelonRate="62.00%", movepositionRate="30.91%", reason="Lower borrow APY (30.91% vs 62.00%)")
+
+    4. **Platform Selection UI Display**:
+
+       - The frontend will display a PlatformSelectionCard with:
+         * Both platform options (Echelon and MovePosition)
+         * Rates for each platform
+         * Recommended platform highlighted
+         * User can select either platform
+
+       - When user selects a platform, the appropriate card (BorrowCard or LendCard) will open
+
+    **Lending Comparison Query Examples**:
+
+    - "which platform has lower APR for borrowing MOVE"
+      → 1. Call Lending Agent: send_message_to_a2a_agent(agentName="lending", task="recommend best protocol for borrowing MOVE")
+      → 2. Parse response and call: show_lending_platform_selection(...)
+
+    - "compare borrowing rates for MOVE"
+      → 1. Call Lending Agent: send_message_to_a2a_agent(agentName="lending", task="compare borrowing rates for MOVE")
+      → 2. Parse response and call: show_lending_platform_selection(...)
+
+    **CRITICAL RULES FOR LENDING COMPARISONS**:
+
+    - ALWAYS call the Lending Agent first to get comparison data
+
+    - After receiving the recommendation, ALWAYS call show_lending_platform_selection action
+
+    - Extract all required fields from the agent response
+
+    - The frontend will handle showing the selection UI and opening the appropriate cards
 
     RECOMMENDED WORKFLOW FOR BALANCE QUERIES:
 

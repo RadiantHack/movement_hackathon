@@ -427,7 +427,18 @@ export function SupplyModal({
 
   const usdValue = amount && asset ? parseFloat(amount) * asset.price : 0;
 
-  const canReview = amount && parseFloat(amount) > 0 && !submitting;
+  const canReview = 
+    ready &&
+    authenticated &&
+    movementWallet &&
+    walletAddress &&
+    amount &&
+    parseFloat(amount) > 0 &&
+    !submitting &&
+    asset &&
+    (activeTab === "supply"
+      ? balance && parseFloat(amount) <= parseFloat(balance)
+      : userSuppliedAmount > 0 && parseFloat(amount) <= userSuppliedAmount);
 
   /**
    * Calculate simulated risk/health factor after supply transaction
@@ -547,8 +558,14 @@ export function SupplyModal({
   }, [activeTab, balance, userSuppliedAmount]);
 
   const handleSubmit = async () => {
+    // Validate Privy wallet connection
+    if (!ready || !authenticated) {
+      setSubmitError("Please connect your Privy wallet first");
+      return;
+    }
+
     if (!movementWallet || !walletAddress || !asset) {
-      setSubmitError("Wallet not connected");
+      setSubmitError("Privy wallet not connected. Please connect your Movement wallet.");
       return;
     }
 
@@ -565,19 +582,19 @@ export function SupplyModal({
       setSubmitError("Insufficient balance");
       return;
     }
-    const EPSILON = 0.000001;
+
     if (
       activeTab === "withdraw" &&
-      parseFloat(amount) > userSuppliedAmount + EPSILON
+      parseFloat(amount) > userSuppliedAmount
     ) {
-      setSubmitError("Insufficient supplied balance");
+      setSubmitError("Amount exceeds your supplied amount");
       return;
     }
 
     setSubmitting(true);
     setSubmitError(null);
     setTxHash(null);
-    setSubmissionStep("");
+    setSubmissionStep("Initializing transaction with Privy...");
 
     try {
       const senderAddress = movementWallet.address as string;
@@ -605,12 +622,21 @@ export function SupplyModal({
         walletAddress: senderAddress,
         publicKey,
         signHash: async (hash: string) => {
-          const response = await signRawHash({
-            address: senderAddress,
-            chainType: "aptos",
-            hash: hash as `0x${string}`,
-          });
-          return { signature: response.signature };
+          setSubmissionStep("Waiting for Privy wallet signature...");
+          try {
+            const response = await signRawHash({
+              address: senderAddress,
+              chainType: "aptos",
+              hash: hash as `0x${string}`,
+            });
+            setSubmissionStep("Signature received from Privy");
+            return { signature: response.signature };
+          } catch (error: any) {
+            setSubmissionStep("");
+            throw new Error(
+              error.message || "Failed to get signature from Privy wallet"
+            );
+          }
         },
         onProgress: (step: string) => {
           setSubmissionStep(step);
@@ -622,6 +648,24 @@ export function SupplyModal({
         txHash
       );
       setTxHash(txHash);
+      
+      // Refresh portfolio data to update supplied amounts
+      if (walletAddress) {
+        try {
+          const superClient = new superJsonApiClient.SuperClient({
+            BASE: "https://api.moveposition.xyz",
+          });
+          const [portfolioRes, brokersRes] = await Promise.all([
+            superClient.default.getPortfolio(walletAddress),
+            superClient.default.getBrokers(),
+          ]);
+          setPortfolioData(portfolioRes as unknown as PortfolioResponse);
+          setBrokerData(brokersRes as unknown as any[]);
+        } catch (error) {
+          console.error("Error refreshing portfolio:", error);
+        }
+      }
+      
       // Close modal on success after a short delay
       setTimeout(() => {
         onClose();
@@ -648,9 +692,16 @@ export function SupplyModal({
       <div className="relative w-full max-w-md rounded-2xl bg-white dark:bg-zinc-900 shadow-2xl">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b border-zinc-200 dark:border-zinc-800">
-          <h2 className="text-xl font-semibold text-zinc-950 dark:text-zinc-50">
-            {activeTab === "supply" ? "Supply" : "Withdraw"} {asset.symbol}
-          </h2>
+          <div>
+            <h2 className="text-xl font-semibold text-zinc-950 dark:text-zinc-50">
+              {activeTab === "supply" ? "Lend" : "Withdraw"} {asset.symbol}
+            </h2>
+            <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">
+              {activeTab === "supply"
+                ? "Supply tokens to earn interest"
+                : "Withdraw your supplied tokens"}
+            </p>
+          </div>
           <button
             onClick={onClose}
             className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors"
@@ -741,6 +792,14 @@ export function SupplyModal({
                   Max
                 </button>
               )}
+              {activeTab === "withdraw" && userSuppliedAmount > 0 && (
+                <button
+                  onClick={() => setAmount(userSuppliedAmount.toString())}
+                  className="px-4 py-1 bg-yellow-500 text-black text-sm font-medium rounded hover:bg-yellow-400 transition-colors"
+                >
+                  Max
+                </button>
+              )}
             </div>
 
             {/* Available balance hint for withdraw */}
@@ -758,26 +817,54 @@ export function SupplyModal({
             )}
           </div>
 
-          {/* Stats */}
-          <div className="space-y-3 mb-4">
+          {/* Stats - Always show previously supplied and health factor */}
+          <div className="mb-4 p-4 rounded-xl bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-700 space-y-3">
+            {/* Health Factor - Prominently displayed */}
             <div className="flex justify-between items-center">
-              <span className="text-zinc-500 dark:text-zinc-400 text-sm">
-                Health factor
-                {loadingSimulation && (
-                  <span className="ml-2 text-xs text-zinc-400">
-                    (simulating...)
+              <div className="flex items-center gap-2">
+                <svg
+                  className="w-4 h-4 text-zinc-500 dark:text-zinc-400"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"
+                  />
+                </svg>
+                <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                  Health Factor
+                  {loadingSimulation && (
+                    <span className="ml-2 text-xs text-zinc-400">
+                      (simulating...)
+                    </span>
+                  )}
+                </span>
+              </div>
+              <span className="text-sm font-bold flex items-center gap-2">
+                {loadingPortfolio ? (
+                  <span className="text-zinc-400">Loading...</span>
+                ) : (
+                  <span
+                    className={`${
+                      currentHealthFactor && currentHealthFactor >= 1.2
+                        ? "text-green-600 dark:text-green-400"
+                        : currentHealthFactor && currentHealthFactor >= 1.0
+                          ? "text-yellow-600 dark:text-yellow-400"
+                          : "text-red-600 dark:text-red-400"
+                    }`}
+                  >
+                    {currentHealthFactor
+                      ? `${currentHealthFactor.toFixed(2)}x`
+                      : "N/A"}
                   </span>
                 )}
-              </span>
-              <span className="text-sm font-medium flex items-center gap-2">
-                <span className="text-zinc-500 dark:text-zinc-400">
-                  {currentHealthFactor
-                    ? `${currentHealthFactor.toFixed(2)}x`
-                    : "N/A"}
-                </span>
                 {amount && parseFloat(amount) > 0 && (
                   <>
-                    <span className="text-yellow-500">→</span>
+                    <span className="text-zinc-400">→</span>
                     <span
                       className={`${
                         displayHealthFactor && displayHealthFactor >= 1.2
@@ -797,44 +884,64 @@ export function SupplyModal({
                 )}
               </span>
             </div>
+
+            {/* Previously Supplied - Prominently displayed */}
             <div className="flex justify-between items-center">
-              <span className="text-zinc-500 dark:text-zinc-400 text-sm">
-                Supplied
-              </span>
-              <span className="text-sm font-medium flex items-center gap-2">
-                <span className="text-zinc-500 dark:text-zinc-400">
-                  {userSuppliedAmount.toFixed(4)} {asset.symbol}
-                </span>
-                {amount && parseFloat(amount) > 0 && (
-                  <>
-                    <span className="text-yellow-500">→</span>
-                    <span className="text-zinc-900 dark:text-zinc-50">
-                      {(activeTab === "supply"
-                        ? userSuppliedAmount + parseFloat(amount)
-                        : Math.max(0, userSuppliedAmount - parseFloat(amount))
-                      ).toFixed(4)}{" "}
-                      {asset.symbol}
+              <div className="flex items-center gap-2">
+                <svg
+                  className="w-4 h-4 text-zinc-500 dark:text-zinc-400"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                  />
+                </svg>
+                <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                  {activeTab === "supply" ? "Previously Supplied" : "Available to Withdraw"}
+                  {loadingPortfolio && (
+                    <span className="ml-2 text-xs text-zinc-400">
+                      (loading...)
                     </span>
+                  )}
+                </span>
+              </div>
+              <span className="text-sm font-bold flex items-center gap-2">
+                {loadingPortfolio ? (
+                  <span className="text-zinc-400">Loading...</span>
+                ) : (
+                  <>
+                    <span className="text-zinc-900 dark:text-zinc-50">
+                      {userSuppliedAmount.toFixed(4)} {asset.symbol}
+                    </span>
+                    {amount && parseFloat(amount) > 0 && (
+                      <>
+                        <span className="text-zinc-400">→</span>
+                        <span className="text-zinc-900 dark:text-zinc-50">
+                          {(activeTab === "supply"
+                            ? userSuppliedAmount + parseFloat(amount)
+                            : Math.max(0, userSuppliedAmount - parseFloat(amount))
+                          ).toFixed(4)}{" "}
+                          {asset.symbol}
+                        </span>
+                      </>
+                    )}
                   </>
                 )}
               </span>
             </div>
+
+            {/* Supply APY */}
             <div className="flex justify-between items-center">
-              <span className="text-zinc-500 dark:text-zinc-400 text-sm">
+              <span className="text-sm text-zinc-500 dark:text-zinc-400">
                 Supply APY
               </span>
-              <span className="text-sm font-medium flex items-center gap-2">
-                <span className="text-zinc-500 dark:text-zinc-400">
-                  {asset.supplyApy.toFixed(2)}%
-                </span>
-                {amount && parseFloat(amount) > 0 && simulatedRiskData && (
-                  <>
-                    <span className="text-yellow-500">→</span>
-                    <span className="text-green-600 dark:text-green-400">
-                      {asset.supplyApy.toFixed(2)}%
-                    </span>
-                  </>
-                )}
+              <span className="text-sm font-medium text-green-600 dark:text-green-400">
+                {asset.supplyApy.toFixed(2)}%
               </span>
             </div>
           </div>
@@ -912,13 +1019,15 @@ export function SupplyModal({
             </div>
           )}
 
-          {/* Review Button */}
+          {/* Submit Button */}
           <button
             onClick={handleSubmit}
-            disabled={!canReview}
-            className={`w-full font-medium py-3 rounded-lg transition-colors mt-4 ${
-              canReview
-                ? "bg-yellow-500 text-black hover:bg-yellow-400 cursor-pointer"
+            disabled={!canReview || submitting}
+            className={`w-full font-semibold py-3.5 rounded-lg transition-all duration-200 mt-4 shadow-lg ${
+              canReview && !submitting
+                ? activeTab === "supply"
+                  ? "bg-green-600 text-white hover:bg-green-700 hover:shadow-xl active:scale-[0.98] cursor-pointer"
+                  : "bg-yellow-500 text-black hover:bg-yellow-400 hover:shadow-xl active:scale-[0.98] cursor-pointer"
                 : "bg-zinc-300 dark:bg-zinc-700 text-zinc-500 dark:text-zinc-400 cursor-not-allowed"
             }`}
           >
@@ -943,12 +1052,51 @@ export function SupplyModal({
                     d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
                   ></path>
                 </svg>
-                {submissionStep || "Submitting..."}
+                {submissionStep ||
+                  (activeTab === "supply" ? "Initiating Supply..." : "Initiating Withdraw...")}
+              </span>
+            ) : activeTab === "supply" ? (
+              <span className="flex items-center justify-center gap-2">
+                <svg
+                  className="w-5 h-5"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                  />
+                </svg>
+                Supply {asset.symbol}
               </span>
             ) : (
-              "Review"
+              <span className="flex items-center justify-center gap-2">
+                <svg
+                  className="w-5 h-5"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
+                  />
+                </svg>
+                Withdraw {asset.symbol}
+              </span>
             )}
           </button>
+          
+          {!walletAddress && (
+            <p className="mt-3 text-xs text-center text-zinc-500 dark:text-zinc-400">
+              Connect your Privy wallet to {activeTab === "supply" ? "supply" : "withdraw"} tokens
+            </p>
+          )}
 
           {/* Wallet Balance */}
           <div className="flex justify-between items-center mt-4 pt-4 border-t border-zinc-200 dark:border-zinc-800">

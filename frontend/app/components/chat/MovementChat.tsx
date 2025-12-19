@@ -8,7 +8,7 @@
  * - Movement Network: Specialized for Movement Network blockchain operations
  */
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import {
   useCopilotChat,
   useCopilotReadable,
@@ -19,6 +19,9 @@ import { MessageToA2A } from "./a2a/MessageToA2A";
 import { MessageFromA2A } from "./a2a/MessageFromA2A";
 import { TransferCard } from "../features/transfer/TransferCard";
 import { SwapCard } from "../features/swap/SwapCard";
+import { PlatformSelectionCard } from "../features/lending/PlatformSelectionCard";
+import { LendCard } from "../features/lend/LendCard";
+import { EchelonSupplyModal } from "../echelon-supply-modal";
 import { TransferData } from "../types";
 import { getAllTokens } from "../../utils/token-constants";
 
@@ -28,6 +31,19 @@ interface MovementChatProps {
 
 const ChatInner = ({ walletAddress }: MovementChatProps) => {
   const { visibleMessages } = useCopilotChat();
+  const [lendingRecommendation, setLendingRecommendation] = useState<{
+    action: "borrow" | "lend";
+    asset: string;
+    recommendedProtocol: string;
+    echelonRate: string;
+    movepositionRate: string;
+    reason: string;
+  } | null>(null);
+  const [supplyConfirmation, setSupplyConfirmation] = useState<{
+    protocol: "moveposition" | "echelon";
+    asset: string;
+    amount: string;
+  } | null>(null);
 
   // Provide wallet address to CopilotKit so orchestrator can use it automatically
   useCopilotReadable({
@@ -256,11 +272,38 @@ const ChatInner = ({ walletAddress }: MovementChatProps) => {
     },
   });
 
-  // Extract structured data from A2A agent responses
+  // Extract structured data from A2A agent responses and detect supply confirmations
   useEffect(() => {
     const extractDataFromMessages = () => {
       for (const message of visibleMessages) {
         const msg = message as any;
+
+        // Detect supply confirmations from text messages
+        if (msg.type === "text" && msg.role === "assistant") {
+          const text = msg.content || "";
+          
+          // Pattern: "You've successfully supplied X [ASSET] as collateral on [PROTOCOL]"
+          // or "You've successfully supplied X [ASSET] to [PROTOCOL]"
+          // or "supplied X [ASSET] as collateral on [PROTOCOL]"
+          const supplyPatterns = [
+            /(?:successfully|supplied)\s+([\d.]+)\s+([A-Z]+)\s+(?:as collateral|to|on)\s+(MovePosition|Echelon)/i,
+            /supplied\s+([\d.]+)\s+([A-Z]+)\s+(?:as collateral|to|on)\s+(MovePosition|Echelon)/i,
+            /(?:successfully|supplied)\s+([\d.]+)\s+([A-Z]+)\s+to\s+(MovePosition|Echelon)/i,
+          ];
+          
+          for (const pattern of supplyPatterns) {
+            const match = text.match(pattern);
+            if (match) {
+              const amount = match[1];
+              const asset = match[2];
+              const protocol = match[3].toLowerCase() === "moveposition" ? "moveposition" : "echelon";
+              
+              console.log("✅ Supply confirmation detected from text:", { protocol, asset, amount });
+              setSupplyConfirmation({ protocol, asset, amount });
+              break;
+            }
+          }
+        }
 
         if (
           msg.type === "ResultMessage" &&
@@ -386,6 +429,51 @@ const ChatInner = ({ walletAddress }: MovementChatProps) => {
             // Process parsed data here if needed
             if (parsed) {
               console.log("📦 Parsed A2A response:", parsed);
+              
+              // Check if this is a supply confirmation response
+              if (
+                parsed.status === "success" &&
+                parsed.protocol &&
+                parsed.asset &&
+                parsed.amount &&
+                (parsed.message?.toLowerCase().includes("supplied") ||
+                  parsed.message?.toLowerCase().includes("supply"))
+              ) {
+                const protocol = parsed.protocol.toLowerCase();
+                const isMovePosition = protocol === "moveposition";
+                const isEchelon = protocol === "echelon";
+                
+                if (isMovePosition || isEchelon) {
+                  console.log("✅ Supply confirmation from A2A response:", {
+                    protocol,
+                    asset: parsed.asset,
+                    amount: parsed.amount,
+                  });
+                  setSupplyConfirmation({
+                    protocol: isMovePosition ? "moveposition" : "echelon",
+                    asset: parsed.asset,
+                    amount: parsed.amount,
+                  });
+                }
+              }
+              
+              // Check if this is a lending recommendation response
+              if (
+                parsed.action &&
+                (parsed.action === "borrow" || parsed.action === "lend") &&
+                parsed.recommended_protocol &&
+                parsed.echelon_rate &&
+                parsed.moveposition_rate
+              ) {
+                setLendingRecommendation({
+                  action: parsed.action,
+                  asset: parsed.asset || "MOVE",
+                  recommendedProtocol: parsed.recommended_protocol,
+                  echelonRate: parsed.echelon_rate,
+                  movepositionRate: parsed.moveposition_rate,
+                  reason: parsed.reason || parsed.message || "",
+                });
+              }
             }
           } catch (e) {
             // Silently ignore parsing errors
@@ -396,6 +484,148 @@ const ChatInner = ({ walletAddress }: MovementChatProps) => {
 
     extractDataFromMessages();
   }, [visibleMessages]);
+
+  // Register supply confirmation action - opens supply card when supply is confirmed
+  useCopilotAction({
+    name: "show_supply_confirmation",
+    description:
+      "Show supply card/modal when a supply action has been confirmed. Use this when the user has successfully supplied tokens to a lending protocol.",
+    parameters: [
+      {
+        name: "protocol",
+        type: "string",
+        description: "The protocol used: 'MovePosition' or 'Echelon'",
+        required: true,
+      },
+      {
+        name: "asset",
+        type: "string",
+        description: "The asset symbol that was supplied (e.g., 'MOVE', 'USDC')",
+        required: true,
+      },
+      {
+        name: "amount",
+        type: "string",
+        description: "The amount that was supplied (e.g., '10', '100')",
+        required: true,
+      },
+    ],
+    render: (props) => {
+      const { protocol, asset, amount } = props.args as {
+        protocol?: string;
+        asset?: string;
+        amount?: string;
+      };
+
+      if (!protocol) {
+        return <div className="my-3" />;
+      }
+
+      const protocolLower = protocol.toLowerCase();
+      const isMovePosition = protocolLower === "moveposition";
+      const isEchelon = protocolLower === "echelon";
+
+      if (isMovePosition) {
+        return (
+          <div className="my-3">
+            <LendCard walletAddress={walletAddress} />
+          </div>
+        );
+      } else if (isEchelon) {
+        return (
+          <EchelonSupplyModal
+            isOpen={true}
+            onClose={() => setSupplyConfirmation(null)}
+            asset={{
+              symbol: asset || "UNKNOWN",
+              name: asset || "Unknown Asset",
+              icon: "",
+              price: 1,
+              supplyApr: 0,
+            }}
+          />
+        );
+      }
+
+      // Fallback: return empty div if protocol is not recognized
+      return <div className="my-3" />;
+    },
+  });
+
+  // Register lending platform selection action
+  useCopilotAction({
+    name: "show_lending_platform_selection",
+    description:
+      "Show platform selection UI after comparing lending/borrowing rates between Echelon and MovePosition. Use this when a lending comparison has been completed and the user needs to choose a platform.",
+    parameters: [
+      {
+        name: "action",
+        type: "string",
+        description: "The action type: 'borrow' or 'lend'",
+        required: true,
+      },
+      {
+        name: "asset",
+        type: "string",
+        description: "The asset symbol (e.g., 'MOVE', 'USDC')",
+        required: true,
+      },
+      {
+        name: "recommendedProtocol",
+        type: "string",
+        description: "The recommended protocol: 'Echelon' or 'MovePosition'",
+        required: true,
+      },
+      {
+        name: "echelonRate",
+        type: "string",
+        description: "The Echelon rate (e.g., '30.91%')",
+        required: true,
+      },
+      {
+        name: "movepositionRate",
+        type: "string",
+        description: "The MovePosition rate (e.g., '62.00%')",
+        required: true,
+      },
+      {
+        name: "reason",
+        type: "string",
+        description: "The reason for the recommendation",
+        required: true,
+      },
+    ],
+    render: (props) => {
+      const {
+        action,
+        asset,
+        recommendedProtocol,
+        echelonRate,
+        movepositionRate,
+        reason,
+      } = props.args as {
+        action: string;
+        asset: string;
+        recommendedProtocol: string;
+        echelonRate: string;
+        movepositionRate: string;
+        reason: string;
+      };
+
+      return (
+        <PlatformSelectionCard
+          action={action === "borrow" ? "borrow" : "lend"}
+          asset={asset}
+          recommendedProtocol={recommendedProtocol}
+          echelonRate={echelonRate}
+          movepositionRate={movepositionRate}
+          reason={reason}
+          walletAddress={walletAddress}
+          onClose={() => setLendingRecommendation(null)}
+        />
+      );
+    },
+  });
 
   const instructions = `You are a Web3 and cryptocurrency assistant for Movement Network. Help users with blockchain operations, balance checks, token swaps, and market analysis. Always be helpful and provide clear, actionable information.
 
@@ -435,6 +665,39 @@ REMEMBER: The wallet address is ${walletAddress} - use it exactly as shown.`
 
   return (
     <div className="h-full w-full">
+      {lendingRecommendation && (
+        <PlatformSelectionCard
+          action={lendingRecommendation.action}
+          asset={lendingRecommendation.asset}
+          recommendedProtocol={lendingRecommendation.recommendedProtocol}
+          echelonRate={lendingRecommendation.echelonRate}
+          movepositionRate={lendingRecommendation.movepositionRate}
+          reason={lendingRecommendation.reason}
+          walletAddress={walletAddress}
+          onClose={() => setLendingRecommendation(null)}
+        />
+      )}
+      {supplyConfirmation && (
+        <>
+          {supplyConfirmation.protocol === "moveposition" ? (
+            <div className="my-3">
+              <LendCard walletAddress={walletAddress} />
+            </div>
+          ) : (
+            <EchelonSupplyModal
+              isOpen={true}
+              onClose={() => setSupplyConfirmation(null)}
+              asset={{
+                symbol: supplyConfirmation.asset,
+                name: supplyConfirmation.asset,
+                icon: "",
+                price: 1,
+                supplyApr: 0,
+              }}
+            />
+          )}
+        </>
+      )}
       <CopilotChat
         className="h-full w-full"
         instructions={instructions}
