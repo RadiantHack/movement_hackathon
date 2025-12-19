@@ -874,7 +874,7 @@ export const SwapCard: React.FC<SwapCardProps> = ({
         <button
           onClick={handleSwap}
           disabled={!canSwap}
-          className={`relative w-full py-3 rounded-xl font-bold text-sm transition-all duration-300 overflow-hidden ${
+          className={`w-full py-3.5 rounded-xl font-semibold transition-all duration-200 shadow-md cursor-pointer ${
             canSwap
               ? "bg-gradient-to-r from-purple-600 to-violet-600 text-white shadow-xl shadow-purple-500/30 hover:shadow-2xl hover:shadow-purple-500/40 hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
               : "bg-zinc-100 dark:bg-zinc-800 text-zinc-400 dark:text-zinc-500 cursor-not-allowed"

@@ -1,5 +1,6 @@
 "use client";
 
+import { Button } from "@/components/ui/button";
 import { usePrivy, WalletWithMetadata } from "@privy-io/react-auth";
 import { useCreateWallet as useCreateExtendedWallet } from "@privy-io/react-auth/extended-chains";
 import { useState, useEffect } from "react";
@@ -130,7 +131,7 @@ export function RightSidebar({
       >
         {/* Logout Button - Top */}
         <div className="flex items-center justify-between border-b border-zinc-200 p-4 dark:border-zinc-800">
-          <button
+          <Button
             onClick={handleLogout}
             className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-red-50 px-4 py-2.5 text-sm font-medium text-red-600 transition-colors hover:bg-red-100 dark:bg-red-900/20 dark:text-red-400 dark:hover:bg-red-900/30"
           >
@@ -148,7 +149,7 @@ export function RightSidebar({
               />
             </svg>
             Logout
-          </button>
+          </Button>
 
           {/* Close button for mobile */}
           <button
@@ -196,7 +197,7 @@ export function RightSidebar({
                   Movement Network
                 </p>
               </div>
-              <button
+              <Button
                 onClick={() => {
                   navigator.clipboard.writeText(movementWallet.address);
                   setCopiedMovement(true);
@@ -239,7 +240,7 @@ export function RightSidebar({
                     Copy Address
                   </>
                 )}
-              </button>
+              </Button>
             </div>
           ) : (
             <div className="rounded-lg border border-zinc-200 bg-white p-4 dark:border-zinc-700 dark:bg-zinc-800">

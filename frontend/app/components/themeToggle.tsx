@@ -1,30 +1,32 @@
 "use client";
-import React, { useEffect } from "react";
+import React from "react";
 import { useTheme } from "next-themes";
 
 import { Moon, Sun } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 export function ThemeToggle() {
   const { theme, setTheme } = useTheme();
-  const [mounted, setMounted] = React.useState(false);
 
-  useEffect(() => {
-    setMounted(true);
-  }, []);
+  // const [mounted, setMounted] = React.useState(false);
+  // useEffect(() => {
+  //   setMounted(true);
+  // }, []);
 
-  if (!mounted) {
-    return null;
-  }
+  // if (!mounted) {
+  //   return null;
+  // }
 
   return (
-    <button
-      className="outline-none"
+    <Button
+      // className="outline-none text-black dark:text-white"
+      variant={"ghost"}
       onClick={() => {
         setTheme(theme === "dark" ? "light" : "dark");
       }}
     >
       {/* <SunMoon size={32} /> */}
       {theme === "dark" ? <Sun /> : <Moon />}
-    </button>
+    </Button>
   );
 }

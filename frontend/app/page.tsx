@@ -3,6 +3,7 @@
 import { usePrivy } from "@privy-io/react-auth";
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
+import { ThemeToggle } from "./components/themeToggle";
 
 export default function Home() {
   const { ready, authenticated, login } = usePrivy();
@@ -34,6 +35,11 @@ export default function Home() {
 
   return (
     <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-zinc-50 dark:bg-black">
+      {/* Theme Toggle Button */}
+      <div className="absolute top-6 right-6 z-50">
+        <ThemeToggle />
+      </div>
+
       {/* Animated floating shapes */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
         <div className="absolute top-1/4 left-1/4 h-64 w-64 rounded-full bg-zinc-200/50 dark:bg-zinc-800/30 blur-3xl animate-[pulse_4s_ease-in-out_infinite]" />

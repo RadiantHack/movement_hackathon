@@ -325,7 +325,7 @@ export default function OverviewPage() {
                     <circle
                       cx="50"
                       cy="50"
-                      r="40"
+                      r="42"
                       fill="none"
                       stroke="currentColor"
                       strokeWidth="8"
@@ -333,7 +333,7 @@ export default function OverviewPage() {
                     />
                   </svg>
                   <div className="absolute inset-0 flex flex-col items-center justify-center">
-                    <div className="text-2xl font-bold text-zinc-900 dark:text-zinc-50">
+                    <div className="text-xl font-bold text-zinc-900 dark:text-zinc-50">
                       ${totalSuppliedValue.toFixed(2)}
                     </div>
                     <div className="text-sm text-zinc-500 dark:text-zinc-400">
@@ -349,7 +349,7 @@ export default function OverviewPage() {
                   supplyComposition.map((item) => (
                     <div
                       key={item.token?.id ?? item.token?.symbol ?? item.amount}
-                      className="flex items-center gap-3 p-3 rounded-lg bg-zinc-50 dark:bg-zinc-800"
+                      className="flex items-center gap-3 p-3 rounded-lg bg-zinc-50 dark:bg-zinc-800 outline"
                     >
                       {item.token?.iconUri ? (
                         <img
