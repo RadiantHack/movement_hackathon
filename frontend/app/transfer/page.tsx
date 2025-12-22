@@ -166,15 +166,13 @@ export default function TransferPage() {
 
       setStep("Building transaction...");
 
-      debugger;
-
       const assetType = selectedToken.assetType.trim();
 
       let rawTxn;
 
       // For native tokens, use coin::transfer
       // For fungible assets, use primary_fungible_store::transfer
-      if (assetType==="0x1::aptos_coin::AptosCoin" || assetType==="0x1::aptos_coin::AptosCoin") {
+      if (selectedToken.isNative || assetType === "0x1::aptos_coin::AptosCoin") {
         rawTxn = await aptos.transaction.build.simple({
           sender: senderAddress,
           data: {
