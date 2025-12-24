@@ -13,7 +13,7 @@ export default function PremiumChatPage() {
   const router = useRouter();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isRightSidebarOpen, setIsRightSidebarOpen] = useState(false);
-  const [selectedAgent, setSelectedAgent] = useState("lending");
+  const [selectedAgent, setSelectedAgent] = useState("premium_lending");
 
   // Get Movement wallet address (chainType is "aptos" for Movement wallets)
   const movementWallet = useMemo(() => {

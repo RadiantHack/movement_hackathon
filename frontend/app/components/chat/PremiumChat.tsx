@@ -47,22 +47,24 @@ export default function PremiumChat({
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const clientRef = useRef<A2APremiumA2AClient | null>(null);
 
-  // Initialize A2A client for the selected agent
+  // Initialize A2A client for premium agents
   useEffect(() => {
     const baseUrl =
       process.env.NEXT_PUBLIC_BACKEND_URL ||
       process.env.BACKEND_URL ||
       "http://localhost:8000";
 
-    const agentUrlMap: Record<string, string> = {
-      lending: `${baseUrl}/lending`,
-      balance: `${baseUrl}/balance`,
-      bridge: `${baseUrl}/bridge`,
-      swap: `${baseUrl}/swap`,
-      transfer: `${baseUrl}/transfer`,
+    // Map premium agent names to their URLs
+    // Add more premium agents here as they become available
+    const premiumAgentUrlMap: Record<string, string> = {
+      premium_lending: `${baseUrl}/premium_lending_agent`,
+      // Future premium agents can be added here:
+      // premium_balance: `${baseUrl}/premium_balance_agent`,
+      // premium_swap: `${baseUrl}/premium_swap_agent`,
     };
 
-    const agentUrl = agentUrlMap[selectedAgent] || agentUrlMap.lending;
+    const agentUrl =
+      premiumAgentUrlMap[selectedAgent] || premiumAgentUrlMap.premium_lending;
 
     try {
       clientRef.current = new A2APremiumA2AClient(agentUrl);
@@ -117,11 +119,8 @@ export default function PremiumChat({
 
     // Build query with wallet address context if available
     let query = userMessage;
-    if (walletAddress && selectedAgent === "balance") {
-      // For balance queries, include wallet address in context
-      query = `${userMessage}. My wallet address is ${walletAddress} on Movement Network.`;
-    } else if (walletAddress) {
-      // For other agents, include wallet address as context
+    if (walletAddress) {
+      // Include wallet address as context for premium agents
       query = `${userMessage} (Wallet: ${walletAddress} on Movement Network)`;
     }
 
@@ -291,23 +290,21 @@ export default function PremiumChat({
     }
   };
 
-  const agentLabels: Record<string, string> = {
-    lending: "Lending Agent",
-    balance: "Balance Agent",
-    bridge: "Bridge Agent",
-    swap: "Swap Agent",
-    transfer: "Transfer Agent",
+  // Premium agent labels - add more as premium agents are added
+  const premiumAgentLabels: Record<string, string> = {
+    premium_lending: "Premium Lending Agent",
+    // Future premium agents:
+    // premium_balance: "Premium Balance Agent",
+    // premium_swap: "Premium Swap Agent",
   };
 
-  const agentOptions = [
-    { value: "lending", label: "Lending Agent" },
-    { value: "balance", label: "Balance Agent" },
-    { value: "bridge", label: "Bridge Agent" },
-    { value: "swap", label: "Swap Agent" },
-    { value: "transfer", label: "Transfer Agent" },
+  const premiumAgentOptions = [
+    { value: "premium_lending", label: "Premium Lending Agent" },
+    // Add more premium agents here as they become available
   ];
 
-  const agentLabel = agentLabels[selectedAgent] || "Premium Agent";
+  const agentLabel =
+    premiumAgentLabels[selectedAgent] || premiumAgentLabels.premium_lending;
 
   return (
     <div className="flex h-full flex-col bg-white dark:bg-zinc-950">
@@ -343,7 +340,7 @@ export default function PremiumChat({
             }}
             className="rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-sm font-medium text-zinc-700 transition-colors focus:border-purple-500 focus:outline-none focus:ring-2 focus:ring-purple-500/20 dark:border-zinc-600 dark:bg-zinc-800 dark:text-zinc-300 dark:focus:border-purple-400"
           >
-            {agentOptions.map((agent) => (
+            {premiumAgentOptions.map((agent) => (
               <option key={agent.value} value={agent.value}>
                 {agent.label}
               </option>
@@ -376,40 +373,16 @@ export default function PremiumChat({
                       Example questions:
                     </p>
                     <ul className="mt-2 space-y-1 text-sm text-zinc-700 dark:text-zinc-300">
-                      {selectedAgent === "lending" && (
+                      {selectedAgent === "premium_lending" && (
                         <>
                           <li>• Compare lending rates for USDC</li>
                           <li>• Where should I borrow MOVE?</li>
                           <li>• Show me the best supply APY</li>
+                          <li>• Compare borrowing rates between protocols</li>
+                          <li>• Get best supply rate across all assets</li>
                         </>
                       )}
-                      {selectedAgent === "balance" && (
-                        <>
-                          <li>• Check my balance</li>
-                          <li>• Show my USDC balance</li>
-                          <li>• Get popular tokens</li>
-                        </>
-                      )}
-                      {selectedAgent === "bridge" && (
-                        <>
-                          <li>• Bridge 100 USDC from Ethereum</li>
-                          <li>• Estimate bridge fees</li>
-                          <li>• Check bridge status</li>
-                        </>
-                      )}
-                      {selectedAgent === "swap" && (
-                        <>
-                          <li>• Swap MOVE for USDC</li>
-                          <li>• Get swap quote</li>
-                          <li>• Best rate for swapping tokens</li>
-                        </>
-                      )}
-                      {selectedAgent === "transfer" && (
-                        <>
-                          <li>• Transfer 10 MOVE to address</li>
-                          <li>• Send USDC to wallet</li>
-                        </>
-                      )}
+                      {/* Add example questions for future premium agents here */}
                     </ul>
                   </div>
                 </div>

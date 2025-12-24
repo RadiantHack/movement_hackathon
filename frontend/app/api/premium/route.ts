@@ -1,8 +1,9 @@
 /**
  * Premium API Route - Direct Agent Communication
  *
- * This route directly calls Python agents via A2A protocol, bypassing the orchestrator.
- * Used for premium chat mode where users can select and chat directly with specific agents.
+ * This route directly calls premium agents via A2A protocol, bypassing the orchestrator.
+ * Used for premium chat mode with x-payment header support (402 status code).
+ * Supports multiple premium agents - add more as they become available.
  */
 
 import {
@@ -19,30 +20,39 @@ export async function POST(request: NextRequest) {
     process.env.BACKEND_URL ||
     "http://localhost:8000";
 
-  // Get selected agent from query parameter or header
+  // Get selected premium agent from query parameter or header
   const url = new URL(request.url);
   const selectedAgent =
     url.searchParams.get("agent") ||
     request.headers.get("x-selected-agent") ||
-    "lending";
+    "premium_lending";
 
-  // Map agent names to their URLs
-  const agentUrlMap: Record<string, string> = {
-    lending: `${baseUrl}/lending`,
-    balance: `${baseUrl}/balance`,
-    bridge: `${baseUrl}/bridge`,
-    swap: `${baseUrl}/swap`,
-    transfer: `${baseUrl}/transfer`,
+  // Map premium agent names to their URLs
+  // Add more premium agents here as they become available
+  const premiumAgentUrlMap: Record<string, string> = {
+    premium_lending: `${baseUrl}/premium_lending_agent`,
+    // Future premium agents can be added here:
+    // premium_balance: `${baseUrl}/premium_balance_agent`,
+    // premium_swap: `${baseUrl}/premium_swap_agent`,
   };
 
-  const agentUrl = agentUrlMap[selectedAgent] || agentUrlMap.lending;
+  const agentUrl =
+    premiumAgentUrlMap[selectedAgent] || premiumAgentUrlMap.premium_lending;
 
-  // Create direct agent connection (bypassing orchestrator)
+  // Get x-payment header from request and forward it
+  const xPaymentHeader = request.headers.get("x-payment") || request.headers.get("x-402");
+
+  // Create direct agent connection to selected premium agent
   const directAgent = new HttpAgent({
     url: agentUrl,
+    headers: xPaymentHeader
+      ? {
+          "x-payment": xPaymentHeader,
+        }
+      : undefined,
   });
 
-  // Create CopilotKit runtime with direct agent
+  // Create CopilotKit runtime with premium agent
   const runtime = new CopilotRuntime({
     agents: {
       premium_agent: directAgent as any,
