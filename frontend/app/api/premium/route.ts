@@ -40,7 +40,8 @@ export async function POST(request: NextRequest) {
     premiumAgentUrlMap[selectedAgent] || premiumAgentUrlMap.premium_lending;
 
   // Get x-payment header from request and forward it
-  const xPaymentHeader = request.headers.get("x-payment") || request.headers.get("x-402");
+  const xPaymentHeader =
+    request.headers.get("x-payment") || request.headers.get("x-402");
 
   // Create direct agent connection to selected premium agent
   const directAgent = new HttpAgent({
