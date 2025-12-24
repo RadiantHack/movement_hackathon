@@ -487,8 +487,3 @@ def create_swap_agent_app(card_url: str) -> A2AStarletteApplication:
         http_handler=request_handler,
         extended_agent_card=agent_card,
     )
-
-
-
-
-

@@ -22,6 +22,7 @@ from app.agents.lending_comparison.agent import (
     create_lending_comparison_agent_app,  # Backward compatibility alias
 )
 from app.agents.orchestrator.agent import create_orchestrator_agent_app
+from app.agents.premium_lending.agent import create_lending_agent_app as create_premium_lending_agent_app
 from app.agents.swap.agent import create_swap_agent_app
 from app.agents.transfer.agent import create_transfer_agent_app
 
@@ -83,6 +84,12 @@ def register_agents(app: FastAPI) -> None:
     # Orchestrator Agent (AG-UI ADK Protocol)
     orchestrator_agent_app = create_orchestrator_agent_app()
     app.mount("/orchestrator", orchestrator_agent_app)
+
+    # Premium Lending Agent (A2A Protocol)
+    premium_lending_agent_app = create_premium_lending_agent_app(
+        card_url=f"{base_url}/premium_lending_agent"
+    )
+    app.mount("/premium_lending_agent", premium_lending_agent_app.build())
 
 
 def create_app() -> FastAPI:
