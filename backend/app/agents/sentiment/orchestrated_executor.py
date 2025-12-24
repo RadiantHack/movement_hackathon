@@ -10,7 +10,7 @@ from a2a.server.agent_execution import AgentExecutor, RequestContext
 from a2a.server.events import EventQueue
 from a2a.utils import new_agent_text_message
 from google.adk.runners import InMemoryRunner
-from google.adk.types import Part, UserContent
+from google.adk.runners import types
 
 from .core.constants import DEFAULT_SESSION_ID, ERROR_CANCEL_NOT_SUPPORTED, ERROR_EXECUTION_ERROR
 from .orchestrated_agent import root_agent
@@ -73,11 +73,14 @@ class OrchestratedSentimentExecutor(AgentExecutor):
                 )
 
             # Run the sequential agent with the query
+            # Construct message using UserContent with Part
+            new_message = types.UserContent(parts=[types.Part(text=query)])
+
             final_response = None
             async for event in runner.run_async(
                 user_id="user",
                 session_id=session_id,
-                new_message=UserContent(parts=[Part(text=query)]),
+                new_message=new_message,
             ):
                 # Collect the final response from events
                 if hasattr(event, "content") and event.content:
