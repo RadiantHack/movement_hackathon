@@ -385,13 +385,13 @@ async function waitForTransactionFinality(
   }
 
   try {
-    const args: WaitArgs = {
+    const aptos = getAptos();
+    const result = await aptos.waitForTransaction({
       transactionHash: hash,
       options: {
         checkSuccess: true,
       },
-    };
-    const result = await aptos.waitForTransaction(args);
+    });
     return result;
   } catch (e: any) {
     console.error(e);

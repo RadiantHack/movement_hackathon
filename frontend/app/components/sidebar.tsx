@@ -10,22 +10,37 @@ import {
   ChartColumn,
   LayoutDashboard,
   MessageSquare,
+  Crown,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+
+interface SidebarProps {
+  isOpen?: boolean;
+  onClose?: () => void;
+  isPremiumMode?: boolean;
+  selectedAgent?: string;
+  onAgentChange?: (agent: string) => void;
+}
 
 export function Sidebar({
   isOpen,
   onClose,
-}: {
-  isOpen?: boolean;
-  onClose?: () => void;
-}) {
+  isPremiumMode = false,
+  selectedAgent = "lending",
+  onAgentChange,
+}: SidebarProps) {
   const pathname = usePathname();
   const [isCollapsed, setIsCollapsed] = useState(false);
 
   const navItems = [
     { href: "/overview", label: "Overview" },
     { href: "/chat", label: "New Chat" },
+    {
+      href: "/premiumchat",
+      label: "Premium Chat",
+      icon: Crown,
+      isPremium: true,
+    },
     { href: "/transfer", label: "Transfer" },
     { href: "/swap", label: "Swap" },
     { href: "/bridge", label: "Bridge" },
@@ -117,22 +132,43 @@ export function Sidebar({
         {/* Navigation */}
         <div className="flex-1 overflow-y-auto p-4">
           <nav className="space-y-2">
-            {navItems.map((item) => {
+            {navItems.map((item, index) => {
               const isActive = pathname === item.href;
+              const Icon = item.icon;
+              const isPremium = item.isPremium;
               return (
                 <Link
-                  key={item.href}
+                  key={`${item.href}-${index}`}
                   href={item.href}
                   onClick={() => onClose?.()}
-                  className={`flex items-center rounded-lg px-3 py-2 text-sm transition-colors ${
+                  className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors ${
                     isActive
-                      ? "bg-purple-100 font-medium text-purple-900 dark:bg-purple-900/30 dark:text-purple-300"
-                      : "text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                      ? isPremium
+                        ? "bg-gradient-to-r from-amber-100 to-yellow-100 font-medium text-amber-900 dark:from-amber-900/30 dark:to-yellow-900/30 dark:text-amber-300"
+                        : "bg-purple-100 font-medium text-purple-900 dark:bg-purple-900/30 dark:text-purple-300"
+                      : isPremium
+                        ? "text-amber-700 hover:bg-amber-50 dark:text-amber-400 dark:hover:bg-amber-900/20"
+                        : "text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800"
                   } ${isCollapsed ? "justify-center" : ""}`}
                   title={isCollapsed ? item.label : undefined}
                 >
-                  <span className="text-lg">{item.icon}</span>
-                  {!isCollapsed && <span className="ml-3">{item.label}</span>}
+                  {Icon && (
+                    <Icon
+                      className={`h-4 w-4 ${
+                        isPremium ? "text-amber-600 dark:text-amber-400" : ""
+                      }`}
+                    />
+                  )}
+                  {!isCollapsed && (
+                    <div className="flex items-center justify-between flex-1">
+                      <span>{item.label}</span>
+                      {isPremium && (
+                        <span className="ml-auto rounded-full bg-amber-200 px-2 py-0.5 text-xs font-semibold text-amber-800 dark:bg-amber-800/50 dark:text-amber-200">
+                          x402
+                        </span>
+                      )}
+                    </div>
+                  )}
                 </Link>
               );
             })}

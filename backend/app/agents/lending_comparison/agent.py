@@ -14,6 +14,9 @@ from dotenv import load_dotenv
 
 load_dotenv()
 import requests
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request
+from starlette.responses import JSONResponse
 
 from app.agents.lending_comparison.moveposition_rates import (
     calculate_moveposition_supply_apy_by_utilization,
@@ -1197,7 +1200,53 @@ class LendingAgentExecutor(AgentExecutor):
         raise NotImplementedError("cancel not supported")
 
 
-def create_lending_agent_app(card_url: str) -> A2AStarletteApplication:
+class PaymentRequiredMiddleware(BaseHTTPMiddleware):
+    """Middleware to check for x-payment header and return 402 if missing.
+    
+    Excludes agent card endpoints (.well-known/agent.json and .well-known/agent-card.json)
+    from payment requirements to allow agent discovery.
+    """
+
+    async def dispatch(self, request: Request, call_next: Any) -> Any:
+        """Check for x-payment header before processing request."""
+        # Get the request path
+        path = request.url.path
+        
+        # Skip payment check for agent card discovery endpoints
+        if (
+            path.endswith("/.well-known/agent.json") or
+            path.endswith("/.well-known/agent-card.json") or
+            "/.well-known/agent.json" in path or
+            "/.well-known/agent-card.json" in path
+        ):
+            return await call_next(request)
+        
+        # Check for x-payment header (case-insensitive via Starlette headers)
+        if "x-payment" not in request.headers:
+            return JSONResponse(
+                status_code=402,
+                content={
+                    "error": "Payment Required",
+                    "message": "x-payment header is required to access this endpoint",
+                },
+            )
+        return await call_next(request)
+
+
+class LendingAgentAppWithMiddleware:
+    """Wrapper for A2AStarletteApplication with payment middleware."""
+
+    def __init__(self, a2a_app: A2AStarletteApplication):
+        self._a2a_app = a2a_app
+
+    def build(self) -> Any:
+        """Build the Starlette app and apply payment middleware."""
+        app = self._a2a_app.build()
+        app.add_middleware(PaymentRequiredMiddleware)
+        return app
+
+
+def create_lending_agent_app(card_url: str) -> LendingAgentAppWithMiddleware:
     """Create unified lending agent application combining comparison and operations."""
     agent_card = AgentCard(
         name="lending",
@@ -1210,13 +1259,14 @@ def create_lending_agent_app(card_url: str) -> A2AStarletteApplication:
         skills=[create_agent_skill()],
         supports_authenticated_extended_card=False,
     )
-    return A2AStarletteApplication(
+    a2a_app = A2AStarletteApplication(
         agent_card=agent_card,
         http_handler=DefaultRequestHandler(
             agent_executor=LendingAgentExecutor(), task_store=InMemoryTaskStore()
         ),
         extended_agent_card=agent_card,
     )
+    return LendingAgentAppWithMiddleware(a2a_app)
 
 
 # Backward compatibility aliases
