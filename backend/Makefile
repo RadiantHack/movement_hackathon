@@ -8,7 +8,14 @@ install:
 # Run development server
 dev:
 	@echo "Starting development server..."
-	uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+	@if [ ! -d "venv" ]; then \
+		echo "Virtual environment not found. Creating one..."; \
+		python -m venv venv; \
+		echo "Installing dependencies..."; \
+		venv/bin/pip install -e ".[dev]"; \
+	fi
+	@echo "Using virtual environment..."
+	venv/bin/uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 
 # Format code with Black
 format:

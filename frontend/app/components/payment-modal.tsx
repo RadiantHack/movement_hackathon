@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { X, CreditCard, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useX402Payment, type PaymentRequirements } from "@/app/hooks/useX402Payment";
 
 interface PaymentModalProps {
   isOpen: boolean;
@@ -10,6 +11,7 @@ interface PaymentModalProps {
   onPaymentComplete: (paymentToken: string) => void;
   amount?: string;
   currency?: string;
+  paymentRequirements?: PaymentRequirements | null; // Payment instructions from 402 response
 }
 
 /**
@@ -22,30 +24,56 @@ export function PaymentModal({
   onPaymentComplete,
   amount = "0.01",
   currency = "USDC",
+  paymentRequirements,
 }: PaymentModalProps) {
   const [isProcessing, setIsProcessing] = useState(false);
-  const [paymentMethod, setPaymentMethod] = useState<"wallet" | "card">(
-    "wallet"
-  );
+  const [error, setError] = useState<string | null>(null);
+  const { payForAccess, isConnected } = useX402Payment();
+
+  // Calculate display amount from payment requirements
+  const displayAmount = paymentRequirements
+    ? (BigInt(paymentRequirements.maxAmountRequired) / BigInt(100000000)).toString() // Convert from smallest units (8 decimals)
+    : amount;
+
+  const displayCurrency = paymentRequirements?.asset?.includes("aptos_coin")
+    ? "MOVE"
+    : currency;
+
+  useEffect(() => {
+    if (isOpen) {
+      setError(null);
+    }
+  }, [isOpen]);
 
   if (!isOpen) {
     return null;
   }
 
   const handlePayment = async () => {
+    if (!paymentRequirements) {
+      setError("Payment requirements not provided");
+      return;
+    }
+
+    if (!isConnected) {
+      setError("Please connect your Movement wallet first");
+      return;
+    }
+
     setIsProcessing(true);
+    setError(null);
+
     try {
-      // Simulate payment processing
-      // In a real implementation, this would integrate with x402 payment protocol
-      // For now, we'll generate a mock payment token
-      await new Promise((resolve) => setTimeout(resolve, 1500));
+      // Use x402plus hook to process payment
+      const paymentHeader = await payForAccess(paymentRequirements);
 
-      // Generate a mock payment token (in real implementation, this would come from x402)
-      const paymentToken = `x402_payment_${Date.now()}_${Math.random().toString(36).substring(7)}`;
-
-      onPaymentComplete(paymentToken);
-    } catch (error) {
+      // Payment header is the x-402 payment proof
+      onPaymentComplete(paymentHeader);
+    } catch (error: any) {
       console.error("Payment error:", error);
+      setError(
+        error?.message || "Payment failed. Please try again."
+      );
     } finally {
       setIsProcessing(false);
     }
@@ -101,57 +129,31 @@ export function PaymentModal({
             </div>
             <div className="text-right">
               <p className="text-2xl font-bold text-zinc-950 dark:text-zinc-50">
-                {amount} {currency}
+                {displayAmount} {displayCurrency}
               </p>
             </div>
           </div>
 
-          {/* Payment Method Selection */}
-          <div className="space-y-3">
-            <p className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
-              Payment Method
-            </p>
-            <div className="grid grid-cols-2 gap-3">
-              <button
-                onClick={() => setPaymentMethod("wallet")}
-                disabled={isProcessing}
-                className={`rounded-lg border-2 p-4 transition-all ${
-                  paymentMethod === "wallet"
-                    ? "border-purple-500 bg-purple-50 dark:bg-purple-900/20"
-                    : "border-zinc-200 dark:border-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-700"
-                }`}
-              >
-                <div className="text-sm font-medium text-zinc-950 dark:text-zinc-50">
-                  Wallet
-                </div>
-                <div className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">
-                  Connect wallet
-                </div>
-              </button>
-              <button
-                onClick={() => setPaymentMethod("card")}
-                disabled={isProcessing}
-                className={`rounded-lg border-2 p-4 transition-all ${
-                  paymentMethod === "card"
-                    ? "border-purple-500 bg-purple-50 dark:bg-purple-900/20"
-                    : "border-zinc-200 dark:border-zinc-800 hover:border-zinc-300 dark:hover:border-zinc-700"
-                }`}
-              >
-                <div className="text-sm font-medium text-zinc-950 dark:text-zinc-50">
-                  Card
-                </div>
-                <div className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">
-                  Credit/Debit
-                </div>
-              </button>
+          {/* Error Message */}
+          {error && (
+            <div className="rounded-lg border border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-900/20 p-3">
+              <p className="text-xs text-red-700 dark:text-red-400">{error}</p>
             </div>
-          </div>
+          )}
+
+          {/* Wallet Connection Status */}
+          {!isConnected && (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 dark:border-amber-800 dark:bg-amber-900/20 p-3">
+              <p className="text-xs text-amber-800 dark:text-amber-200">
+                ⚠️ Please connect your Movement wallet to proceed with payment.
+              </p>
+            </div>
+          )}
 
           {/* Info Note */}
           <div className="rounded-lg bg-zinc-100 dark:bg-zinc-800 p-3">
             <p className="text-xs text-zinc-600 dark:text-zinc-400">
-              💡 This is a demo payment flow. In production, this would
-              integrate with the x402 payment protocol to process real payments.
+              🔒 Secure payment via x402 protocol. Your payment will be processed on Movement Network.
             </p>
           </div>
         </div>
@@ -168,8 +170,8 @@ export function PaymentModal({
           </Button>
           <Button
             onClick={handlePayment}
-            disabled={isProcessing}
-            className="flex-1 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white"
+            disabled={isProcessing || !isConnected || !paymentRequirements}
+            className="flex-1 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isProcessing ? (
               <>
@@ -179,7 +181,7 @@ export function PaymentModal({
             ) : (
               <>
                 <CreditCard className="h-4 w-4 mr-2" />
-                Pay {amount} {currency}
+                Pay {displayAmount} {displayCurrency}
               </>
             )}
           </Button>

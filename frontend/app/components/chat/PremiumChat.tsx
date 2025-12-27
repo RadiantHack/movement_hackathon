@@ -43,31 +43,26 @@ export default function PremiumChat({
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [pendingRequest, setPendingRequest] =
     useState<MessageSendParams | null>(null);
+  const [paymentRequirements, setPaymentRequirements] = useState<any>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const clientRef = useRef<A2APremiumA2AClient | null>(null);
 
   // Initialize A2A client for premium agents
+  // IMPORTANT: Use /api/premium route to go through x402plus payment middleware
   useEffect(() => {
-    const baseUrl =
-      process.env.NEXT_PUBLIC_BACKEND_URL ||
-      process.env.BACKEND_URL ||
-      "http://localhost:8000";
-
-    // Map premium agent names to their URLs
-    // Add more premium agents here as they become available
-    const premiumAgentUrlMap: Record<string, string> = {
-      premium_lending: `${baseUrl}/premium_lending_agent`,
-      // Future premium agents can be added here:
-      // premium_balance: `${baseUrl}/premium_balance_agent`,
-      // premium_swap: `${baseUrl}/premium_swap_agent`,
-    };
-
-    const agentUrl =
-      premiumAgentUrlMap[selectedAgent] || premiumAgentUrlMap.premium_lending;
+    // Use Next.js API route which has x402plus protection
+    // This ensures all requests go through payment check
+    const agentUrl = "/api/premium";
 
     try {
+      // Pass selected agent as a header so the API route knows which agent to use
       clientRef.current = new A2APremiumA2AClient(agentUrl);
+      
+      // Set agent selection header
+      if (selectedAgent) {
+        clientRef.current.setHeaders({ "x-selected-agent": selectedAgent });
+      }
 
       // Try to fetch agent card immediately to catch payment errors early
       // This is done asynchronously so it doesn't block initialization
@@ -185,6 +180,8 @@ export default function PremiumChat({
       if (error instanceof PaymentRequiredError) {
         // Store the pending request to retry after payment
         setPendingRequest(messageParams);
+        // Extract payment requirements from error
+        setPaymentRequirements(error.paymentRequirements || error.originalError?.payment);
         setShowPaymentModal(true);
         setIsLoading(false);
         return;
@@ -720,10 +717,10 @@ export default function PremiumChat({
         onClose={() => {
           setShowPaymentModal(false);
           setPendingRequest(null);
+          setPaymentRequirements(null);
         }}
         onPaymentComplete={handlePaymentComplete}
-        amount="0.01"
-        currency="USDC"
+        paymentRequirements={paymentRequirements}
       />
     </div>
   );

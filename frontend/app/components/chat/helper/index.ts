@@ -215,6 +215,21 @@ export class A2APremiumA2AClient extends A2AClient {
               message: "x-payment header is required",
             };
           }
+          
+          // Try to extract payment requirements from X-PAYMENT-RESPONSE header or body
+          const paymentResponseHeader = response.headers.get("X-PAYMENT-RESPONSE");
+          if (paymentResponseHeader) {
+            try {
+              const paymentData = JSON.parse(paymentResponseHeader);
+              errorBody.payment = paymentData.payment || paymentData;
+            } catch {
+              // If header is not JSON, check errorBody for payment info
+              if (errorBody.payment) {
+                // Already has payment info
+              }
+            }
+          }
+          
           throw new PaymentRequiredError(
             errorBody.message || errorBody.error || "Payment Required",
             errorBody
@@ -282,10 +297,22 @@ export class A2APremiumA2AClient extends A2AClient {
 export class PaymentRequiredError extends Error {
   public readonly statusCode: number = 402;
   public readonly originalError: any;
+  public readonly paymentRequirements?: {
+    payTo: string;
+    maxAmountRequired: string;
+    network?: string;
+    asset?: string;
+    description?: string;
+  };
 
   constructor(message: string, originalError?: any) {
     super(message);
     this.name = "PaymentRequiredError";
     this.originalError = originalError;
+    
+    // Extract payment requirements from error body
+    if (originalError?.payment || originalError?.paymentRequirements) {
+      this.paymentRequirements = originalError.payment || originalError.paymentRequirements;
+    }
   }
 }
