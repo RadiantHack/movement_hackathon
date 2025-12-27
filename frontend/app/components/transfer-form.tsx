@@ -59,15 +59,15 @@ export const TransferForm: React.FC<TransferFormProps> = ({
     if (!config.movementFullNode) return null;
     return new Aptos(
       new AptosConfig({
-        network: Network.TESTNET,
+        network: Network.CUSTOM,
         fullnode: config.movementFullNode,
       })
     );
   }, [config.movementFullNode]);
 
   const movementChainId = useMemo(() => {
-    return config.movementTestNetChainId || 250;
-  }, [config.movementTestNetChainId]);
+    return config.movementChainId || 126;
+  }, [config.movementChainId]);
 
   const movementWallet = useMemo(() => {
     if (!ready || !authenticated || !user?.linkedAccounts) {
@@ -496,21 +496,31 @@ export const TransferForm: React.FC<TransferFormProps> = ({
 
       {/* Success Message */}
       {txHash && (
-        <div className="p-4 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800">
-          <p className="text-xs text-green-800 dark:text-green-300 font-medium mb-1">
-            Transaction Hash
-          </p>
-          <p className="text-xs text-green-900 dark:text-green-200 font-mono break-all mb-2">
-            {txHash}
-          </p>
-          <a
-            href={`${config.movementExplorerUrl || "https://explorer.movementlabs.xyz"}/txn/${txHash}`}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-xs font-medium text-green-700 dark:text-green-400 hover:underline"
-          >
-            View on Explorer →
-          </a>
+        <div className="p-4 rounded-2xl bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800/50 text-sm text-green-700 dark:text-green-400">
+          <div className="flex items-center gap-3">
+            <svg
+              className="w-5 h-5 flex-shrink-0"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+              />
+            </svg>
+            <span className="font-medium">Transfer successful!</span>
+            <a
+              href={`https://explorer.movementnetwork.xyz/txn/${txHash}?network=mainnet`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="ml-auto text-green-600 dark:text-green-400 hover:underline font-semibold"
+            >
+              View →
+            </a>
+          </div>
         </div>
       )}
 

@@ -1048,8 +1048,8 @@ export default function OverviewPage() {
                 balances={balances}
                 initialToken={selectedTokenForTransfer}
                 onTransferComplete={() => {
-                  setShowTransferModal(false);
-                  setSelectedTokenForTransfer(null);
+                  // Don't close modal automatically - let user see success message and view link
+                  // Refresh balances after a delay
                   setTimeout(() => {
                     if (walletAddress) {
                       fetch(
