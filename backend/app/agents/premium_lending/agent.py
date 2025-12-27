@@ -14,9 +14,11 @@ from dotenv import load_dotenv
 
 load_dotenv()
 import requests
-from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.requests import Request
-from starlette.responses import JSONResponse
+import os
+import logging
+from typing import Any, Dict, List, Optional
+
+from app.x402 import X402PaywallMiddleware, RouteConfig
 
 from app.agents.lending_comparison.moveposition_rates import (
     calculate_moveposition_supply_apy_by_utilization,
@@ -1200,49 +1202,59 @@ class LendingAgentExecutor(AgentExecutor):
         raise NotImplementedError("cancel not supported")
 
 
-class PaymentRequiredMiddleware(BaseHTTPMiddleware):
-    """Middleware to check for x-payment header and return 402 if missing.
-
-    Excludes agent card endpoints (.well-known/agent.json and .well-known/agent-card.json)
-    from payment requirements to allow agent discovery.
-    """
-
-    async def dispatch(self, request: Request, call_next: Any) -> Any:
-        """Check for x-payment header before processing request."""
-        # Get the request path
-        path = request.url.path
-
-        # Skip payment check for agent card discovery endpoints
-        if (
-            path.endswith("/.well-known/agent.json")
-            or path.endswith("/.well-known/agent-card.json")
-            or "/.well-known/agent.json" in path
-            or "/.well-known/agent-card.json" in path
-        ):
-            return await call_next(request)
-
-        # Check for x-payment header (case-insensitive via Starlette headers)
-        if "x-payment" not in request.headers:
-            return JSONResponse(
-                status_code=402,
-                content={
-                    "error": "Payment Required",
-                    "message": "x-payment header is required to access this endpoint",
-                },
-            )
-        return await call_next(request)
+# PaymentRequiredMiddleware has been replaced with x402Paywall
+# The old middleware is removed - use x402Paywall from app.x402 instead
 
 
 class LendingAgentAppWithMiddleware:
-    """Wrapper for A2AStarletteApplication with payment middleware."""
+    """Wrapper for A2AStarletteApplication with x402 payment middleware."""
 
     def __init__(self, a2a_app: A2AStarletteApplication):
         self._a2a_app = a2a_app
 
     def build(self) -> Any:
-        """Build the Starlette app and apply payment middleware."""
+        """Build the Starlette app and apply x402 payment middleware."""
         app = self._a2a_app.build()
-        app.add_middleware(PaymentRequiredMiddleware)
+        
+        # Get payment configuration from environment - REQUIRED
+        movement_pay_to = os.getenv("MOVEMENT_PAY_TO") or os.getenv("NEXT_PUBLIC_MOVEMENT_PAY_TO")
+        
+        # MOVEMENT_PAY_TO is required - throw error if not configured
+        if not movement_pay_to:
+            import logging
+            logger = logging.getLogger(__name__)
+            error_msg = (
+                "MOVEMENT_PAY_TO environment variable is required for premium_lending_agent. "
+                "Please set MOVEMENT_PAY_TO to your payment recipient address."
+            )
+            logger.error(error_msg)
+            raise ValueError(error_msg)
+        
+        # Define protected routes for premium lending agent
+        # Note: Route keys should match the path when mounted (e.g., "/premium_lending_agent" when mounted at /premium_lending_agent)
+        routes = {
+            # Protect all POST requests to the agent
+            "POST /": RouteConfig(
+                network="movement",
+                asset="0x1::aptos_coin::AptosCoin",
+                max_amount_required="100000000",  # 1 MOVE (8 decimals)
+                description="Premium Lending Agent access - Pay to unlock premium lending features",
+                mime_type="application/json",
+                max_timeout_seconds=600,
+            ),
+        }
+        
+        # Always add x402Paywall middleware to require payment
+        app.add_middleware(
+            X402PaywallMiddleware,
+            pay_to=movement_pay_to,
+            routes=routes,
+            skip_paths=[
+                "/.well-known/agent.json",
+                "/.well-known/agent-card.json",
+            ],
+        )
+        
         return app
 
 

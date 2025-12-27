@@ -180,8 +180,13 @@ export class A2APremiumA2AClient extends A2AClient {
         );
       }
 
-      // Get the service endpoint URL
-      const serviceEndpointUrl = agentCard.url;
+      // Get the service endpoint URL and normalize it
+      // Add trailing slash to avoid 307 redirect (POST -> GET conversion)
+      // Similar to orchestrator pattern in copilotkit/route.ts
+      let serviceEndpointUrl = agentCard.url.trim();
+      if (!serviceEndpointUrl.endsWith("/")) {
+        serviceEndpointUrl = serviceEndpointUrl + "/";
+      }
 
       // Create JSON-RPC request
       const requestId = Date.now();
@@ -193,6 +198,7 @@ export class A2APremiumA2AClient extends A2AClient {
       };
 
       // Make the request with custom headers
+      // Use redirect: "manual" to handle redirects ourselves and preserve POST method
       const response = await fetch(serviceEndpointUrl, {
         method: "POST",
         headers: {
@@ -201,6 +207,7 @@ export class A2APremiumA2AClient extends A2AClient {
           ...this.customHeaders,
         },
         body: JSON.stringify(rpcRequest),
+        redirect: "follow", // Follow redirects but preserve POST method
       });
 
       if (!response.ok) {
@@ -218,6 +225,22 @@ export class A2APremiumA2AClient extends A2AClient {
           throw new PaymentRequiredError(
             errorBody.message || errorBody.error || "Payment Required",
             errorBody
+          );
+        }
+
+        // Handle 405 Method Not Allowed - might be a redirect or URL issue
+        if (response.status === 405) {
+          let errorBody: any = null;
+          try {
+            errorBody = await response.json();
+          } catch {
+            errorBody = {
+              error: "Method Not Allowed",
+              message: `The endpoint ${serviceEndpointUrl} does not support POST method. This may be due to a redirect issue.`,
+            };
+          }
+          throw new Error(
+            errorBody.message || errorBody.error || `Method Not Allowed: ${serviceEndpointUrl}`
           );
         }
 
@@ -282,10 +305,33 @@ export class A2APremiumA2AClient extends A2AClient {
 export class PaymentRequiredError extends Error {
   public readonly statusCode: number = 402;
   public readonly originalError: any;
+  public readonly paymentRequirements?: {
+    payTo: string;
+    maxAmountRequired: string;
+    network?: string;
+    asset?: string;
+    description?: string;
+    resource?: string;
+    scheme?: string;
+  };
 
   constructor(message: string, originalError?: any) {
     super(message);
     this.name = "PaymentRequiredError";
     this.originalError = originalError;
+
+    // Extract payment requirements from error body
+    if (originalError?.accepts && Array.isArray(originalError.accepts) && originalError.accepts.length > 0) {
+      const accepts = originalError.accepts[0];
+      this.paymentRequirements = {
+        payTo: accepts.payTo,
+        maxAmountRequired: accepts.maxAmountRequired,
+        network: accepts.network,
+        asset: accepts.asset,
+        description: accepts.description,
+        resource: accepts.resource,
+        scheme: accepts.scheme,
+      };
+    }
   }
 }
