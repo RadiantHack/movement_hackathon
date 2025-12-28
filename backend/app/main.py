@@ -26,6 +26,7 @@ from app.agents.premium_lending.agent import create_lending_agent_app as create_
 from app.agents.sentiment.agent import create_sentiment_agent_app
 from app.agents.swap.agent import create_swap_agent_app
 from app.agents.transfer.agent import create_transfer_agent_app
+from app.facilitator.routes import router as facilitator_router
 
 # Configuration constants
 DEFAULT_AGENTS_PORT = 8000
@@ -129,6 +130,9 @@ def create_app() -> FastAPI:
                 "version": API_VERSION,
             }
         )
+
+    # Register facilitator routes (x402 payment protocol)
+    app.include_router(facilitator_router)
 
     # Register all agent applications
     register_agents(app)

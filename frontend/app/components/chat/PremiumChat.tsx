@@ -44,6 +44,15 @@ export default function PremiumChat({
   const [showPaymentModal, setShowPaymentModal] = useState(false);
   const [pendingRequest, setPendingRequest] =
     useState<MessageSendParams | null>(null);
+  const [paymentRequirements, setPaymentRequirements] = useState<{
+    payTo: string;
+    maxAmountRequired: string;
+    network?: string;
+    asset?: string;
+    description?: string;
+    resource?: string;
+    scheme?: string;
+  } | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const clientRef = useRef<A2APremiumA2AClient | null>(null);
@@ -189,6 +198,10 @@ export default function PremiumChat({
       if (error instanceof PaymentRequiredError) {
         // Store the pending request to retry after payment
         setPendingRequest(messageParams);
+        // Extract payment requirements from error
+        if (error.paymentRequirements) {
+          setPaymentRequirements(error.paymentRequirements);
+        }
         setShowPaymentModal(true);
         setIsLoading(false);
         return;
@@ -775,10 +788,11 @@ export default function PremiumChat({
         onClose={() => {
           setShowPaymentModal(false);
           setPendingRequest(null);
+          setPaymentRequirements(null);
         }}
         onPaymentComplete={handlePaymentComplete}
-        amount="0.01"
-        currency="USDC"
+        paymentRequirements={paymentRequirements || undefined}
+        walletAddress={walletAddress}
       />
     </div>
   );

@@ -39,9 +39,15 @@ export async function POST(request: NextRequest) {
   const agentUrl =
     premiumAgentUrlMap[selectedAgent] || premiumAgentUrlMap.premium_lending;
 
-  // Get x-payment header from request and forward it
+  // Get x-payment header from request and forward it (check both lowercase and uppercase)
   const xPaymentHeader =
-    request.headers.get("x-payment") || request.headers.get("x-402");
+    request.headers.get("x-payment") ||
+    request.headers.get("X-Payment") ||
+    request.headers.get("x-402") ||
+    request.headers.get("X-402");
+
+    console.log(`Selected premium agent: ${selectedAgent} at ${agentUrl}`);
+    console.log(`x-payment header present: ${xPaymentHeader ? "yes" : "no"} with value: ${xPaymentHeader} `);
 
   // Create direct agent connection to selected premium agent
   const directAgent = new HttpAgent({

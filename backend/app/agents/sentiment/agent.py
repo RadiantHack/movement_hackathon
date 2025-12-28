@@ -6,11 +6,15 @@ Adapted for Movement repository pattern with create_sentiment_agent_app() functi
 """
 
 import os
+import logging
+from typing import Any
 
 from a2a.server.apps import A2AStarletteApplication
 from a2a.server.request_handlers import DefaultRequestHandler
 from a2a.server.tasks import InMemoryTaskStore
 from a2a.types import AgentCapabilities, AgentCard, AgentSkill
+
+from app.x402 import X402PaywallMiddleware, RouteConfig
 
 from .core.constants import (
     ERROR_VALIDATION_FAILED,
@@ -249,4 +253,55 @@ def create_sentiment_agent_app(
         extended_agent_card=public_agent_card,
     )
 
-    return server
+    return SentimentAgentAppWithMiddleware(server)
+
+
+class SentimentAgentAppWithMiddleware:
+    """Wrapper for A2AStarletteApplication with x402 payment middleware."""
+
+    def __init__(self, a2a_app: A2AStarletteApplication):
+        self._a2a_app = a2a_app
+
+    def build(self) -> Any:
+        """Build the Starlette app and apply x402 payment middleware."""
+        app = self._a2a_app.build()
+
+        # Get payment configuration from environment - REQUIRED
+        movement_pay_to = os.getenv("MOVEMENT_PAY_TO") or os.getenv("NEXT_PUBLIC_MOVEMENT_PAY_TO")
+
+        # MOVEMENT_PAY_TO is required - throw error if not configured
+        if not movement_pay_to:
+            error_msg = (
+                "MOVEMENT_PAY_TO environment variable is required for sentiment/trading agent. "
+                "Please set MOVEMENT_PAY_TO to your payment recipient address."
+            )
+            logger = logging.getLogger(__name__)
+            logger.error(error_msg)
+            raise ValueError(error_msg)
+
+        # Define protected routes for sentiment/trading agent
+        # Note: Route keys should match the path when mounted (e.g., "/sentiment" when mounted at /sentiment)
+        routes = {
+            # Protect all POST requests to the agent
+            "POST /": RouteConfig(
+                network="movement",
+                asset="0x1::aptos_coin::AptosCoin",
+                max_amount_required="100000000",  # 1 MOVE (8 decimals)
+                description="Sentiment & Trading Agent access - Pay to unlock sentiment analysis and trading recommendations",
+                mime_type="application/json",
+                max_timeout_seconds=600,
+            ),
+        }
+
+        # Always add x402Paywall middleware to require payment
+        app.add_middleware(
+            X402PaywallMiddleware,
+            pay_to=movement_pay_to,
+            routes=routes,
+            skip_paths=[
+                "/.well-known/agent.json",
+                "/.well-known/agent-card.json",
+            ],
+        )
+
+        return app
