@@ -18,8 +18,13 @@ import {
 import { HttpAgent } from "@ag-ui/client";
 import { A2AMiddlewareAgent } from "../helper.ts";
 import { NextRequest } from "next/server";
+import { isRailwayDeployment } from "../../utils/deployment";
 
 export async function POST(request: NextRequest) {
+  // Check if this is a Railway deployment
+  // You can also import IS_RAILWAY constant: import { IS_RAILWAY } from "@/app/utils/deployment"
+  const isRailway = isRailwayDeployment();
+
   // Get base URL - prioritize NEXT_PUBLIC_BASE_URL for Railway/production
   // Remove trailing slash if present to avoid double slashes
   // Get base URL - use environment variable if available, otherwise default to localhost
@@ -33,12 +38,13 @@ export async function POST(request: NextRequest) {
   // - http://localhost:8000/balance -> agentName: "balance"
   // - http://localhost:8000/bridge -> agentName: "bridge"
   // Make sure backend is running and agents are accessible at these URLs
-  const balanceAgentUrl = `${baseUrl}/balance`;
-  const bridgeAgentUrl = `${baseUrl}/bridge`;
-  const lendingAgentUrl = `${baseUrl}/lending`;
+  const balanceAgentUrl = `${baseUrl}/balance${isRailway ? "/" : ""}`.trim();
+  const bridgeAgentUrl = `${baseUrl}/bridge${isRailway ? "/" : ""}`.trim();
+  const lendingAgentUrl = `${baseUrl}/lending${isRailway ? "/" : ""}`.trim();
   // Orchestrator URL needs trailing slash to avoid 307 redirect (POST -> GET conversion)
   // This works for both local (localhost:8000) and Railway (https://backend.railway.app)
-  const orchestratorUrl = `${baseUrl}/orchestrator/`;
+  const orchestratorUrl =
+    `${baseUrl}/orchestrator${isRailway ? "/" : ""}`.trim();
 
   // Connect to orchestrator via AG-UI Protocol with authentication
   const orchestrationAgent = new HttpAgent({
