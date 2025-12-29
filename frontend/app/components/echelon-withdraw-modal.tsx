@@ -28,6 +28,7 @@ interface EchelonWithdrawModalProps {
   isOpen: boolean;
   onClose: () => void;
   asset: WithdrawAsset | null;
+  onSuccess?: () => void; // Callback after successful transaction
 }
 
 const ECHELON_CONTRACT =
@@ -60,6 +61,7 @@ export function EchelonWithdrawModal({
   isOpen,
   onClose,
   asset,
+  onSuccess,
 }: EchelonWithdrawModalProps) {
   const [amount, setAmount] = useState("");
   const [percentage, setPercentage] = useState(0);
@@ -209,6 +211,11 @@ export function EchelonWithdrawModal({
 
       setTxHash(pending.hash);
       setStep("");
+
+      // Call onSuccess callback to refresh data
+      if (onSuccess) {
+        onSuccess();
+      }
 
       setTimeout(() => {
         onClose();

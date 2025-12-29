@@ -89,6 +89,9 @@ export default function EchelonPage() {
   const [userSupplies, setUserSupplies] = useState<UserSupply[]>([]);
   const [userBorrows, setUserBorrows] = useState<UserBorrow[]>([]);
   const [loadingVault, setLoadingVault] = useState(false);
+  const [availableBalances, setAvailableBalances] = useState<
+    Record<string, number>
+  >({});
 
   const movementWallet = useMemo(() => {
     if (!ready || !authenticated || !user?.linkedAccounts) {
@@ -160,65 +163,105 @@ export default function EchelonPage() {
   }, []);
 
   // Fetch user vault data
-  useEffect(() => {
-    const fetchVault = async () => {
-      if (!movementWallet?.address || assets.length === 0) return;
+  const fetchVault = async () => {
+    if (!movementWallet?.address || assets.length === 0) return;
 
-      setLoadingVault(true);
-      try {
-        const response = await fetch(
-          `/api/echelon/vault?address=${movementWallet.address}`
+    setLoadingVault(true);
+    try {
+      const response = await fetch(
+        `/api/echelon/vault?address=${movementWallet.address}`
+      );
+      const data = await response.json();
+
+      if (data.data?.collaterals?.data) {
+        const supplies: UserSupply[] = data.data.collaterals.data.map(
+          (item: { key: { inner: string }; value: string }) => {
+            const marketAddress = item.key.inner;
+            const symbol = MARKET_TO_SYMBOL[marketAddress] || "Unknown";
+            const asset = assets.find((a) => a.symbol === symbol);
+            return {
+              marketAddress,
+              amount: item.value,
+              symbol,
+              icon: asset?.icon || "",
+              price: asset?.price || 0,
+              apr: asset?.supplyApr || 0,
+              decimals: asset?.decimals || 8,
+            };
+          }
         );
-        const data = await response.json();
-
-        if (data.data?.collaterals?.data) {
-          const supplies: UserSupply[] = data.data.collaterals.data.map(
-            (item: { key: { inner: string }; value: string }) => {
-              const marketAddress = item.key.inner;
-              const symbol = MARKET_TO_SYMBOL[marketAddress] || "Unknown";
-              const asset = assets.find((a) => a.symbol === symbol);
-              return {
-                marketAddress,
-                amount: item.value,
-                symbol,
-                icon: asset?.icon || "",
-                price: asset?.price || 0,
-                apr: asset?.supplyApr || 0,
-                decimals: asset?.decimals || 8,
-              };
-            }
-          );
-          setUserSupplies(supplies);
-        }
-
-        if (data.data?.liabilities?.data) {
-          const borrows: UserBorrow[] = data.data.liabilities.data.map(
-            (item: { key: { inner: string }; value: string }) => {
-              const marketAddress = item.key.inner;
-              const symbol = MARKET_TO_SYMBOL[marketAddress] || "Unknown";
-              const asset = assets.find((a) => a.symbol === symbol);
-              return {
-                marketAddress,
-                amount: item.value,
-                symbol,
-                icon: asset?.icon || "",
-                price: asset?.price || 0,
-                apr: asset?.borrowApr || 0,
-                decimals: asset?.decimals || 8,
-              };
-            }
-          );
-          setUserBorrows(borrows);
-        }
-      } catch (err) {
-        console.error("Failed to fetch vault:", err);
-      } finally {
-        setLoadingVault(false);
+        setUserSupplies(supplies);
       }
-    };
 
+      if (data.data?.liabilities?.data) {
+        const borrows: UserBorrow[] = data.data.liabilities.data.map(
+          (item: { key: { inner: string }; value: string }) => {
+            const marketAddress = item.key.inner;
+            const symbol = MARKET_TO_SYMBOL[marketAddress] || "Unknown";
+            const asset = assets.find((a) => a.symbol === symbol);
+            return {
+              marketAddress,
+              amount: item.value,
+              symbol,
+              icon: asset?.icon || "",
+              price: asset?.price || 0,
+              apr: asset?.borrowApr || 0,
+              decimals: asset?.decimals || 8,
+            };
+          }
+        );
+        setUserBorrows(borrows);
+      }
+    } catch (err) {
+      console.error("Failed to fetch vault:", err);
+    } finally {
+      setLoadingVault(false);
+    }
+  };
+
+  useEffect(() => {
     fetchVault();
   }, [movementWallet?.address, assets]);
+
+  // Fetch available balances for tokens
+  const fetchAvailableBalances = async () => {
+    if (!movementWallet?.address) return;
+
+    try {
+      const response = await fetch(
+        `/api/balance?address=${encodeURIComponent(movementWallet.address)}`
+      );
+
+      if (!response.ok) {
+        throw new Error("Failed to fetch balance");
+      }
+
+      const data = await response.json();
+
+      if (data.success && data.balances && data.balances.length > 0) {
+        const balances: Record<string, number> = {};
+        data.balances.forEach((b: {
+          metadata: { symbol: string; decimals: number };
+          amount: string;
+        }) => {
+          const symbol = b.metadata.symbol.toUpperCase().replace(/\./g, "");
+          const amount = parseFloat(b.amount) / Math.pow(10, b.metadata.decimals);
+          // Store both with and without .e suffix
+          balances[symbol] = amount;
+          if (symbol.endsWith("E")) {
+            balances[symbol.slice(0, -1)] = amount; // USDC.E -> USDC
+          }
+        });
+        setAvailableBalances(balances);
+      }
+    } catch (error) {
+      console.error("Error fetching available balances:", error);
+    }
+  };
+
+  useEffect(() => {
+    fetchAvailableBalances();
+  }, [movementWallet?.address]);
 
   // Calculate totals
   const totalSupplyBalance = useMemo(() => {
@@ -341,21 +384,21 @@ export default function EchelonPage() {
         </div>
 
         {/* Main Content */}
-        <div className="p-4 md:p-8">
+        <div className="p-3 sm:p-4 md:p-6 lg:p-8">
           {error && (
             <div className="mb-4 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-sm text-red-700 dark:text-red-400">
               {error}
             </div>
           )}
 
-          <div className="mx-auto max-w-7xl grid gap-6 lg:grid-cols-2">
+          <div className="mx-auto max-w-7xl grid gap-4 sm:gap-6 lg:grid-cols-2">
             {/* Your Supplies */}
-            <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg font-semibold text-zinc-950 dark:text-zinc-50">
+            <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4 sm:p-6">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+                <h2 className="text-base sm:text-lg font-semibold text-zinc-950 dark:text-zinc-50">
                   Your Supplies
                 </h2>
-                <div className="flex items-center gap-4 text-sm">
+                <div className="flex flex-wrap items-center gap-2 sm:gap-4 text-xs sm:text-sm">
                   <span className="text-zinc-500 dark:text-zinc-400">
                     Balance{" "}
                     <span className="text-zinc-950 dark:text-zinc-50">
@@ -380,7 +423,8 @@ export default function EchelonPage() {
                 </div>
               ) : (
                 <>
-                  <div className="grid grid-cols-4 gap-4 text-xs text-zinc-500 dark:text-zinc-400 uppercase tracking-wider pb-2 border-b border-zinc-200 dark:border-zinc-800">
+                  {/* Desktop Table Header */}
+                  <div className="hidden sm:grid grid-cols-4 gap-4 text-xs text-zinc-500 dark:text-zinc-400 uppercase tracking-wider pb-2 border-b border-zinc-200 dark:border-zinc-800">
                     <div>Asset</div>
                     <div>Balance</div>
                     <div>APR</div>
@@ -395,7 +439,7 @@ export default function EchelonPage() {
                       return (
                         <div
                           key={supply.marketAddress}
-                          className="grid grid-cols-4 gap-4 py-3 items-center"
+                          className="grid grid-cols-1 sm:grid-cols-4 gap-3 sm:gap-4 py-3 sm:items-center"
                         >
                           <div className="flex items-center gap-3">
                             <div className="relative">
@@ -418,28 +462,36 @@ export default function EchelonPage() {
                               )}
                               <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-purple-500 border-2 border-white dark:border-zinc-900" />
                             </div>
-                            <span className="text-zinc-950 dark:text-zinc-50 font-medium">
+                            <span className="text-zinc-950 dark:text-zinc-50 font-medium text-sm sm:text-base">
                               {supply.symbol}
                             </span>
                           </div>
-                          <div>
-                            <div className="text-zinc-950 dark:text-zinc-50">
+                          <div className="sm:block">
+                            <div className="text-xs sm:text-sm text-zinc-500 dark:text-zinc-400 mb-1 sm:hidden">
+                              Balance
+                            </div>
+                            <div className="text-zinc-950 dark:text-zinc-50 text-sm sm:text-base">
                               {amount.toFixed(2)}
                             </div>
-                            <div className="text-zinc-500 dark:text-zinc-400 text-sm">
+                            <div className="text-zinc-500 dark:text-zinc-400 text-xs">
                               ${usdValue.toFixed(2)}
                             </div>
                           </div>
-                          <div className="text-purple-600 dark:text-purple-400">
-                            {supply.apr.toFixed(2)}%
+                          <div className="sm:block">
+                            <div className="text-xs sm:text-sm text-zinc-500 dark:text-zinc-400 mb-1 sm:hidden">
+                              APR
+                            </div>
+                            <div className="text-purple-600 dark:text-purple-400 text-sm sm:text-base">
+                              {supply.apr.toFixed(2)}%
+                            </div>
                           </div>
-                          <div>
+                          <div className="sm:block">
                             <button
                               onClick={() => {
                                 setSelectedWithdrawAsset(supply);
                                 setWithdrawModalOpen(true);
                               }}
-                              className="px-4 py-1.5 rounded-lg bg-zinc-100 dark:bg-zinc-800 text-purple-600 dark:text-purple-400 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors text-sm font-medium border border-zinc-200 dark:border-zinc-700 cursor-pointer"
+                              className="w-full sm:w-auto px-4 py-2 sm:py-1.5 rounded-lg bg-zinc-100 dark:bg-zinc-800 text-purple-600 dark:text-purple-400 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors text-sm font-medium border border-zinc-200 dark:border-zinc-700 cursor-pointer"
                             >
                               Withdraw
                             </button>
@@ -453,12 +505,12 @@ export default function EchelonPage() {
             </div>
 
             {/* Your Borrows */}
-            <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg font-semibold text-zinc-950 dark:text-zinc-50">
+            <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4 sm:p-6">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+                <h2 className="text-base sm:text-lg font-semibold text-zinc-950 dark:text-zinc-50">
                   Your Borrows
                 </h2>
-                <div className="flex items-center gap-4 text-sm">
+                <div className="flex flex-wrap items-center gap-2 sm:gap-4 text-xs sm:text-sm">
                   <span className="text-zinc-500 dark:text-zinc-400">
                     Liability{" "}
                     <span className="text-zinc-950 dark:text-zinc-50">
@@ -472,7 +524,8 @@ export default function EchelonPage() {
                     </span>
                   </span>
                   <span className="text-zinc-500 dark:text-zinc-400">
-                    Borrowing power{" "}
+                    <span className="hidden sm:inline">Borrowing power </span>
+                    <span className="sm:hidden">Power </span>
                     <span className="text-zinc-950 dark:text-zinc-50">
                       ${(totalSupplyBalance * 0.7).toFixed(2)} (
                       {totalSupplyBalance > 0
@@ -496,7 +549,8 @@ export default function EchelonPage() {
                 </div>
               ) : (
                 <>
-                  <div className="grid grid-cols-4 gap-4 text-xs text-zinc-500 dark:text-zinc-400 uppercase tracking-wider pb-2 border-b border-zinc-200 dark:border-zinc-800">
+                  {/* Desktop Table Header */}
+                  <div className="hidden sm:grid grid-cols-4 gap-4 text-xs text-zinc-500 dark:text-zinc-400 uppercase tracking-wider pb-2 border-b border-zinc-200 dark:border-zinc-800">
                     <div>Asset</div>
                     <div>Debt</div>
                     <div>APR</div>
@@ -511,7 +565,7 @@ export default function EchelonPage() {
                       return (
                         <div
                           key={borrow.marketAddress}
-                          className="grid grid-cols-4 gap-4 py-3 items-center"
+                          className="grid grid-cols-1 sm:grid-cols-4 gap-3 sm:gap-4 py-3 sm:items-center"
                         >
                           <div className="flex items-center gap-3">
                             <div className="relative">
@@ -534,23 +588,31 @@ export default function EchelonPage() {
                               )}
                               <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-purple-500 border-2 border-white dark:border-zinc-900" />
                             </div>
-                            <span className="text-zinc-950 dark:text-zinc-50 font-medium">
+                            <span className="text-zinc-950 dark:text-zinc-50 font-medium text-sm sm:text-base">
                               {borrow.symbol}
                             </span>
                           </div>
-                          <div>
-                            <div className="text-zinc-950 dark:text-zinc-50">
+                          <div className="sm:block">
+                            <div className="text-xs sm:text-sm text-zinc-500 dark:text-zinc-400 mb-1 sm:hidden">
+                              Debt
+                            </div>
+                            <div className="text-zinc-950 dark:text-zinc-50 text-sm sm:text-base">
                               {amount.toFixed(2)}
                             </div>
-                            <div className="text-zinc-500 dark:text-zinc-400 text-sm">
+                            <div className="text-zinc-500 dark:text-zinc-400 text-xs">
                               ${usdValue.toFixed(2)}
                             </div>
                           </div>
-                          <div className="text-purple-600 dark:text-purple-400">
-                            {borrow.apr.toFixed(2)}%
+                          <div className="sm:block">
+                            <div className="text-xs sm:text-sm text-zinc-500 dark:text-zinc-400 mb-1 sm:hidden">
+                              APR
+                            </div>
+                            <div className="text-purple-600 dark:text-purple-400 text-sm sm:text-base">
+                              {borrow.apr.toFixed(2)}%
+                            </div>
                           </div>
-                          <div>
-                            <button className="px-4 py-1.5 rounded-lg bg-zinc-100 dark:bg-zinc-800 text-purple-600 dark:text-purple-400 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors text-sm font-medium border border-zinc-200 dark:border-zinc-700 cursor-pointer">
+                          <div className="sm:block">
+                            <button className="w-full sm:w-auto px-4 py-2 sm:py-1.5 rounded-lg bg-zinc-100 dark:bg-zinc-800 text-purple-600 dark:text-purple-400 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors text-sm font-medium border border-zinc-200 dark:border-zinc-700 cursor-pointer">
                               Repay
                             </button>
                           </div>
@@ -563,14 +625,14 @@ export default function EchelonPage() {
             </div>
 
             {/* Assets to Supply */}
-            <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg font-semibold text-zinc-950 dark:text-zinc-50">
+            <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4 sm:p-6">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+                <h2 className="text-base sm:text-lg font-semibold text-zinc-950 dark:text-zinc-50">
                   Assets to Supply
                 </h2>
                 <div className="flex items-center gap-2">
-                  <span className="text-sm text-zinc-500 dark:text-zinc-400">
-                    Hide 0 balance assets ({filteredSupplyAssets.length})
+                  <span className="text-xs sm:text-sm text-zinc-500 dark:text-zinc-400">
+                    Hide 0 balance ({filteredSupplyAssets.length})
                   </span>
                   <button
                     onClick={() => setHideZeroBalance(!hideZeroBalance)}
@@ -583,8 +645,8 @@ export default function EchelonPage() {
                 </div>
               </div>
 
-              {/* Table Header */}
-              <div className="grid grid-cols-4 gap-4 text-xs text-zinc-500 dark:text-zinc-400 uppercase tracking-wider pb-2 border-b border-zinc-200 dark:border-zinc-800">
+              {/* Desktop Table Header */}
+              <div className="hidden sm:grid grid-cols-4 gap-4 text-xs text-zinc-500 dark:text-zinc-400 uppercase tracking-wider pb-2 border-b border-zinc-200 dark:border-zinc-800">
                 <div className="flex items-center gap-1">
                   Asset{" "}
                   <span className="text-zinc-400 dark:text-zinc-600">↕</span>
@@ -610,7 +672,7 @@ export default function EchelonPage() {
                   {filteredSupplyAssets.map((asset) => (
                     <div
                       key={asset.symbol}
-                      className="grid grid-cols-4 gap-4 py-3 items-center"
+                      className="grid grid-cols-1 sm:grid-cols-4 gap-3 sm:gap-4 py-3 sm:items-center"
                     >
                       <div className="flex items-center gap-3">
                         <div className="relative">
@@ -643,12 +705,15 @@ export default function EchelonPage() {
                           </div>
                           <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-purple-500 border-2 border-white dark:border-zinc-900" />
                         </div>
-                        <span className="text-zinc-950 dark:text-zinc-50 font-medium">
+                        <span className="text-zinc-950 dark:text-zinc-50 font-medium text-sm sm:text-base">
                           {asset.symbol}
                         </span>
                       </div>
-                      <div>
-                        <div className="text-zinc-950 dark:text-zinc-50">
+                      <div className="sm:block">
+                        <div className="text-xs sm:text-sm text-zinc-500 dark:text-zinc-400 mb-1 sm:hidden">
+                          Price
+                        </div>
+                        <div className="text-zinc-950 dark:text-zinc-50 text-sm sm:text-base">
                           $
                           {asset.price < 1
                             ? asset.price.toFixed(4)
@@ -658,24 +723,29 @@ export default function EchelonPage() {
                               })}
                         </div>
                       </div>
-                      <div
-                        className={
-                          asset.supplyApr > 0
-                            ? "text-purple-600 dark:text-purple-400"
-                            : "text-zinc-500 dark:text-zinc-400"
-                        }
-                      >
-                        {asset.supplyApr > 0
-                          ? `${asset.supplyApr.toFixed(2)}%`
-                          : "0.00%"}
+                      <div className="sm:block">
+                        <div className="text-xs sm:text-sm text-zinc-500 dark:text-zinc-400 mb-1 sm:hidden">
+                          Supply APR
+                        </div>
+                        <div
+                          className={
+                            asset.supplyApr > 0
+                              ? "text-purple-600 dark:text-purple-400 text-sm sm:text-base"
+                              : "text-zinc-500 dark:text-zinc-400 text-sm sm:text-base"
+                          }
+                        >
+                          {asset.supplyApr > 0
+                            ? `${asset.supplyApr.toFixed(2)}%`
+                            : "0.00%"}
+                        </div>
                       </div>
-                      <div>
+                      <div className="sm:block">
                         <button
                           onClick={() => {
                             setSelectedAsset(asset);
                             setSupplyModalOpen(true);
                           }}
-                          className="px-4 py-1.5 rounded-lg bg-zinc-100 dark:bg-zinc-800 text-purple-600 dark:text-purple-400 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors text-sm font-medium border border-zinc-200 dark:border-zinc-700 cursor-pointer"
+                          className="w-full sm:w-auto px-4 py-2 sm:py-1.5 rounded-lg bg-zinc-100 dark:bg-zinc-800 text-purple-600 dark:text-purple-400 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors text-sm font-medium border border-zinc-200 dark:border-zinc-700 cursor-pointer"
                         >
                           Supply
                         </button>
@@ -687,13 +757,13 @@ export default function EchelonPage() {
             </div>
 
             {/* Assets to Borrow */}
-            <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-6">
-              <h2 className="text-lg font-semibold text-zinc-950 dark:text-zinc-50 mb-4">
+            <div className="rounded-xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-4 sm:p-6">
+              <h2 className="text-base sm:text-lg font-semibold text-zinc-950 dark:text-zinc-50 mb-4">
                 Assets to Borrow
               </h2>
 
-              {/* Table Header */}
-              <div className="grid grid-cols-4 gap-4 text-xs text-zinc-500 dark:text-zinc-400 uppercase tracking-wider pb-2 border-b border-zinc-200 dark:border-zinc-800">
+              {/* Desktop Table Header */}
+              <div className="hidden sm:grid grid-cols-4 gap-4 text-xs text-zinc-500 dark:text-zinc-400 uppercase tracking-wider pb-2 border-b border-zinc-200 dark:border-zinc-800">
                 <div className="flex items-center gap-1">
                   Asset{" "}
                   <span className="text-zinc-400 dark:text-zinc-600">↕</span>
@@ -719,7 +789,7 @@ export default function EchelonPage() {
                   {borrowableAssets.map((asset) => (
                     <div
                       key={asset.symbol}
-                      className="grid grid-cols-4 gap-4 py-3 items-center"
+                      className="grid grid-cols-1 sm:grid-cols-4 gap-3 sm:gap-4 py-3 sm:items-center"
                     >
                       <div className="flex items-center gap-3">
                         <div className="relative">
@@ -752,12 +822,15 @@ export default function EchelonPage() {
                           </div>
                           <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-purple-500 border-2 border-white dark:border-zinc-900" />
                         </div>
-                        <span className="text-zinc-950 dark:text-zinc-50 font-medium">
+                        <span className="text-zinc-950 dark:text-zinc-50 font-medium text-sm sm:text-base">
                           {asset.symbol}
                         </span>
                       </div>
-                      <div>
-                        <div className="text-zinc-950 dark:text-zinc-50">
+                      <div className="sm:block">
+                        <div className="text-xs sm:text-sm text-zinc-500 dark:text-zinc-400 mb-1 sm:hidden">
+                          Available
+                        </div>
+                        <div className="text-zinc-950 dark:text-zinc-50 text-sm sm:text-base">
                           {asset.borrowCap >= 1000
                             ? asset.borrowCap.toLocaleString(undefined, {
                                 minimumFractionDigits: 0,
@@ -765,7 +838,7 @@ export default function EchelonPage() {
                               })
                             : asset.borrowCap.toFixed(2)}
                         </div>
-                        <div className="text-zinc-500 dark:text-zinc-400 text-sm">
+                        <div className="text-zinc-500 dark:text-zinc-400 text-xs">
                           $
                           {(asset.borrowCap * asset.price).toLocaleString(
                             undefined,
@@ -776,24 +849,29 @@ export default function EchelonPage() {
                           )}
                         </div>
                       </div>
-                      <div
-                        className={
-                          asset.borrowApr > 0
-                            ? "text-purple-600 dark:text-purple-400"
-                            : "text-zinc-500 dark:text-zinc-400"
-                        }
-                      >
-                        {asset.borrowApr > 0
-                          ? `${asset.borrowApr.toFixed(2)}%`
-                          : "0.00%"}
+                      <div className="sm:block">
+                        <div className="text-xs sm:text-sm text-zinc-500 dark:text-zinc-400 mb-1 sm:hidden">
+                          Borrow APR
+                        </div>
+                        <div
+                          className={
+                            asset.borrowApr > 0
+                              ? "text-purple-600 dark:text-purple-400 text-sm sm:text-base"
+                              : "text-zinc-500 dark:text-zinc-400 text-sm sm:text-base"
+                          }
+                        >
+                          {asset.borrowApr > 0
+                            ? `${asset.borrowApr.toFixed(2)}%`
+                            : "0.00%"}
+                        </div>
                       </div>
-                      <div>
+                      <div className="sm:block">
                         <button
                           onClick={() => {
                             setSelectedAsset(asset);
                             setBorrowModalOpen(true);
                           }}
-                          className="px-4 py-1.5 rounded-lg bg-zinc-100 dark:bg-zinc-800 text-purple-600 dark:text-purple-400 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors text-sm font-medium border border-zinc-200 dark:border-zinc-700 cursor-pointer"
+                          className="w-full sm:w-auto px-4 py-2 sm:py-1.5 rounded-lg bg-zinc-100 dark:bg-zinc-800 text-purple-600 dark:text-purple-400 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition-colors text-sm font-medium border border-zinc-200 dark:border-zinc-700 cursor-pointer"
                         >
                           Borrow
                         </button>
@@ -819,6 +897,16 @@ export default function EchelonPage() {
           setSelectedAsset(null);
         }}
         asset={selectedAsset}
+        availableBalance={
+          selectedAsset
+            ? availableBalances[selectedAsset.symbol.toUpperCase()] || 0
+            : 0
+        }
+        onSuccess={() => {
+          // Refresh vault data and balances after successful supply
+          fetchVault();
+          fetchAvailableBalances();
+        }}
       />
 
       <EchelonBorrowModal
@@ -828,6 +916,15 @@ export default function EchelonPage() {
           setSelectedAsset(null);
         }}
         asset={selectedAsset}
+        availableBalance={
+          selectedAsset
+            ? (totalSupplyBalance * 0.7 - totalBorrowBalance) / (selectedAsset.price || 1)
+            : 0
+        }
+        onSuccess={() => {
+          // Refresh vault data after successful borrow
+          fetchVault();
+        }}
       />
 
       <EchelonWithdrawModal
@@ -848,6 +945,11 @@ export default function EchelonPage() {
               }
             : null
         }
+        onSuccess={() => {
+          // Refresh vault data and balances after successful withdraw
+          fetchVault();
+          fetchAvailableBalances();
+        }}
       />
     </div>
   );

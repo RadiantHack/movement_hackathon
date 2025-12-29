@@ -17,14 +17,16 @@ interface EchelonBorrowModalProps {
   asset: EchelonAsset | null;
   availableBalance?: number;
   inline?: boolean; // If true, renders inline without backdrop (for chat)
+  onSuccess?: () => void; // Callback after successful transaction
 }
 
 export function EchelonBorrowModal({
   isOpen,
   onClose,
   asset,
-  availableBalance = 0.255919,
+  availableBalance = 0,
   inline = false,
+  onSuccess,
 }: EchelonBorrowModalProps) {
   const [amount, setAmount] = useState("");
   const [percentage, setPercentage] = useState(0);

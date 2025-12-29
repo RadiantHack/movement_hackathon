@@ -31,6 +31,7 @@ interface EchelonSupplyModalProps {
   asset: EchelonAsset | null;
   availableBalance?: number;
   inline?: boolean; // If true, renders inline without backdrop (for chat)
+  onSuccess?: () => void; // Callback after successful transaction
 }
 
 // Echelon contract address
@@ -79,8 +80,9 @@ export function EchelonSupplyModal({
   isOpen,
   onClose,
   asset,
-  availableBalance = 49.15281732,
+  availableBalance = 0,
   inline = false,
+  onSuccess,
 }: EchelonSupplyModalProps) {
   const [amount, setAmount] = useState("");
   const [percentage, setPercentage] = useState(0);
@@ -240,6 +242,11 @@ export function EchelonSupplyModal({
 
       setTxHash(pending.hash);
       setStep("");
+
+      // Call onSuccess callback to refresh data
+      if (onSuccess) {
+        onSuccess();
+      }
 
       // Only close modal if not in inline mode (for chat, keep it open)
       if (!inline) {
