@@ -1,6 +1,6 @@
 /**
  * Facilitator Supported Endpoint - x402 Supported Networks
- * 
+ *
  * This endpoint returns information about supported networks and schemes.
  */
 
@@ -52,4 +52,3 @@ export async function POST(request: NextRequest) {
     );
   }
 }
-

@@ -1,6 +1,6 @@
 /**
  * Facilitator Verify Endpoint - x402 Payment Verification
- * 
+ *
  * This endpoint proxies payment verification requests to the Python backend facilitator.
  * It implements the x402 facilitator protocol for verifying payment transactions.
  */
@@ -53,4 +53,3 @@ export async function POST(request: NextRequest) {
     );
   }
 }
-

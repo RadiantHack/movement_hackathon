@@ -191,7 +191,7 @@ div.copilotKitMessages {
     position: relative !important;
     overflow: hidden !important;
   }
-  
+
   .copilotKitChat [class*="MessagesContainer"],
   .copilotKitChat [class*="messages-container"],
   .copilotKitChat > div > div:first-child {
@@ -205,14 +205,14 @@ div.copilotKitMessages {
     height: auto !important;
     max-height: 100% !important;
   }
-  
+
   .copilotKitMessage {
     font-size: 0.875rem !important;
     line-height: 1.5 !important;
     -webkit-tap-highlight-color: transparent !important;
     touch-action: manipulation !important;
   }
-  
+
   /* Ensure text is readable on mobile */
   .copilotKitChat p,
   .copilotKitChat span,
@@ -221,7 +221,7 @@ div.copilotKitMessages {
     overflow-wrap: break-word !important;
     -webkit-tap-highlight-color: transparent !important;
   }
-  
+
   /* Fix for A2A message boxes on mobile */
   .a2a-message-enter {
     margin-left: 0 !important;
@@ -231,12 +231,12 @@ div.copilotKitMessages {
     touch-action: manipulation !important;
     -webkit-tap-highlight-color: transparent !important;
   }
-  
+
   /* Prevent zoom on double tap */
   .copilotKitChat * {
     touch-action: manipulation !important;
   }
-  
+
   /* Allow text selection in messages but prevent zoom */
   .copilotKitChat [class*="Message"] p,
   .copilotKitChat [class*="Message"] span {

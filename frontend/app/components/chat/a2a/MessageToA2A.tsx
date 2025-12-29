@@ -83,7 +83,9 @@ export const MessageToA2A: React.FC<MessageActionRenderProps> = ({
               className={`px-2 py-1 sm:px-3 sm:py-1.5 rounded-full text-[10px] sm:text-xs font-semibold border-2 ${agentStyle.bgColor} ${agentStyle.textColor} ${agentStyle.borderColor} flex items-center gap-1 sm:gap-1.5 shadow-sm`}
             >
               <span className="text-xs sm:text-sm">{agentStyle.icon}</span>
-              <span className="capitalize whitespace-nowrap">{args.agentName}</span>
+              <span className="capitalize whitespace-nowrap">
+                {args.agentName}
+              </span>
             </span>
             {agentStyle.framework && (
               <span className="text-[9px] sm:text-[10px] text-gray-500 dark:text-gray-400 mt-0.5 sm:mt-1 font-medium">

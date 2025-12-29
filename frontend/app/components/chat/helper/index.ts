@@ -240,7 +240,9 @@ export class A2APremiumA2AClient extends A2AClient {
             };
           }
           throw new Error(
-            errorBody.message || errorBody.error || `Method Not Allowed: ${serviceEndpointUrl}`
+            errorBody.message ||
+              errorBody.error ||
+              `Method Not Allowed: ${serviceEndpointUrl}`
           );
         }
 
@@ -321,7 +323,11 @@ export class PaymentRequiredError extends Error {
     this.originalError = originalError;
 
     // Extract payment requirements from error body
-    if (originalError?.accepts && Array.isArray(originalError.accepts) && originalError.accepts.length > 0) {
+    if (
+      originalError?.accepts &&
+      Array.isArray(originalError.accepts) &&
+      originalError.accepts.length > 0
+    ) {
       const accepts = originalError.accepts[0];
       this.paymentRequirements = {
         payTo: accepts.payTo,

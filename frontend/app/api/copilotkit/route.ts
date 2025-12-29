@@ -43,7 +43,7 @@ export async function POST(request: NextRequest) {
     process.env.BACKEND_URL ||
     process.env.NEXT_PUBLIC_BACKEND_URL ||
     "https://movement-production-ee30.up.railway.app";
-  
+
   // Log the backend URL being used (for debugging)
   console.log("[copilotkit] Using backend URL:", baseUrl);
 
@@ -59,8 +59,7 @@ export async function POST(request: NextRequest) {
   const lendingAgentUrl = `${baseUrl}/lending/`;
   // Orchestrator URL needs trailing slash to avoid 307 redirect (POST -> GET conversion)
   // This works for both local (localhost:8000) and Railway (https://backend.railway.app)
-  const orchestratorUrl =
-    `${baseUrl}/orchestrator/`;
+  const orchestratorUrl = `${baseUrl}/orchestrator/`;
 
   // Log all agent URLs being used
   console.log("[copilotkit] Agent URLs:", {

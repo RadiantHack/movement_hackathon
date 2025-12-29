@@ -40,10 +40,13 @@ export class A2AMiddlewareAgent extends AbstractAgent {
   constructor(config: A2AAgentConfig) {
     super(config);
     this.instructions = config.instructions;
-    
+
     // Log the initial agent URLs being used to create clients
-    console.log("[A2AMiddlewareAgent] Initializing with agent URLs:", config.agentUrls);
-    
+    console.log(
+      "[A2AMiddlewareAgent] Initializing with agent URLs:",
+      config.agentUrls
+    );
+
     this.agentClients = config.agentUrls.map((url) => {
       console.log("[A2AMiddlewareAgent] Creating A2AClient with URL:", url);
       return new A2AClient(url);
@@ -51,18 +54,23 @@ export class A2AMiddlewareAgent extends AbstractAgent {
     this.agentCards = Promise.all(
       this.agentClients.map((client) => client.getAgentCard())
     );
-    this.agentCards.then((cards) => {
-      cards.forEach((card) => {
-        console.log("[A2AMiddlewareAgent] Agent card fetched:", {
-          name: card.name,
-          url: card.url,
-          description: card.description,
-          version: card.version,
+    this.agentCards
+      .then((cards) => {
+        cards.forEach((card) => {
+          console.log("[A2AMiddlewareAgent] Agent card fetched:", {
+            name: card.name,
+            url: card.url,
+            description: card.description,
+            version: card.version,
+          });
         });
+      })
+      .catch((error) => {
+        console.error(
+          "[A2AMiddlewareAgent] Error fetching agent cards:",
+          error
+        );
       });
-    }).catch((error) => {
-      console.error("[A2AMiddlewareAgent] Error fetching agent cards:", error);
-    });
     this.orchestrationAgent = config.orchestrationAgent;
   }
 
@@ -341,7 +349,7 @@ export class A2AMiddlewareAgent extends AbstractAgent {
         agentCardUrl: card.url,
         clientUrl: (client as any).url || (client as any).baseUrl || "unknown",
       });
-      
+
       const sendResponse: SendMessageResponse = await client.sendMessage({
         message: {
           kind: "message",

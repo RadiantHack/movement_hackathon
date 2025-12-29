@@ -153,12 +153,15 @@ export function EchelonSupplyModal({
         throw new Error("Wallet address or public key not found");
       }
 
-      // Get market address and type argument for the asset
+      // Get market address and determine if it's a fungible asset
       const marketAddress = MARKET_ADDRESSES[asset.symbol];
-      const typeArgument = TYPE_ARGUMENTS[asset.symbol];
+      // MOVE is a coin, everything else with faAddress is a fungible asset
+      const isFungibleAsset = asset.symbol !== "MOVE" && !!asset.faAddress;
 
-      if (!marketAddress || !typeArgument) {
-        throw new Error(`Unsupported asset: ${asset.symbol}`);
+      if (!marketAddress) {
+        throw new Error(
+          `Unsupported asset: ${asset.symbol}. Market address not found.`
+        );
       }
 
       // Convert amount to smallest unit (8 decimals for most assets)
@@ -170,16 +173,47 @@ export function EchelonSupplyModal({
       setStep("Building transaction...");
 
       // Build the transaction payload
-      const functionName =
-        `${ECHELON_CONTRACT}::scripts::supply` as `${string}::${string}::${string}`;
+      // Use supply_fa for fungible assets, supply for coins
+      let functionName: `${string}::${string}::${string}`;
+      let typeArguments: string[] | undefined = undefined;
+      let functionArguments: any[];
+
+      if (isFungibleAsset && asset.faAddress) {
+        // For fungible assets, use supply_fa (no type arguments needed)
+        // Based on actual payload structure: supply_fa takes Object<Market> and u64
+        functionName =
+          `${ECHELON_CONTRACT}::scripts::supply_fa` as `${string}::${string}::${string}`;
+        // supply_fa params: &signer, Object<Market>, u64
+        // Pass market address directly - SDK handles Object wrapping
+        functionArguments = [marketAddress, rawAmount];
+      } else {
+        // For coins (like MOVE), use supply with type argument
+        const typeArgument = TYPE_ARGUMENTS[asset.symbol];
+        if (!typeArgument) {
+          throw new Error(
+            `Unsupported asset: ${asset.symbol}. Type argument not found.`
+          );
+        }
+        functionName =
+          `${ECHELON_CONTRACT}::scripts::supply` as `${string}::${string}::${string}`;
+        typeArguments = [typeArgument];
+        // supply params: &signer, Object<Market>, u64
+        functionArguments = [marketAddress, rawAmount];
+      }
+
+      const transactionData: any = {
+        function: functionName,
+        functionArguments,
+      };
+
+      // Only add typeArguments if they exist (for coin types, not fungible assets)
+      if (typeArguments && typeArguments.length > 0) {
+        transactionData.typeArguments = typeArguments;
+      }
 
       const rawTxn = await aptos.transaction.build.simple({
         sender: senderAddress,
-        data: {
-          function: functionName,
-          typeArguments: [typeArgument],
-          functionArguments: [marketAddress, rawAmount],
-        },
+        data: transactionData,
       });
 
       // Override chain ID
@@ -476,16 +510,45 @@ export function EchelonSupplyModal({
         {/* Success Message */}
         {txHash && (
           <div className="mb-4 p-3 rounded-xl bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-sm text-green-700 dark:text-green-400">
-            <div className="flex items-center gap-2">
-              <span>Transaction submitted!</span>
+            <div className="flex items-center gap-2 flex-wrap">
+              <svg
+                className="w-5 h-5 flex-shrink-0"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                />
+              </svg>
+              <span className="font-medium">Transaction successful!</span>
               <a
                 href={`https://explorer.movementnetwork.xyz/txn/${txHash}?network=mainnet`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-green-600 dark:text-green-400 hover:underline"
+                className="ml-auto text-green-600 dark:text-green-400 hover:text-green-800 dark:hover:text-green-300 underline font-semibold flex items-center gap-1"
               >
-                View →
+                View Transaction
+                <svg
+                  className="w-4 h-4"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+                  />
+                </svg>
               </a>
+            </div>
+            <div className="mt-2 text-xs font-mono text-green-600 dark:text-green-400 break-all">
+              {txHash}
             </div>
           </div>
         )}

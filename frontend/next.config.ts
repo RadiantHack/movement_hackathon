@@ -13,7 +13,7 @@ const withPWA = require("@ducanh2912/next-pwa").default({
 
 const nextConfig: NextConfig = {
   /* config options here */
-  output: 'standalone',
+  output: "standalone",
   webpack: (config, { isServer }) => {
     // Handle Solana packages that may use ESM
     config.resolve.fallback = {

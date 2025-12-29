@@ -21,7 +21,8 @@ export async function OPTIONS(request: NextRequest) {
     headers: {
       "Access-Control-Allow-Origin": "*",
       "Access-Control-Allow-Methods": "POST, OPTIONS",
-      "Access-Control-Allow-Headers": "Content-Type, Authorization, x-payment, x-402, x-selected-agent",
+      "Access-Control-Allow-Headers":
+        "Content-Type, Authorization, x-payment, x-402, x-selected-agent",
     },
   });
 }
@@ -32,7 +33,7 @@ export async function POST(request: NextRequest) {
     process.env.BACKEND_URL ||
     process.env.NEXT_PUBLIC_BACKEND_URL ||
     "https://movement-production-ee30.up.railway.app";
-  
+
   // Log the backend URL being used (for debugging)
   console.log("[premium] Using backend URL:", baseUrl);
 
@@ -62,8 +63,10 @@ export async function POST(request: NextRequest) {
     request.headers.get("x-402") ||
     request.headers.get("X-402");
 
-    console.log(`Selected premium agent: ${selectedAgent} at ${agentUrl}`);
-    console.log(`x-payment header present: ${xPaymentHeader ? "yes" : "no"} with value: ${xPaymentHeader} `);
+  console.log(`Selected premium agent: ${selectedAgent} at ${agentUrl}`);
+  console.log(
+    `x-payment header present: ${xPaymentHeader ? "yes" : "no"} with value: ${xPaymentHeader} `
+  );
 
   // Create direct agent connection to selected premium agent
   const directAgent = new HttpAgent({

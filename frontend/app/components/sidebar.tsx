@@ -50,46 +50,46 @@ export function Sidebar({
 
   const agents = [
     // Free Agents
-    { 
-      name: "Balance Agent", 
+    {
+      name: "Balance Agent",
       description: "Check cryptocurrency balances",
-      isPremium: false 
+      isPremium: false,
     },
-    { 
-      name: "Bridge Agent", 
+    {
+      name: "Bridge Agent",
       description: "Cross-chain asset bridging",
-      isPremium: false 
+      isPremium: false,
     },
-    { 
-      name: "Lending Agent", 
+    {
+      name: "Lending Agent",
       description: "Lending & borrowing operations",
-      isPremium: false 
+      isPremium: false,
     },
-    { 
-      name: "Swap Agent", 
+    {
+      name: "Swap Agent",
       description: "Execute token swaps",
-      isPremium: false 
+      isPremium: false,
     },
-    { 
-      name: "Transfer Agent", 
+    {
+      name: "Transfer Agent",
       description: "Transfer tokens between addresses",
-      isPremium: false 
+      isPremium: false,
     },
-    { 
-      name: "Orchestrator Agent", 
+    {
+      name: "Orchestrator Agent",
       description: "Coordinates multiple agents",
-      isPremium: false 
+      isPremium: false,
     },
     // Premium Agents
-    { 
-      name: "Premium Lending Agent", 
+    {
+      name: "Premium Lending Agent",
       description: "Advanced lending with premium features",
-      isPremium: true 
+      isPremium: true,
     },
-    { 
-      name: "Sentiment & Trading Agent", 
+    {
+      name: "Sentiment & Trading Agent",
       description: "Sentiment analysis & trading recommendations",
-      isPremium: true 
+      isPremium: true,
     },
   ];
 
@@ -219,7 +219,7 @@ export function Sidebar({
               <h2 className="mb-3 text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
                 AVAILABLE AGENTS
               </h2>
-              
+
               {/* Free Agents */}
               <div className="space-y-2 mb-6">
                 {agents

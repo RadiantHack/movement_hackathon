@@ -45,11 +45,11 @@ function PrivyProviderWithConfig({
 }) {
   const config = useMovementConfig();
   const pathname = usePathname();
-  
+
   // Only load CopilotKit on pages that need it (chat pages)
   // This prevents unnecessary API calls on pages like /echelon
-  const needsCopilotKit = pathname?.startsWith("/chat") || 
-                          pathname?.startsWith("/premiumchat");
+  const needsCopilotKit =
+    pathname?.startsWith("/chat") || pathname?.startsWith("/premiumchat");
 
   return (
     <PrivyProvider

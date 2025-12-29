@@ -7,7 +7,11 @@ import { usePrivy, WalletWithMetadata } from "@privy-io/react-auth";
 import { useSignRawHash } from "@privy-io/react-auth/extended-chains";
 import { Aptos, AptosConfig, ChainId, Network } from "@aptos-labs/ts-sdk";
 import { generateSigningMessageForTransaction } from "@aptos-labs/ts-sdk";
-import { AccountAuthenticatorEd25519, Ed25519PublicKey, Ed25519Signature } from "@aptos-labs/ts-sdk";
+import {
+  AccountAuthenticatorEd25519,
+  Ed25519PublicKey,
+  Ed25519Signature,
+} from "@aptos-labs/ts-sdk";
 import { toHex } from "viem";
 import { buildAptosLikePaymentHeader } from "x402plus";
 import { useMovementConfig } from "@/app/hooks/useMovementConfig";
@@ -71,7 +75,9 @@ export function PaymentModal({
 
   // Calculate amount in MOVE (8 decimals)
   const amountInMove = paymentRequirements
-    ? (parseInt(paymentRequirements.maxAmountRequired, 10) / 100000000).toFixed(8)
+    ? (parseInt(paymentRequirements.maxAmountRequired, 10) / 100000000).toFixed(
+        8
+      )
     : "1.0";
 
   const handlePayment = async () => {
@@ -91,7 +97,9 @@ export function PaymentModal({
     try {
       // Ensure config is loaded
       if (!config.loaded) {
-        throw new Error("Movement Network configuration not loaded. Please wait and try again.");
+        throw new Error(
+          "Movement Network configuration not loaded. Please wait and try again."
+        );
       }
 
       // Initialize Aptos SDK for Movement Network Mainnet
@@ -110,7 +118,8 @@ export function PaymentModal({
 
       const senderAddress = walletAddress;
       // Privy wallet public key is accessed via the wallet object
-      const senderPubKeyWithScheme = (movementWallet as any).publicKey as string;
+      const senderPubKeyWithScheme = (movementWallet as any)
+        .publicKey as string;
 
       if (!senderPubKeyWithScheme || senderPubKeyWithScheme.length < 2) {
         throw new Error("Invalid public key format from Privy wallet");
@@ -174,8 +183,12 @@ export function PaymentModal({
       );
 
       // Get BCS-encoded bytes
-      const transactionBcsBase64 = Buffer.from(rawTxn.bcsToBytes()).toString("base64");
-      const signatureBcsBase64 = Buffer.from(senderAuthenticator.bcsToBytes()).toString("base64");
+      const transactionBcsBase64 = Buffer.from(rawTxn.bcsToBytes()).toString(
+        "base64"
+      );
+      const signatureBcsBase64 = Buffer.from(
+        senderAuthenticator.bcsToBytes()
+      ).toString("base64");
 
       // Build x402 payment header using x402plus
       const accepts = {
@@ -237,7 +250,8 @@ export function PaymentModal({
             <p className="text-sm text-amber-800 dark:text-amber-200">
               <span className="font-semibold">Premium Content Access</span>
               <br />
-              {paymentRequirements?.description || "This agent requires payment to access premium features. Complete the payment to continue."}
+              {paymentRequirements?.description ||
+                "This agent requires payment to access premium features. Complete the payment to continue."}
             </p>
           </div>
 
@@ -265,7 +279,8 @@ export function PaymentModal({
           {!walletAddress || !ready || !authenticated ? (
             <div className="rounded-lg border border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-900/20 p-4">
               <p className="text-sm text-red-800 dark:text-red-200">
-                ⚠️ Please connect your Movement Network wallet to proceed with payment.
+                ⚠️ Please connect your Movement Network wallet to proceed with
+                payment.
               </p>
             </div>
           ) : (
@@ -285,16 +300,14 @@ export function PaymentModal({
           {/* Error Message */}
           {error && (
             <div className="rounded-lg border border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-900/20 p-4">
-              <p className="text-sm text-red-800 dark:text-red-200">
-                {error}
-              </p>
+              <p className="text-sm text-red-800 dark:text-red-200">{error}</p>
             </div>
           )}
 
           {/* Info Note */}
           <div className="rounded-lg bg-zinc-100 dark:bg-zinc-800 p-3">
             <p className="text-xs text-zinc-600 dark:text-zinc-400">
-              💡 Payment is processed on Movement Network using MOVE tokens. 
+              💡 Payment is processed on Movement Network using MOVE tokens.
               You'll be asked to sign the transaction in your wallet.
             </p>
           </div>
@@ -312,7 +325,9 @@ export function PaymentModal({
           </Button>
           <Button
             onClick={handlePayment}
-            disabled={isProcessing || !walletAddress || !ready || !authenticated}
+            disabled={
+              isProcessing || !walletAddress || !ready || !authenticated
+            }
             className="flex-1 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white"
           >
             {isProcessing ? (
