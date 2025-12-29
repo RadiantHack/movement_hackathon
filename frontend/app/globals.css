@@ -171,6 +171,8 @@ div.copilotKitMessages {
   overflow-x: hidden !important;
   min-height: 0 !important;
   padding: 0.75rem !important;
+  touch-action: pan-y !important;
+  -webkit-tap-highlight-color: transparent !important;
 }
 
 /* Ensure messages are visible and properly wrapped */
@@ -186,6 +188,8 @@ div.copilotKitMessages {
 @media (max-width: 768px) {
   .copilotKitChat {
     height: calc(100vh - 65px) !important;
+    position: relative !important;
+    overflow: hidden !important;
   }
   
   .copilotKitChat [class*="MessagesContainer"],
@@ -193,11 +197,20 @@ div.copilotKitMessages {
   .copilotKitChat > div > div:first-child {
     padding: 0.5rem !important;
     -webkit-overflow-scrolling: touch !important;
+    touch-action: pan-y !important;
+    -webkit-tap-highlight-color: transparent !important;
+    transform: none !important;
+    will-change: scroll-position !important;
+    position: relative !important;
+    height: auto !important;
+    max-height: 100% !important;
   }
   
   .copilotKitMessage {
     font-size: 0.875rem !important;
     line-height: 1.5 !important;
+    -webkit-tap-highlight-color: transparent !important;
+    touch-action: manipulation !important;
   }
   
   /* Ensure text is readable on mobile */
@@ -206,6 +219,7 @@ div.copilotKitMessages {
   .copilotKitChat div {
     word-break: break-word !important;
     overflow-wrap: break-word !important;
+    -webkit-tap-highlight-color: transparent !important;
   }
   
   /* Fix for A2A message boxes on mobile */
@@ -214,6 +228,21 @@ div.copilotKitMessages {
     margin-right: 0 !important;
     width: 100% !important;
     max-width: 100% !important;
+    touch-action: manipulation !important;
+    -webkit-tap-highlight-color: transparent !important;
+  }
+  
+  /* Prevent zoom on double tap */
+  .copilotKitChat * {
+    touch-action: manipulation !important;
+  }
+  
+  /* Allow text selection in messages but prevent zoom */
+  .copilotKitChat [class*="Message"] p,
+  .copilotKitChat [class*="Message"] span {
+    -webkit-user-select: text !important;
+    user-select: text !important;
+    touch-action: manipulation !important;
   }
 }
 
