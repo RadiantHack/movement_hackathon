@@ -6,6 +6,7 @@ agent applications, and sets up middleware and health check endpoints.
 """
 
 import os
+import logging
 
 from dotenv import load_dotenv
 from fastapi import FastAPI
@@ -41,11 +42,33 @@ ENV_RENDER_EXTERNAL_URL = "RENDER_EXTERNAL_URL"
 def get_base_url() -> str:
     """Get the base URL for agent card endpoints.
 
+    Checks for Railway deployment first (RAILWAY_PUBLIC_DOMAIN), then Render (RENDER_EXTERNAL_URL),
+    then falls back to localhost for local development.
+
     Returns:
         Base URL from environment or constructed from port
     """
+    logger = logging.getLogger(__name__)
+    
+    # Railway deployment - check for RAILWAY_PUBLIC_DOMAIN first
+    railway_url = os.getenv("RAILWAY_PUBLIC_DOMAIN")
+    if railway_url:
+        # Railway URLs are typically just the domain, add https:// if not present
+        base_url = f"https://{railway_url}" if not railway_url.startswith("http") else railway_url
+        logger.info(f"[get_base_url] Using Railway URL: {base_url}")
+        return base_url
+    
+    # Render deployment - check for RENDER_EXTERNAL_URL
+    render_url = os.getenv(ENV_RENDER_EXTERNAL_URL)
+    if render_url:
+        logger.info(f"[get_base_url] Using Render URL: {render_url}")
+        return render_url
+    
+    # Local development - default to localhost
     port = int(os.getenv(ENV_AGENTS_PORT, str(DEFAULT_AGENTS_PORT)))
-    return os.getenv(ENV_RENDER_EXTERNAL_URL, f"http://localhost:{port}")
+    base_url = f"http://localhost:{port}"
+    logger.info(f"[get_base_url] Using localhost URL: {base_url}")
+    return base_url
 
 
 def register_agents(app: FastAPI) -> None:
@@ -57,30 +80,36 @@ def register_agents(app: FastAPI) -> None:
     base_url = get_base_url()
 
     # Balance Agent (A2A Protocol)
-    balance_agent_app = create_balance_agent_app(card_url=f"{base_url}/balance")
+    # CRITICAL: Add trailing slash to card_url to avoid 307 redirect (POST -> GET conversion)
+    balance_agent_app = create_balance_agent_app(card_url=f"{base_url}/balance/")
     app.mount("/balance", balance_agent_app.build())
 
     # Bridge Agent (A2A Protocol)
-    bridge_agent_app = create_bridge_agent_app(card_url=f"{base_url}/bridge")
+    # CRITICAL: Add trailing slash to card_url to avoid 307 redirect (POST -> GET conversion)
+    bridge_agent_app = create_bridge_agent_app(card_url=f"{base_url}/bridge/")
     app.mount("/bridge", bridge_agent_app.build())
 
     # Unified Lending Agent (A2A Protocol) - Combines comparison and operations
     # Both endpoints point to the same unified agent for backward compatibility
-    lending_agent_app = create_lending_agent_app(card_url=f"{base_url}/lending")
+    # CRITICAL: Add trailing slash to card_url to avoid 307 redirect (POST -> GET conversion)
+    lending_agent_app = create_lending_agent_app(card_url=f"{base_url}/lending/")
     app.mount("/lending", lending_agent_app.build())
 
     # Lending Comparison endpoint (same unified agent, different route for backward compatibility)
+    # CRITICAL: Add trailing slash to card_url to avoid 307 redirect (POST -> GET conversion)
     lending_comparison_agent_app = create_lending_comparison_agent_app(
-        card_url=f"{base_url}/lending_comparison"
+        card_url=f"{base_url}/lending_comparison/"
     )
     app.mount("/lending_comparison", lending_comparison_agent_app.build())
 
     # Swap Agent (A2A Protocol)
-    swap_agent_app = create_swap_agent_app(card_url=f"{base_url}/swap")
+    # CRITICAL: Add trailing slash to card_url to avoid 307 redirect (POST -> GET conversion)
+    swap_agent_app = create_swap_agent_app(card_url=f"{base_url}/swap/")
     app.mount("/swap", swap_agent_app.build())
 
     # Transfer Agent (A2A Protocol)
-    transfer_agent_app = create_transfer_agent_app(card_url=f"{base_url}/transfer")
+    # CRITICAL: Add trailing slash to card_url to avoid 307 redirect (POST -> GET conversion)
+    transfer_agent_app = create_transfer_agent_app(card_url=f"{base_url}/transfer/")
     app.mount("/transfer", transfer_agent_app.build())
 
     # Orchestrator Agent (AG-UI ADK Protocol)
@@ -88,13 +117,15 @@ def register_agents(app: FastAPI) -> None:
     app.mount("/orchestrator", orchestrator_agent_app)
 
     # Premium Lending Agent (A2A Protocol)
+    # CRITICAL: Add trailing slash to card_url to avoid 307 redirect (POST -> GET conversion)
     premium_lending_agent_app = create_premium_lending_agent_app(
-        card_url=f"{base_url}/premium_lending_agent"
+        card_url=f"{base_url}/premium_lending_agent/"
     )
     app.mount("/premium_lending_agent", premium_lending_agent_app.build())
 
     # Sentiment Agent (A2A Protocol)
-    sentiment_agent_app = create_sentiment_agent_app(card_url=f"{base_url}/sentiment")
+    # CRITICAL: Add trailing slash to card_url to avoid 307 redirect (POST -> GET conversion)
+    sentiment_agent_app = create_sentiment_agent_app(card_url=f"{base_url}/sentiment/")
     app.mount("/sentiment", sentiment_agent_app.build())
 
 

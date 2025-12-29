@@ -7,10 +7,23 @@
 
 import { NextRequest, NextResponse } from "next/server";
 
+// Prioritize runtime BACKEND_URL for server-side, then build-time NEXT_PUBLIC_BACKEND_URL
 const BACKEND_URL =
-  process.env.NEXT_PUBLIC_BACKEND_URL ||
   process.env.BACKEND_URL ||
+  process.env.NEXT_PUBLIC_BACKEND_URL ||
   "http://localhost:8000";
+
+// Handle CORS preflight requests
+export async function OPTIONS(request: NextRequest) {
+  return new NextResponse(null, {
+    status: 200,
+    headers: {
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "POST, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type, Authorization",
+    },
+  });
+}
 
 export async function POST(request: NextRequest) {
   try {

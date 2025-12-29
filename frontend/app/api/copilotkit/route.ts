@@ -17,34 +17,58 @@ import {
 } from "@copilotkit/runtime";
 import { HttpAgent } from "@ag-ui/client";
 import { A2AMiddlewareAgent } from "../helper.ts";
-import { NextRequest } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { isRailwayDeployment } from "../../utils/deployment";
+
+// Handle CORS preflight requests
+export async function OPTIONS(request: NextRequest) {
+  return new NextResponse(null, {
+    status: 200,
+    headers: {
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "POST, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type, Authorization",
+    },
+  });
+}
 
 export async function POST(request: NextRequest) {
   // Check if this is a Railway deployment
   // You can also import IS_RAILWAY constant: import { IS_RAILWAY } from "@/app/utils/deployment"
   const isRailway = isRailwayDeployment();
 
-  // Get base URL - prioritize NEXT_PUBLIC_BASE_URL for Railway/production
-  // Remove trailing slash if present to avoid double slashes
-  // Get base URL - use environment variable if available, otherwise default to localhost
+  // Get base URL - prioritize runtime BACKEND_URL for server-side, then build-time NEXT_PUBLIC_BACKEND_URL
+  // This allows Railway to set BACKEND_URL at runtime without requiring a rebuild
   const baseUrl =
-    process.env.NEXT_PUBLIC_BACKEND_URL ||
     process.env.BACKEND_URL ||
-    "http://localhost:8000";
+    process.env.NEXT_PUBLIC_BACKEND_URL ||
+    "https://movement-production-ee30.up.railway.app";
+  
+  // Log the backend URL being used (for debugging)
+  console.log("[copilotkit] Using backend URL:", baseUrl);
 
   // Agent URLs - all Movement Network agents
   // CRITICAL: A2A middleware extracts agent names from URL paths:
   // - http://localhost:8000/balance -> agentName: "balance"
   // - http://localhost:8000/bridge -> agentName: "bridge"
   // Make sure backend is running and agents are accessible at these URLs
-  const balanceAgentUrl = `${baseUrl}/balance${isRailway ? "/" : ""}`.trim();
-  const bridgeAgentUrl = `${baseUrl}/bridge${isRailway ? "/" : ""}`.trim();
-  const lendingAgentUrl = `${baseUrl}/lending${isRailway ? "/" : ""}`.trim();
+  // CRITICAL: All agent URLs need trailing slashes to avoid 307 redirect (POST -> GET conversion)
+  // This works for both local (localhost:8000) and Railway (https://backend.railway.app)
+  const balanceAgentUrl = `${baseUrl}/balance/`;
+  const bridgeAgentUrl = `${baseUrl}/bridge/`;
+  const lendingAgentUrl = `${baseUrl}/lending/`;
   // Orchestrator URL needs trailing slash to avoid 307 redirect (POST -> GET conversion)
   // This works for both local (localhost:8000) and Railway (https://backend.railway.app)
   const orchestratorUrl =
-    `${baseUrl}/orchestrator${isRailway ? "/" : ""}`.trim();
+    `${baseUrl}/orchestrator/`;
+
+  // Log all agent URLs being used
+  console.log("[copilotkit] Agent URLs:", {
+    balanceAgentUrl,
+    bridgeAgentUrl,
+    lendingAgentUrl,
+    orchestratorUrl,
+  });
 
   // Connect to orchestrator via AG-UI Protocol with authentication
   const orchestrationAgent = new HttpAgent({

@@ -12,13 +12,29 @@ import {
   copilotRuntimeNextJSAppRouterEndpoint,
 } from "@copilotkit/runtime";
 import { HttpAgent } from "@ag-ui/client";
-import { NextRequest } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
+
+// Handle CORS preflight requests
+export async function OPTIONS(request: NextRequest) {
+  return new NextResponse(null, {
+    status: 200,
+    headers: {
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "POST, OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type, Authorization, x-payment, x-402, x-selected-agent",
+    },
+  });
+}
 
 export async function POST(request: NextRequest) {
+  // Prioritize runtime BACKEND_URL for server-side, then build-time NEXT_PUBLIC_BACKEND_URL
   const baseUrl =
-    process.env.NEXT_PUBLIC_BACKEND_URL ||
     process.env.BACKEND_URL ||
-    "http://localhost:8000";
+    process.env.NEXT_PUBLIC_BACKEND_URL ||
+    "https://movement-production-ee30.up.railway.app";
+  
+  // Log the backend URL being used (for debugging)
+  console.log("[premium] Using backend URL:", baseUrl);
 
   // Get selected premium agent from query parameter or header
   const url = new URL(request.url);

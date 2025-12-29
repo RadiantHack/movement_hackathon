@@ -59,10 +59,10 @@ export default function PremiumChat({
 
   // Initialize A2A client for premium agents
   useEffect(() => {
+    // Client-side code can only access NEXT_PUBLIC_* variables
     const baseUrl =
       process.env.NEXT_PUBLIC_BACKEND_URL ||
-      process.env.BACKEND_URL ||
-      "http://localhost:8000";
+      "https://movement-production-ee30.up.railway.app";
 
     // Map premium agent names to their URLs
     // Add more premium agents here as they become available

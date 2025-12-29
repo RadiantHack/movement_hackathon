@@ -40,18 +40,28 @@ export class A2AMiddlewareAgent extends AbstractAgent {
   constructor(config: A2AAgentConfig) {
     super(config);
     this.instructions = config.instructions;
-    this.agentClients = config.agentUrls.map((url) => new A2AClient(url));
+    
+    // Log the initial agent URLs being used to create clients
+    console.log("[A2AMiddlewareAgent] Initializing with agent URLs:", config.agentUrls);
+    
+    this.agentClients = config.agentUrls.map((url) => {
+      console.log("[A2AMiddlewareAgent] Creating A2AClient with URL:", url);
+      return new A2AClient(url);
+    });
     this.agentCards = Promise.all(
       this.agentClients.map((client) => client.getAgentCard())
     );
     this.agentCards.then((cards) => {
       cards.forEach((card) => {
-        console.log("card", card);
-        console.log("card.url", card.url);
-        console.log("card.name", card.name);
-        console.log("card.description", card.description);
-        console.log("card.version", card.version);
+        console.log("[A2AMiddlewareAgent] Agent card fetched:", {
+          name: card.name,
+          url: card.url,
+          description: card.description,
+          version: card.version,
+        });
       });
+    }).catch((error) => {
+      console.error("[A2AMiddlewareAgent] Error fetching agent cards:", error);
     });
     this.orchestrationAgent = config.orchestrationAgent;
   }
@@ -315,37 +325,62 @@ export class A2AMiddlewareAgent extends AbstractAgent {
       throw new Error(`Agent "${agentName}" not found`);
     }
 
-    const { client } = agent;
+    const { client, card } = agent;
 
-    const sendResponse: SendMessageResponse = await client.sendMessage({
-      message: {
-        kind: "message",
-        messageId: Date.now().toString(),
-        role: "agent",
-        parts: [{ text: args, kind: "text" }],
-      },
+    // Log the URL being called
+    console.log("[sendMessageToA2AAgent] Sending message to agent:", {
+      agentName,
+      agentCardUrl: card.url,
+      task: args,
     });
 
-    if ("error" in sendResponse) {
-      throw new Error(
-        `Error sending message to agent "${agentName}": ${sendResponse.error.message}`
-      );
+    try {
+      // Log the exact request details before sending
+      console.log("[sendMessageToA2AAgent] About to call client.sendMessage:", {
+        agentName,
+        agentCardUrl: card.url,
+        clientUrl: (client as any).url || (client as any).baseUrl || "unknown",
+      });
+      
+      const sendResponse: SendMessageResponse = await client.sendMessage({
+        message: {
+          kind: "message",
+          messageId: Date.now().toString(),
+          role: "agent",
+          parts: [{ text: args, kind: "text" }],
+        },
+      });
+
+      if ("error" in sendResponse) {
+        throw new Error(
+          `Error sending message to agent "${agentName}": ${sendResponse.error.message}`
+        );
+      }
+
+      const result = (sendResponse as SendMessageSuccessResponse).result;
+      let responseContent = "";
+
+      if (
+        result.kind === "message" &&
+        result.parts.length > 0 &&
+        result.parts[0].kind === "text"
+      ) {
+        responseContent = result.parts[0].text;
+      } else {
+        responseContent = JSON.stringify(result);
+      }
+
+      return responseContent;
+    } catch (error: any) {
+      console.error("[sendMessageToA2AAgent] Error sending message:", {
+        agentName,
+        agentCardUrl: card.url,
+        error: error?.message || String(error),
+        errorCode: error?.cause?.code,
+        errorStack: error?.stack,
+      });
+      throw error;
     }
-
-    const result = (sendResponse as SendMessageSuccessResponse).result;
-    let responseContent = "";
-
-    if (
-      result.kind === "message" &&
-      result.parts.length > 0 &&
-      result.parts[0].kind === "text"
-    ) {
-      responseContent = result.parts[0].text;
-    } else {
-      responseContent = JSON.stringify(result);
-    }
-
-    return responseContent;
   }
 
   private triggerNewRun(
