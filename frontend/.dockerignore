@@ -32,15 +32,6 @@ coverage
 .git
 .gitignore
 
-# Docker
-Dockerfile
-.dockerignore
-docker-compose.yml
-
-# Documentation
-README.md
-*.md
-
 # Logs
 *.log
 
