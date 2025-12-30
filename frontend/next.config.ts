@@ -1,14 +1,24 @@
 import type { NextConfig } from "next";
+
+const isDev = process.env.NODE_ENV === "development";
+
+// PWA disabled - no caching
 const withPWA = require("@ducanh2912/next-pwa").default({
   dest: "public",
-  cacheOnFrontEndNav: true,
-  aggressiveFrontEndNavCaching: true,
-  reloadOnOnline: true,
+  disable: true, // Completely disable PWA to prevent caching
+  cacheOnFrontEndNav: false,
+  aggressiveFrontEndNavCaching: false,
+  reloadOnOnline: false,
   swcMinify: true,
-  disable: process.env.NODE_ENV === "development",
   workboxOptions: {
     disableDevLogs: true,
+    skipWaiting: false,
+    clientsClaim: false,
+    // Disable all caching strategies
+    runtimeCaching: [],
   },
+  // Exclude all routes from precaching
+  exclude: [/.*/],
 });
 
 const nextConfig: NextConfig = {

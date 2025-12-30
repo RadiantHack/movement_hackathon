@@ -197,6 +197,7 @@ export const LendCard: React.FC<LendCardProps> = ({ walletAddress }) => {
           superClient.default.getPortfolio(walletAddress),
           superClient.default.getBrokers(),
         ]);
+        debugger;
         setPortfolioData(portfolioRes as unknown as any);
         setBrokerData(brokersRes as unknown as any[]);
       } catch (error) {

@@ -316,22 +316,32 @@ function PositionsPageContent() {
     return marketPositions.reduce((sum, asset) => sum + asset.tvlUsd, 0);
   }, [marketPositions]);
 
-  // Use portfolio data if available, otherwise fallback to calculated values
-  const equity =
+  // Calculate equity, debt, and health factor matching MovePosition's implementation
+  // Equity = total_collateral - total_liability
+  const totalCollateral =
     portfolioData?.evaluation?.total_collateral ?? totalSuppliedValue;
-  const debt =
+  const totalLiability =
     portfolioData?.evaluation?.total_liability ??
     marketPositions.reduce(
       (sum, asset) => sum + asset.totalBorrowed * asset.price,
       0
     );
+  const equity = totalCollateral - totalLiability;
+
+  // Health Factor = equity / minRequiredEquity (matching MovePosition's selectHealthFactor)
+  // minRequiredEquity comes from portfolio.risk.requiredEquity or portfolio.evaluation.mm
+  const minRequiredEquity =
+    portfolioData?.risk?.requiredEquity ??
+    portfolioData?.evaluation?.mm ??
+    equity * 0.35; // Fallback if neither is available
+
+  // Use health_ratio from API if available, otherwise calculate it
   const healthFactor =
     portfolioData?.evaluation?.health_ratio ??
-    (equity > 0 && debt > 0 ? equity / debt : null);
-  const minRequiredEquity =
-    portfolioData?.risk?.requiredEquity ?? equity * 0.35;
+    (minRequiredEquity > 0 ? equity / minRequiredEquity : null);
+
   const minRequiredEquityPercent =
-    equity > 0 ? (minRequiredEquity / equity) * 100 : 0;
+    totalCollateral > 0 ? (minRequiredEquity / totalCollateral) * 100 : 0;
 
   // Show loading while checking authentication status
   if (!ready) {
@@ -476,7 +486,7 @@ function PositionsPageContent() {
                     {loadingPortfolio ? (
                       <span className="inline-block w-16 h-6 bg-zinc-200 dark:bg-zinc-700 rounded animate-pulse" />
                     ) : (
-                      `$${debt.toFixed(2)}`
+                      `$${totalLiability.toFixed(2)}`
                     )}
                   </div>
                 </div>
