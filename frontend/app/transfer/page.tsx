@@ -272,17 +272,25 @@ export default function TransferPage() {
       console.error("Transfer error:", err);
       let errorMessage = err.message || "Transaction failed";
       
-      // Note: With aptos_account::transfer_coins, CoinStore registration should be automatic
-      // If we still get this error, it might be a network or account type issue
+      // Check for CoinStore errors
       if (
         err.message?.includes("ECOIN_STORE_NOT_PUBLISHED") ||
         err.message?.includes("CoinStore") ||
         err.message?.includes("0x60005")
       ) {
-        errorMessage =
-          `Transfer failed: The recipient address ${recipient.slice(0, 10)}...${recipient.slice(-8)} may not support automatic CoinStore registration. ` +
-          `This can happen if the recipient is not a normal account type. ` +
-          `Please verify the recipient address is correct and is a standard Aptos account.`;
+        const isNativeMove = selectedToken.isNative || assetType === "0x1::aptos_coin::AptosCoin";
+        if (isNativeMove) {
+          // For native MOVE, this shouldn't happen with aptos_account::transfer_coins
+          errorMessage =
+            `Transfer failed: The recipient address ${recipient.slice(0, 10)}...${recipient.slice(-8)} may not support automatic CoinStore registration. ` +
+            `This can happen if the recipient is not a normal account type. ` +
+            `Please verify the recipient address is correct and is a standard Aptos account.`;
+        } else {
+          // For fungible assets, different error handling
+          errorMessage =
+            `Transfer failed: The recipient may not have the required fungible asset store registered. ` +
+            `Please verify the recipient address is correct.`;
+        }
       }
       
       setError(errorMessage);
