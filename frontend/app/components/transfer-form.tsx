@@ -11,6 +11,7 @@ import {
   Ed25519Signature,
   generateSigningMessageForTransaction,
   ChainId,
+  AccountAddress,
 } from "@aptos-labs/ts-sdk";
 import { toHex } from "viem";
 import { useSignRawHash } from "@privy-io/react-auth/extended-chains";
@@ -193,14 +194,37 @@ export const TransferForm: React.FC<TransferFormProps> = ({
         parsedAmount * Math.pow(10, decimals)
       );
 
-      const rawTxn = await aptos.transaction.build.simple({
-        sender: senderAddress,
-        data: {
-          function: "0x1::coin::transfer",
-          typeArguments: ["0x1::aptos_coin::AptosCoin"],
-          functionArguments: [toAddress, amountInSmallestUnit],
-        },
-      });
+      // For native MOVE tokens, use aptos_account::transfer_coins which automatically registers CoinStore
+      // For fungible assets (other tokens), use primary_fungible_store::transfer
+      const isNativeMove = selectedToken.isNative || selectedToken.assetType === "0x1::aptos_coin::AptosCoin";
+      
+      let rawTxn;
+      if (isNativeMove) {
+        // Use aptos_account::transfer_coins for native MOVE - automatically registers CoinStore
+        rawTxn = await aptos.transaction.build.simple({
+          sender: senderAddress,
+          data: {
+            function: "0x1::aptos_account::transfer_coins",
+            typeArguments: ["0x1::aptos_coin::AptosCoin"],
+            functionArguments: [toAddress, amountInSmallestUnit],
+          },
+        });
+      } else {
+        // For fungible assets, use primary_fungible_store::transfer
+        // The assetType is the fungible asset metadata address
+        // Function signature: transfer<Metadata>(metadata_address: address, to: address, amount: u64)
+        const assetType = selectedToken.assetType.trim();
+        const recipientAddress = AccountAddress.fromString(toAddress);
+        
+        rawTxn = await aptos.transaction.build.simple({
+          sender: senderAddress,
+          data: {
+            function: "0x1::primary_fungible_store::transfer",
+            typeArguments: ["0x1::fungible_asset::Metadata"],
+            functionArguments: [assetType, recipientAddress, amountInSmallestUnit],
+          },
+        });
+      }
 
       const txnObj = rawTxn as unknown as Record<
         string,
@@ -241,10 +265,34 @@ export const TransferForm: React.FC<TransferFormProps> = ({
       onTransferComplete?.();
     } catch (err: unknown) {
       console.error("Transfer error:", err);
-      const errorMessage =
-        err instanceof Error
-          ? err.message
-          : "Transfer failed. Please try again.";
+      let errorMessage = "Transfer failed. Please try again.";
+      
+      if (err instanceof Error) {
+        errorMessage = err.message;
+        
+        // Check for CoinStore errors
+        if (
+          err.message.includes("ECOIN_STORE_NOT_PUBLISHED") ||
+          err.message.includes("CoinStore") ||
+          err.message.includes("0x60005")
+        ) {
+          const isNativeMove = selectedToken.isNative || selectedToken.assetType === "0x1::aptos_coin::AptosCoin";
+          if (isNativeMove) {
+            // For native MOVE, this shouldn't happen with aptos_account::transfer_coins
+            errorMessage =
+              `Transfer failed: The recipient address ${toAddress.slice(0, 10)}...${toAddress.slice(-8)} may not support automatic CoinStore registration. ` +
+              `This can happen if the recipient is not a normal account type. ` +
+              `Please verify the recipient address is correct and is a standard Aptos account.`;
+          } else {
+            // For other tokens, recipient needs to register CoinStore first
+            errorMessage =
+              `The recipient address ${toAddress.slice(0, 10)}...${toAddress.slice(-8)} has not registered a CoinStore for this token. ` +
+              `The recipient needs to register their CoinStore before they can receive tokens. ` +
+              `Please ask the recipient to register their CoinStore first, or use a different recipient address.`;
+          }
+        }
+      }
+      
       setTransferError(errorMessage);
     } finally {
       setTransferring(false);
