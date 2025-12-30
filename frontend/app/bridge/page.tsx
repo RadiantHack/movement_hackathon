@@ -59,7 +59,7 @@ export default function BridgePage() {
   const [tokenDecimals, setTokenDecimals] = useState<number>(8);
   const [tokenBalanceData, setTokenBalanceData] = useState<any>(null);
   const tokenDropdownRef = useRef<HTMLDivElement>(null);
-  
+
   const { signRawHash } = useSignRawHash();
   const config = useMovementConfig();
 
@@ -209,9 +209,12 @@ export default function BridgePage() {
 
   // Convert bytes32 to hex string for display
   const bytes32ToHex = (bytes: Uint8Array): string => {
-    return "0x" + Array.from(bytes)
-      .map(b => b.toString(16).padStart(2, "0"))
-      .join("");
+    return (
+      "0x" +
+      Array.from(bytes)
+        .map((b) => b.toString(16).padStart(2, "0"))
+        .join("")
+    );
   };
 
   const handleBridge = async () => {
@@ -226,7 +229,7 @@ export default function BridgePage() {
     try {
       const senderAddress = walletAddress;
       const senderPubKeyWithScheme = movementWallet.publicKey as string;
-      
+
       if (!senderPubKeyWithScheme || senderPubKeyWithScheme.length < 2) {
         throw new Error("Invalid public key format");
       }
@@ -238,7 +241,9 @@ export default function BridgePage() {
       if (isNaN(parsedAmount) || parsedAmount <= 0) {
         throw new Error("Invalid amount");
       }
-      const amountLd = BigInt(Math.floor(parsedAmount * Math.pow(10, tokenDecimals)));
+      const amountLd = BigInt(
+        Math.floor(parsedAmount * Math.pow(10, tokenDecimals))
+      );
       const minAmountLd = amountLd; // Use same amount as minimum
 
       // Ethereum endpoint ID
@@ -246,20 +251,27 @@ export default function BridgePage() {
 
       // Convert recipient address to bytes32 (vector<u8> format)
       const toBytes32 = addressToBytes32(recipientAddress);
-      const toVector = Array.from(toBytes32).map(b => b.toString());
+      const toVector = Array.from(toBytes32).map((b) => b.toString());
 
       // Default options (from example) - convert hex strings to vector<u8>
       const extraOptionsHex = "0x00030100110100000000000000000000000000061a80";
       const extraOptionsBytes = Buffer.from(extraOptionsHex.slice(2), "hex");
-      const extraOptionsVector = Array.from(extraOptionsBytes).map(b => b.toString());
+      const extraOptionsVector = Array.from(extraOptionsBytes).map((b) =>
+        b.toString()
+      );
 
       const composeMessageHex = "0x00";
-      const composeMessageBytes = Buffer.from(composeMessageHex.slice(2), "hex");
-      const composeMessageVector = Array.from(composeMessageBytes).map(b => b.toString());
+      const composeMessageBytes = Buffer.from(
+        composeMessageHex.slice(2),
+        "hex"
+      );
+      const composeMessageVector = Array.from(composeMessageBytes).map((b) =>
+        b.toString()
+      );
 
       const oftCmdHex = "0x00";
       const oftCmdBytes = Buffer.from(oftCmdHex.slice(2), "hex");
-      const oftCmdVector = Array.from(oftCmdBytes).map(b => b.toString());
+      const oftCmdVector = Array.from(oftCmdBytes).map((b) => b.toString());
 
       // Use default fees (can be improved with quote_send later)
       // Default fee from example: 481762913
@@ -270,7 +282,8 @@ export default function BridgePage() {
       const rawTxn = await aptos.transaction.build.simple({
         sender: senderAddress,
         data: {
-          function: "0x4d2969d384e440db9f1a51391cfc261d1ec08ee1bdf7b9711a6c05d485a4110a::oft::send_withdraw_coin",
+          function:
+            "0x4d2969d384e440db9f1a51391cfc261d1ec08ee1bdf7b9711a6c05d485a4110a::oft::send_withdraw_coin",
           typeArguments: [],
           functionArguments: [
             dstEid.toString(),
@@ -325,7 +338,7 @@ export default function BridgePage() {
 
       console.log("Bridge transaction executed:", executed.hash);
       alert(`Bridge transaction successful! Hash: ${executed.hash}`);
-      
+
       // Reset form
       setAmount("");
       setRecipientAddress("");
@@ -565,7 +578,8 @@ export default function BridgePage() {
                                 onError={(e) => {
                                   const target = e.target as HTMLImageElement;
                                   target.style.display = "none";
-                                  const fallback = target.nextElementSibling as HTMLElement;
+                                  const fallback =
+                                    target.nextElementSibling as HTMLElement;
                                   if (fallback) {
                                     fallback.style.display = "flex";
                                   }
@@ -634,7 +648,8 @@ export default function BridgePage() {
                                   onError={(e) => {
                                     const target = e.target as HTMLImageElement;
                                     target.style.display = "none";
-                                    const fallback = target.nextElementSibling as HTMLElement;
+                                    const fallback =
+                                      target.nextElementSibling as HTMLElement;
                                     if (fallback) {
                                       fallback.style.display = "flex";
                                     }
@@ -727,10 +742,14 @@ export default function BridgePage() {
                           Loading...
                         </span>
                       ) : (
-                        `Balance: ${balance ? parseFloat(balance).toLocaleString(undefined, {
-                          minimumFractionDigits: 2,
-                          maximumFractionDigits: 6,
-                        }) : "0.00"} ${selectedToken.symbol}`
+                        `Balance: ${
+                          balance
+                            ? parseFloat(balance).toLocaleString(undefined, {
+                                minimumFractionDigits: 2,
+                                maximumFractionDigits: 6,
+                              })
+                            : "0.00"
+                        } ${selectedToken.symbol}`
                       )}
                     </span>
                     <button
@@ -740,17 +759,23 @@ export default function BridgePage() {
                         }
                       }}
                       className="text-xs font-bold text-blue-500 hover:text-blue-600 dark:text-blue-400 dark:hover:text-blue-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                      disabled={bridging || !balance || parseFloat(balance || "0") === 0}
+                      disabled={
+                        bridging || !balance || parseFloat(balance || "0") === 0
+                      }
                     >
                       MAX
                     </button>
                   </div>
                   {hasInsufficientBalance && (
                     <p className="mt-2 text-xs text-red-500">
-                      Insufficient balance. Available: {balance ? parseFloat(balance).toLocaleString(undefined, {
-                        minimumFractionDigits: 2,
-                        maximumFractionDigits: 6,
-                      }) : "0.00"} {selectedToken.symbol}
+                      Insufficient balance. Available:{" "}
+                      {balance
+                        ? parseFloat(balance).toLocaleString(undefined, {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 6,
+                          })
+                        : "0.00"}{" "}
+                      {selectedToken.symbol}
                     </p>
                   )}
                 </div>

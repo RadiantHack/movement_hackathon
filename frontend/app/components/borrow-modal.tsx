@@ -96,12 +96,13 @@ export function BorrowModal({
   const [portfolioData, setPortfolioData] = useState<PortfolioResponse | null>(
     null
   );
-  const [brokerData, setBrokerData] = useState<superJsonApiClient.Broker | null>(null);
+  const [brokerData, setBrokerData] =
+    useState<superJsonApiClient.Broker | null>(null);
   const [simulatedRiskData, setSimulatedRiskData] = useState<any | null>(null);
   const [loadingSimulation, setLoadingSimulation] = useState(false);
   const [loadingPortfolio, setLoadingPortfolio] = useState(false);
   const [submissionStep, setSubmissionStep] = useState<string>("");
-  
+
   // Risk simulation state (matching MovePosition)
   const [simHealthFactor, setSimHealthFactor] = useState<number>(0);
   const [simHealthYellow, setSimHealthYellow] = useState<boolean>(false);
@@ -212,21 +213,21 @@ export function BorrowModal({
         const superClient = new superJsonApiClient.SuperClient({
           BASE: movementApiBase,
         });
-        
+
         // Fetch portfolio and brokers in parallel
         const [portfolioRes, brokersRes] = await Promise.all([
           superClient.default.getPortfolio(walletAddress),
           superClient.default.getBrokers(),
         ]);
-        
+
         setPortfolioData(portfolioRes as unknown as PortfolioResponse);
-        
+
         // Find the broker for this asset
         const brokerName = getBrokerName(asset.symbol);
         const broker = brokersRes.find(
           (b) => b.underlyingAsset.name === brokerName
         );
-        
+
         if (broker) {
           setBrokerData(broker);
         } else {
@@ -274,15 +275,17 @@ export function BorrowModal({
     // liability.amount is in raw note tokens
     // MovePosition: noteBalance = positions.liabilities[loanNoteName] (already scaled down)
     //               underlyingTokenBalance = noteBalance * broker.loanNoteExchangeRate
-    const loanNoteDecimals = brokerData.loanNote?.decimals ?? getCoinDecimals(asset.symbol);
+    const loanNoteDecimals =
+      brokerData.loanNote?.decimals ?? getCoinDecimals(asset.symbol);
     const loanNoteExchangeRate = brokerData.loanNoteExchangeRate || 1;
-    
+
     // Convert raw note tokens to note tokens (scaled down)
-    const noteBalance = parseFloat(liability.amount) / Math.pow(10, loanNoteDecimals);
-    
+    const noteBalance =
+      parseFloat(liability.amount) / Math.pow(10, loanNoteDecimals);
+
     // Convert note tokens to underlying tokens using exchange rate
     const underlyingTokenBalance = noteBalance * loanNoteExchangeRate;
-    
+
     return underlyingTokenBalance;
   }, [portfolioData, asset, brokerData]);
 
@@ -299,7 +302,7 @@ export function BorrowModal({
   /**
    * Get max borrow amount for the selected asset from portfolio API
    * This is calculated based on user's collateral and health factor
-   * 
+   *
    * Note: The API returns maxBorrow values already in underlying token units (scaled),
    * not in raw units. For example: "0.30358239388513447" for USDC means 0.303582... USDC.
    */
@@ -315,12 +318,12 @@ export function BorrowModal({
     // The API returns maxBorrow already in underlying token units (scaled format)
     // Just parse it as a number - no conversion needed
     const maxBorrowAmount = parseFloat(maxBorrowValue);
-    
+
     // Return null if invalid or zero
     if (isNaN(maxBorrowAmount) || maxBorrowAmount <= 0) {
       return null;
     }
-    
+
     return maxBorrowAmount;
   }, [portfolioData, asset]);
 
@@ -532,10 +535,10 @@ export function BorrowModal({
    */
   const maxBorrowAmount = useMemo(() => {
     if (!asset) return 0;
-    
+
     const maxFromPortfolio = maxBorrowFromPortfolio ?? Infinity;
     const maxFromLiquidity = asset.availableLiquidity;
-    
+
     // Take the minimum of both limits
     return Math.min(maxFromPortfolio, maxFromLiquidity);
   }, [asset, maxBorrowFromPortfolio]);
@@ -551,10 +554,18 @@ export function BorrowModal({
   const handleMax = () => {
     if (activeTab === "borrow" && maxBorrowAmount > 0) {
       // Use the calculated max borrow amount
-      setAmount(Math.max(0, maxBorrowAmount).toFixed(8).replace(/\.?0+$/, ""));
+      setAmount(
+        Math.max(0, maxBorrowAmount)
+          .toFixed(8)
+          .replace(/\.?0+$/, "")
+      );
     } else if (activeTab === "repay" && maxRepayAmount > 0) {
       // Max repay is min of wallet balance and borrowed amount
-      setAmount(Math.max(0, maxRepayAmount).toFixed(8).replace(/\.?0+$/, ""));
+      setAmount(
+        Math.max(0, maxRepayAmount)
+          .toFixed(8)
+          .replace(/\.?0+$/, "")
+      );
     }
   };
 
@@ -564,9 +575,10 @@ export function BorrowModal({
 
   // Use simulated health factor if available, otherwise use current
   // Matching MovePosition: simHealthFactor is calculated from evaluation
-  const displayHealthFactor = simHealthFactor > 0 
-    ? simHealthFactor 
-    : (simulatedRiskData?.evaluation?.health_ratio ?? currentHealthFactor);
+  const displayHealthFactor =
+    simHealthFactor > 0
+      ? simHealthFactor
+      : (simulatedRiskData?.evaluation?.health_ratio ?? currentHealthFactor);
 
   /**
    * Validation logic similar to MovePosition
@@ -578,7 +590,10 @@ export function BorrowModal({
 
     if (activeTab === "borrow") {
       // Check if exceeds max borrow from portfolio
-      if (maxBorrowFromPortfolio !== null && parsedAmount > maxBorrowFromPortfolio) {
+      if (
+        maxBorrowFromPortfolio !== null &&
+        parsedAmount > maxBorrowFromPortfolio
+      ) {
         return "Exceeds max safe borrow based on your collateral";
       }
       // Check if exceeds available liquidity
@@ -612,9 +627,24 @@ export function BorrowModal({
     }
 
     return null;
-  }, [amount, parsedAmount, activeTab, maxBorrowFromPortfolio, asset, balance, userBorrowedAmount, displayHealthFactor, simulatedRiskData, simHealthRed, simHealthYellow, isLTVWarning, simLTV]);
+  }, [
+    amount,
+    parsedAmount,
+    activeTab,
+    maxBorrowFromPortfolio,
+    asset,
+    balance,
+    userBorrowedAmount,
+    displayHealthFactor,
+    simulatedRiskData,
+    simHealthRed,
+    simHealthYellow,
+    isLTVWarning,
+    simLTV,
+  ]);
 
-  const canReview = amount && parsedAmount > 0 && !submitting && !validationError;
+  const canReview =
+    amount && parsedAmount > 0 && !submitting && !validationError;
 
   const handleSubmit = async () => {
     if (!movementWallet || !walletAddress || !asset) {
@@ -656,22 +686,24 @@ export function BorrowModal({
 
       const publicKey = senderPubKeyWithScheme;
       const decimals = getCoinDecimals(asset.symbol);
-      
+
       // Validate amount before conversion
       const parsedAmountValue = parseFloat(amount);
       if (isNaN(parsedAmountValue) || parsedAmountValue <= 0) {
-        throw new Error(`Invalid amount: ${amount}. Please enter a valid positive number.`);
+        throw new Error(
+          `Invalid amount: ${amount}. Please enter a valid positive number.`
+        );
       }
-      
+
       const rawAmount = convertAmountToRaw(amount, decimals);
-      
+
       // Validate raw amount is not zero
       if (rawAmount === "0" || BigInt(rawAmount) <= BigInt(0)) {
         throw new Error(
           `Amount conversion resulted in zero. Original amount: ${amount}, Decimals: ${decimals}, Raw: ${rawAmount}`
         );
       }
-      
+
       console.log(`[BorrowModal] Amount conversion:`, {
         originalAmount: amount,
         parsedAmount: parsedAmountValue,
@@ -680,9 +712,10 @@ export function BorrowModal({
         rawAmountBigInt: BigInt(rawAmount).toString(),
         coinSymbol: asset.symbol,
         activeTab,
-        note: activeTab === "repay" 
-          ? "Note: For repay, amount will be converted to note tokens in executeRepayV2"
-          : "Note: For borrow, amount is in underlying tokens",
+        note:
+          activeTab === "repay"
+            ? "Note: For repay, amount will be converted to note tokens in executeRepayV2"
+            : "Note: For borrow, amount is in underlying tokens",
       });
 
       const txHash = await (
@@ -706,7 +739,7 @@ export function BorrowModal({
       });
 
       setTxHash(txHash);
-      
+
       // Refresh portfolio data after successful transaction (matching MovePosition)
       // MovePosition calls: postTransactionRefresh(address, brokerNames)
       // which refreshes: portfolio, wallet balances, and broker data
@@ -718,9 +751,12 @@ export function BorrowModal({
             const superClient = new superJsonApiClient.SuperClient({
               BASE: movementApiBase,
             });
-            const refreshedPortfolio = await superClient.default.getPortfolio(walletAddress);
-            setPortfolioData(refreshedPortfolio as unknown as PortfolioResponse);
-            
+            const refreshedPortfolio =
+              await superClient.default.getPortfolio(walletAddress);
+            setPortfolioData(
+              refreshedPortfolio as unknown as PortfolioResponse
+            );
+
             // Refresh wallet balance
             if (asset?.symbol) {
               const balanceResponse = await fetch(
@@ -739,20 +775,25 @@ export function BorrowModal({
                 }
               }
             }
-            
-            console.log("[BorrowModal] Portfolio and balance refreshed after transaction");
+
+            console.log(
+              "[BorrowModal] Portfolio and balance refreshed after transaction"
+            );
           } catch (refreshError) {
-            console.warn("[BorrowModal] Error refreshing data after transaction:", refreshError);
+            console.warn(
+              "[BorrowModal] Error refreshing data after transaction:",
+              refreshError
+            );
             // Don't fail the transaction if refresh fails
           }
         }
-        
+
         // Call onSuccess callback if provided (for parent component refresh)
         if (onSuccess) {
           onSuccess();
         }
       }, 1500); // Wait 1.5s for transaction to be processed
-      
+
       setTimeout(() => {
         onClose();
         setAmount("");
@@ -980,21 +1021,28 @@ export function BorrowModal({
               {/* Yellow Zone Warning */}
               {simHealthYellow && !simHealthRed && !isLTVWarning && (
                 <div className="mb-4 p-3 rounded-lg bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 text-sm text-yellow-700 dark:text-yellow-400">
-                  ⚠️ Warning: This borrow would reduce your health factor to {displayHealthFactor?.toFixed(2)}x (warning zone: 1.2x - 1.5x). Consider borrowing less to maintain a safer position.
+                  ⚠️ Warning: This borrow would reduce your health factor to{" "}
+                  {displayHealthFactor?.toFixed(2)}x (warning zone: 1.2x -
+                  1.5x). Consider borrowing less to maintain a safer position.
                 </div>
               )}
 
               {/* Red Zone Warning */}
               {simHealthRed && !isLTVWarning && (
                 <div className="mb-4 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-sm text-red-700 dark:text-red-400">
-                  🚨 Danger: This borrow would make your position unhealthy (health factor ≤ 1.2x). Your position may be at risk of liquidation. Please reduce the amount.
+                  🚨 Danger: This borrow would make your position unhealthy
+                  (health factor ≤ 1.2x). Your position may be at risk of
+                  liquidation. Please reduce the amount.
                 </div>
               )}
 
               {/* LTV Warning */}
               {isLTVWarning && isSimHealthy && simLTV > 0 && (
                 <div className="mb-4 p-3 rounded-lg bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 text-sm text-orange-700 dark:text-orange-400">
-                  ⚠️ LTV Warning: This borrow would result in an LTV of {(simLTV * 100).toFixed(1)}%, which exceeds the recommended 95% threshold. Consider borrowing less to maintain a safer position.
+                  ⚠️ LTV Warning: This borrow would result in an LTV of{" "}
+                  {(simLTV * 100).toFixed(1)}%, which exceeds the recommended
+                  95% threshold. Consider borrowing less to maintain a safer
+                  position.
                 </div>
               )}
             </>

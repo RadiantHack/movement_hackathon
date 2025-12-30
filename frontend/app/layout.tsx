@@ -19,8 +19,7 @@ export const metadata: Metadata = {
   title: "Movement Nexus - AI-Powered DeFi Gateway",
   description:
     "Multi-agent AI platform for seamless DeFi operations on Movement Network",
-  // Manifest removed - PWA caching disabled
-  // manifest: "/manifest.json",
+  manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",

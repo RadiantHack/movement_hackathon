@@ -137,8 +137,9 @@ export const TransferCard: React.FC<TransferCardProps> = ({
       const amountInOctas = Math.floor(parsedAmount * 100000000);
 
       // Determine if this is native MOVE token
-      const isNativeMove = (tokenSymbol || token || "").toUpperCase() === "MOVE";
-      
+      const isNativeMove =
+        (tokenSymbol || token || "").toUpperCase() === "MOVE";
+
       let rawTxn;
       if (isNativeMove) {
         // For native MOVE tokens, use aptos_account::transfer_coins which automatically registers CoinStore
@@ -156,7 +157,7 @@ export const TransferCard: React.FC<TransferCardProps> = ({
         // For now, throw an error asking for assetType
         throw new Error(
           `Transfer of ${tokenSymbol || token} requires assetType information. ` +
-          `Please use the transfer page for non-native tokens or provide assetType in TransferData.`
+            `Please use the transfer page for non-native tokens or provide assetType in TransferData.`
         );
       }
 

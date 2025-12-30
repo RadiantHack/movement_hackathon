@@ -55,26 +55,26 @@ export function convertAmountToRaw(amount: string, decimals: number): string {
   if (!trimmedAmount || trimmedAmount === "") {
     throw new Error(`Invalid amount: empty string`);
   }
-  
+
   const amountNum = parseFloat(trimmedAmount);
   if (isNaN(amountNum)) {
     throw new Error(`Invalid amount: ${amount} is not a valid number`);
   }
-  
+
   if (amountNum <= 0) {
     throw new Error(`Invalid amount: ${amount} must be greater than 0`);
   }
-  
+
   const multiplier = Math.pow(10, decimals);
   const rawAmount = Math.floor(amountNum * multiplier);
-  
+
   if (rawAmount <= 0) {
     throw new Error(
       `Amount ${amount} is too small to convert to raw units (decimals: ${decimals}). ` +
-      `Minimum amount: ${1 / multiplier}`
+        `Minimum amount: ${1 / multiplier}`
     );
   }
-  
+
   return rawAmount.toString();
 }
 

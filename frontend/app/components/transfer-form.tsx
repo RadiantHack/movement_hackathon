@@ -196,8 +196,10 @@ export const TransferForm: React.FC<TransferFormProps> = ({
 
       // For native MOVE tokens, use aptos_account::transfer_coins which automatically registers CoinStore
       // For fungible assets (other tokens), use primary_fungible_store::transfer
-      const isNativeMove = selectedToken.isNative || selectedToken.assetType === "0x1::aptos_coin::AptosCoin";
-      
+      const isNativeMove =
+        selectedToken.isNative ||
+        selectedToken.assetType === "0x1::aptos_coin::AptosCoin";
+
       let rawTxn;
       if (isNativeMove) {
         // Use aptos_account::transfer_coins for native MOVE - automatically registers CoinStore
@@ -215,13 +217,17 @@ export const TransferForm: React.FC<TransferFormProps> = ({
         // Function signature: transfer<Metadata>(metadata_address: address, to: address, amount: u64)
         const assetType = selectedToken.assetType.trim();
         const recipientAddress = AccountAddress.fromString(toAddress);
-        
+
         rawTxn = await aptos.transaction.build.simple({
           sender: senderAddress,
           data: {
             function: "0x1::primary_fungible_store::transfer",
             typeArguments: ["0x1::fungible_asset::Metadata"],
-            functionArguments: [assetType, recipientAddress, amountInSmallestUnit],
+            functionArguments: [
+              assetType,
+              recipientAddress,
+              amountInSmallestUnit,
+            ],
           },
         });
       }
@@ -266,17 +272,19 @@ export const TransferForm: React.FC<TransferFormProps> = ({
     } catch (err: unknown) {
       console.error("Transfer error:", err);
       let errorMessage = "Transfer failed. Please try again.";
-      
+
       if (err instanceof Error) {
         errorMessage = err.message;
-        
+
         // Check for CoinStore errors
         if (
           err.message.includes("ECOIN_STORE_NOT_PUBLISHED") ||
           err.message.includes("CoinStore") ||
           err.message.includes("0x60005")
         ) {
-          const isNativeMove = selectedToken.isNative || selectedToken.assetType === "0x1::aptos_coin::AptosCoin";
+          const isNativeMove =
+            selectedToken.isNative ||
+            selectedToken.assetType === "0x1::aptos_coin::AptosCoin";
           if (isNativeMove) {
             // For native MOVE, this shouldn't happen with aptos_account::transfer_coins
             errorMessage =
@@ -292,7 +300,7 @@ export const TransferForm: React.FC<TransferFormProps> = ({
           }
         }
       }
-      
+
       setTransferError(errorMessage);
     } finally {
       setTransferring(false);

@@ -910,11 +910,17 @@ function PositionsPageContent() {
                 const superClient = new superJsonApiClient.SuperClient({
                   BASE: movementApiBase,
                 });
-                const data = await superClient.default.getPortfolio(walletAddress);
+                const data =
+                  await superClient.default.getPortfolio(walletAddress);
                 setPortfolioData(data as unknown as PortfolioResponse);
-                console.log("[PositionsPage] Portfolio refreshed after transaction");
+                console.log(
+                  "[PositionsPage] Portfolio refreshed after transaction"
+                );
               } catch (error) {
-                console.error("[PositionsPage] Error refreshing portfolio:", error);
+                console.error(
+                  "[PositionsPage] Error refreshing portfolio:",
+                  error
+                );
               }
             };
             refreshPortfolio();

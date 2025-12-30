@@ -38,17 +38,17 @@ const getFacilitatorAccount = () => {
   const privateKeyHex =
     process.env.FACILITATOR_PRIVATE_KEY ||
     process.env.NEXT_PUBLIC_FACILITATOR_PRIVATE_KEY;
-  
+
   if (!privateKeyHex) {
     throw new Error(
       "FACILITATOR_PRIVATE_KEY environment variable is not set. " +
-      "Please set it to a hex-encoded Ed25519 private key (64 hex characters)."
+        "Please set it to a hex-encoded Ed25519 private key (64 hex characters)."
     );
   }
 
   // Remove 0x prefix if present
-  const cleanKey = privateKeyHex.startsWith("0x") 
-    ? privateKeyHex.slice(2) 
+  const cleanKey = privateKeyHex.startsWith("0x")
+    ? privateKeyHex.slice(2)
     : privateKeyHex;
 
   if (cleanKey.length !== 64) {
@@ -61,9 +61,12 @@ const getFacilitatorAccount = () => {
     const privateKey = new Ed25519PrivateKey(cleanKey);
     const publicKey = privateKey.publicKey();
     const address = publicKey.authKey().derivedAddress();
-    
-    console.log("[facilitator/settle] Facilitator address:", address.toString());
-    
+
+    console.log(
+      "[facilitator/settle] Facilitator address:",
+      address.toString()
+    );
+
     return {
       privateKey,
       publicKey,
@@ -218,7 +221,9 @@ export async function POST(request: NextRequest) {
 
       // Deserialize RawTransaction from BCS bytes
       const transactionDeserializer = new Deserializer(transactionBytes);
-      const rawTransaction = RawTransaction.deserialize(transactionDeserializer);
+      const rawTransaction = RawTransaction.deserialize(
+        transactionDeserializer
+      );
       console.log(
         "[facilitator/settle] RawTransaction deserialized successfully"
       );
@@ -280,14 +285,18 @@ export async function POST(request: NextRequest) {
 
       // Deserialize RawTransaction from BCS bytes
       const transactionDeserializer = new Deserializer(transactionBytes);
-      const rawTransaction = RawTransaction.deserialize(transactionDeserializer);
+      const rawTransaction = RawTransaction.deserialize(
+        transactionDeserializer
+      );
       console.log(
         "[facilitator/settle] RawTransaction deserialized successfully"
       );
 
       // Sign the transaction with facilitator's private key
       console.log("[facilitator/settle] Signing transaction...");
-      const message = generateSigningMessageForTransaction(rawTransaction as any);
+      const message = generateSigningMessageForTransaction(
+        rawTransaction as any
+      );
       // generateSigningMessageForTransaction returns Uint8Array, sign() expects Uint8Array
       const signature = facilitatorAccount.privateKey.sign(message);
 

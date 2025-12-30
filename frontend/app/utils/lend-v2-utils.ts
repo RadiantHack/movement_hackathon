@@ -166,15 +166,17 @@ async function checkGasBalance(
       );
     }
 
-    console.log(`[GasCheck] ✅ Gas balance: ${gasBal.toString()} (${(Number(gasBal) / Math.pow(10, 8)).toFixed(6)} MOVE)`);
+    console.log(
+      `[GasCheck] ✅ Gas balance: ${gasBal.toString()} (${(Number(gasBal) / Math.pow(10, 8)).toFixed(6)} MOVE)`
+    );
   } catch (e: any) {
     console.error("[GasCheck] Error checking gas balance:", e);
-    
+
     // If it's our custom error, throw it as-is
     if (e.message.includes("MOVE") || e.message.includes("gas")) {
       throw e;
     }
-    
+
     // Otherwise, wrap in a user-friendly error
     throw new Error(
       `Failed to check gas balance: ${e.message || "Unknown error"}. Please ensure you have MOVE tokens in your wallet for transaction fees.`

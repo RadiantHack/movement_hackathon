@@ -167,7 +167,8 @@ export default function TransferPage() {
       setStep("Building transaction...");
 
       const assetType = selectedToken.assetType.trim();
-      const isNativeMove = selectedToken.isNative || assetType === "0x1::aptos_coin::AptosCoin";
+      const isNativeMove =
+        selectedToken.isNative || assetType === "0x1::aptos_coin::AptosCoin";
 
       let rawTxn;
 
@@ -269,14 +270,16 @@ export default function TransferPage() {
     } catch (err: any) {
       console.error("Transfer error:", err);
       let errorMessage = err.message || "Transaction failed";
-      
+
       // Check for CoinStore errors
       if (
         err.message?.includes("ECOIN_STORE_NOT_PUBLISHED") ||
         err.message?.includes("CoinStore") ||
         err.message?.includes("0x60005")
       ) {
-        const isNativeMove = selectedToken?.isNative || selectedToken?.assetType === "0x1::aptos_coin::AptosCoin";
+        const isNativeMove =
+          selectedToken?.isNative ||
+          selectedToken?.assetType === "0x1::aptos_coin::AptosCoin";
         if (isNativeMove) {
           // For native MOVE, this shouldn't happen with aptos_account::transfer_coins
           errorMessage =
@@ -290,7 +293,7 @@ export default function TransferPage() {
             `Please verify the recipient address is correct.`;
         }
       }
-      
+
       setError(errorMessage);
       setStep("");
     } finally {
