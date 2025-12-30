@@ -136,7 +136,8 @@ export const TransferCard: React.FC<TransferCardProps> = ({
       const amountInOctas = Math.floor(parsedAmount * 100000000);
 
       // Check if recipient has CoinStore registered for AptosCoin
-      // This prevents ECOIN_STORE_NOT_PUBLISHED errors
+      // If not registered, we'll try the transfer anyway and handle the error
+      let coinStoreRegistered = false;
       try {
         const accountResources = await aptos.account.getAccountResources({
           accountAddress: toAddress,
@@ -148,27 +149,20 @@ export const TransferCard: React.FC<TransferCardProps> = ({
           (resource) => resource.type === nativeCoinStoreType
         );
 
-        if (!coinStore) {
-          throw new Error(
-            `Recipient address ${toAddress.slice(0, 10)}...${toAddress.slice(-8)} has not registered a CoinStore for AptosCoin. ` +
-            `The recipient needs to register their CoinStore before they can receive tokens. ` +
-            `Please ask the recipient to register their CoinStore first, or use a different recipient address.`
-          );
+        coinStoreRegistered = !!coinStore;
+        
+        if (!coinStoreRegistered) {
+          console.log("CoinStore not registered for recipient. Will attempt transfer - if it fails, recipient needs to register first.");
         }
       } catch (checkError: any) {
-        // If the error is about coin store not existing, re-throw with helpful message
-        if (
-          checkError.message &&
-          checkError.message.includes("CoinStore")
-        ) {
-          throw checkError;
-        }
-        // If it's a different error (like account doesn't exist), continue with transfer
-        // The transfer will fail with a more specific error if needed
+        // If account doesn't exist or other error, assume coin store is not registered
         console.warn("Could not check coin store, proceeding with transfer:", checkError);
+        coinStoreRegistered = false;
       }
 
-      // Build the raw transaction
+      // Build the transfer transaction
+      // We'll try the transfer first - if CoinStore is not registered, it will fail
+      // and we'll provide helpful error message
       const rawTxn = await aptos.transaction.build.simple({
         sender: senderAddress,
         data: {
@@ -237,10 +231,15 @@ export const TransferCard: React.FC<TransferCardProps> = ({
           err.message.includes("CoinStore") ||
           err.message.includes("0x60005")
         ) {
+          // CoinStore registration requires recipient's signature, which we don't have
+          // Provide clear error message explaining this
           errorMessage =
-            `The recipient address has not registered a CoinStore for AptosCoin. ` +
+            `The recipient address ${toAddress.slice(0, 10)}...${toAddress.slice(-8)} has not registered a CoinStore for AptosCoin. ` +
+            `CoinStore registration requires the recipient's signature, so we cannot register it automatically. ` +
             `The recipient needs to register their CoinStore before they can receive tokens. ` +
-            `Please ask the recipient to register their CoinStore first, or use a different recipient address.`;
+            `Please ask the recipient to register their CoinStore first by calling: ` +
+            `0x1::coin::register<0x1::aptos_coin::AptosCoin>() ` +
+            `or use a different recipient address that has already registered their CoinStore.`;
         }
       }
       

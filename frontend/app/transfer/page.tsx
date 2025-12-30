@@ -177,6 +177,7 @@ export default function TransferPage() {
         assetType === "0x1::aptos_coin::AptosCoin"
       ) {
         // Check if recipient has CoinStore registered for AptosCoin
+        // We'll try the transfer anyway - if CoinStore is not registered, it will fail with a clear error
         setStep("Checking recipient CoinStore...");
         try {
           const accountResources = await aptos.account.getAccountResources({
@@ -190,19 +191,10 @@ export default function TransferPage() {
           );
 
           if (!coinStore) {
-            throw new Error(
-              `Recipient address ${recipient.slice(0, 10)}...${recipient.slice(-8)} has not registered a CoinStore for AptosCoin. ` +
-              `The recipient needs to register their CoinStore before they can receive tokens. ` +
-              `Please ask the recipient to register their CoinStore first, or use a different recipient address.`
-            );
+            console.log("CoinStore not registered for recipient. Will attempt transfer - if it fails, recipient needs to register first.");
           }
         } catch (checkError: any) {
-          if (
-            checkError.message &&
-            checkError.message.includes("CoinStore")
-          ) {
-            throw checkError;
-          }
+          // If we can't check, proceed with transfer - it will fail with clear error if needed
           console.warn("Could not check coin store, proceeding with transfer:", checkError);
         }
 
@@ -306,9 +298,11 @@ export default function TransferPage() {
         err.message?.includes("0x60005")
       ) {
         errorMessage =
-          `The recipient address has not registered a CoinStore for AptosCoin. ` +
-          `The recipient needs to register their CoinStore before they can receive tokens. ` +
-          `Please ask the recipient to register their CoinStore first, or use a different recipient address.`;
+          `The recipient address ${recipient.slice(0, 10)}...${recipient.slice(-8)} has not registered a CoinStore for AptosCoin. ` +
+          `CoinStore registration requires the recipient's signature, so we cannot register it automatically. ` +
+          `The recipient needs to register their CoinStore before they can receive tokens by calling: ` +
+          `0x1::coin::register<0x1::aptos_coin::AptosCoin>() ` +
+          `or use a different recipient address that has already registered their CoinStore.`;
       }
       
       setError(errorMessage);
