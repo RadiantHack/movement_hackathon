@@ -20,6 +20,7 @@ import {
   MOVEPOSITION_ADDRESS,
   getCoinType,
   getBrokerAddress,
+  getCoinDecimals,
 } from "./token-utils";
 import {
   requireMovementChainId,
@@ -72,6 +73,21 @@ async function getBrokerFromAPI(
   };
 }
 
+/**
+ * Get full broker object from API (for repay, needs loanNote info)
+ */
+async function getFullBrokerFromAPI(
+  superClient: superJsonApiClient.SuperClient,
+  brokerAddress: string
+): Promise<superJsonApiClient.Broker> {
+  const brokers = await superClient.default.getBrokers();
+  const broker = brokers.find((b) => b.networkAddress === brokerAddress);
+  if (!broker) {
+    throw new Error(`Broker not found for address: ${brokerAddress}`);
+  }
+  return broker;
+}
+
 async function getPortfolioStateFromAPI(
   superClient: superJsonApiClient.SuperClient,
   address: string
@@ -89,6 +105,62 @@ async function getPortfolioStateFromAPI(
   };
 }
 
+/**
+ * Check gas balance (MOVE/APT) before transaction
+ * Matches MovePosition's checkAPTBalance implementation
+ */
+async function checkGasBalance(
+  aptos: Aptos,
+  address: string,
+  onProgress?: (step: string) => void
+): Promise<void> {
+  if (onProgress) {
+    onProgress("Checking gas balance...");
+  }
+
+  try {
+    // MovePosition uses: '0x1::coin::CoinStore<0x1::aptos_coin::AptosCoin>'
+    const aptResource = "0x1::coin::CoinStore<0x1::aptos_coin::AptosCoin>";
+
+    // Get account resources (new Aptos SDK method)
+    const resources = await aptos.account.getAccountResources({
+      accountAddress: address,
+    });
+
+    // Find APT/MOVE coin store resource
+    const gasToken = resources.find((r) => r.type === aptResource);
+
+    if (!gasToken) {
+      throw new Error(
+        "No MOVE balance found. You need MOVE tokens for transaction fees. Please add MOVE to your wallet."
+      );
+    }
+
+    const gasBal = BigInt((gasToken.data as any)?.coin?.value || "0");
+    const hasGas = gasBal > BigInt(0);
+
+    if (!hasGas) {
+      throw new Error(
+        "Insufficient gas. You need MOVE tokens for transaction fees. Please add MOVE to your wallet."
+      );
+    }
+
+    console.log(`[GasCheck] ✅ Gas balance: ${gasBal.toString()} (${(Number(gasBal) / Math.pow(10, 8)).toFixed(6)} MOVE)`);
+  } catch (e: any) {
+    console.error("[GasCheck] Error checking gas balance:", e);
+    
+    // If it's our custom error, throw it as-is
+    if (e.message.includes("MOVE") || e.message.includes("gas")) {
+      throw e;
+    }
+    
+    // Otherwise, wrap in a user-friendly error
+    throw new Error(
+      `Failed to check gas balance: ${e.message || "Unknown error"}. Please ensure you have MOVE tokens in your wallet for transaction fees.`
+    );
+  }
+}
+
 export async function executeBorrowV2(params: BorrowV2Params): Promise<string> {
   const { amount, coinSymbol, walletAddress, publicKey, signHash, onProgress } =
     params;
@@ -103,6 +175,9 @@ export async function executeBorrowV2(params: BorrowV2Params): Promise<string> {
   const API_BASE = movementApiBase;
 
   const aptos = getAptosInstance();
+
+  // Check gas balance before proceeding (like MovePosition does)
+  await checkGasBalance(aptos, walletAddress, onProgress);
 
   const coinType = getCoinType(coinSymbol);
   const brokerAddress = getBrokerAddress(coinType);
@@ -132,6 +207,23 @@ export async function executeBorrowV2(params: BorrowV2Params): Promise<string> {
 
   const signerPubkey = walletAddress;
   const network = "aptos";
+
+  // Validate amount before API call
+  const amountBigInt = BigInt(amount);
+  if (amountBigInt <= BigInt(0)) {
+    throw new Error(
+      `Invalid amount for borrow: ${amount}. Amount must be a positive integer string in raw token units.`
+    );
+  }
+
+  console.log(`[BorrowV2] API request details:`, {
+    amount,
+    amountBigInt: amountBigInt.toString(),
+    brokerName,
+    signerPubkey,
+    network,
+    currentPortfolioState,
+  });
 
   if (onProgress) {
     onProgress("Requesting borrow ticket...");
@@ -356,6 +448,9 @@ export async function executeRepayV2(params: BorrowV2Params): Promise<string> {
 
   const aptos = getAptosInstance();
 
+  // Check gas balance before proceeding (like MovePosition does)
+  await checkGasBalance(aptos, walletAddress, onProgress);
+
   const coinType = getCoinType(coinSymbol);
   const brokerAddress = getBrokerAddress(coinType);
 
@@ -367,12 +462,12 @@ export async function executeRepayV2(params: BorrowV2Params): Promise<string> {
   if (onProgress) {
     onProgress("Fetching broker information...");
   }
-  // Get broker data to use the exact networkAddress (coinType) from API
-  // This matches MovePosition's approach: broker.underlyingAsset.networkAddress
-  const broker = await getBrokerFromAPI(superClient, brokerAddress);
-  const brokerName = broker.name;
+  // Get full broker data (needed for loanNote info and exchange rate)
+  // This matches MovePosition's approach: broker.loanNote and broker.loanNoteExchangeRate
+  const fullBroker = await getFullBrokerFromAPI(superClient, brokerAddress);
+  const brokerName = fullBroker.underlyingAsset.name;
   // Use the networkAddress from the broker API response (matches MovePosition)
-  const coinTypeFromBroker = broker.networkAddress;
+  const coinTypeFromBroker = fullBroker.underlyingAsset.networkAddress;
 
   if (onProgress) {
     onProgress("Fetching portfolio state...");
@@ -382,14 +477,117 @@ export async function executeRepayV2(params: BorrowV2Params): Promise<string> {
     walletAddress
   );
 
+  // CRITICAL: For REPAY, the API expects amount in NOTE TOKENS (raw), not underlying tokens (raw)
+  // Following MovePosition's approach from TxForm.tsx line 688-689:
+  // For REPAY_TAB: loanNoteAmount = scaleUp(amount, loanNoteDecimals) / loanNoteExchangeRate
+  //                txAmount = Math.floor(loanNoteAmount)
+  //
+  // Since our 'amount' parameter is in raw underlying tokens:
+  // - Convert to formatted underlying: amount / 10^coinDecimals
+  // - Scale up by loan note decimals: (amount / 10^coinDecimals) * 10^loanNoteDecimals
+  // - Divide by exchange rate: ((amount / 10^coinDecimals) * 10^loanNoteDecimals) / exchangeRate
+  // - Simplify: (amount * 10^(loanNoteDecimals - coinDecimals)) / exchangeRate
+  // - Floor to get integer note tokens in raw units
+
+  const coinDecimals = getCoinDecimals(coinSymbol);
+  const loanNoteDecimals = fullBroker.loanNote?.decimals ?? coinDecimals;
+  const loanNoteExchangeRate = fullBroker.loanNoteExchangeRate || 1;
+
+  // Validate amount before conversion
+  const amountBigInt = BigInt(amount);
+  if (amountBigInt <= BigInt(0)) {
+    throw new Error(
+      `Invalid amount for repay: ${amount}. Amount must be a positive integer string in raw token units.`
+    );
+  }
+
+  // Convert underlying token amount (raw) to note token amount (raw)
+  const decimalDiff = loanNoteDecimals - coinDecimals;
+  const scaleFactor = Math.pow(10, decimalDiff);
+
+  // Calculate note tokens: (rawUnderlying * scaleFactor) / exchangeRate
+  // Use Number for the calculation, then floor and convert to string
+  const repayAmountNoteTokensRaw = Math.floor(
+    (Number(amountBigInt) * scaleFactor) / loanNoteExchangeRate
+  ).toString();
+
+  console.log(`[RepayV2] Amount conversion (underlying → note tokens):`, {
+    originalAmountUnderlyingRaw: amount,
+    coinDecimals,
+    loanNoteDecimals,
+    loanNoteExchangeRate,
+    decimalDiff,
+    scaleFactor,
+    repayAmountNoteTokensRaw,
+    originalAmountFormatted: (Number(amountBigInt) / Math.pow(10, coinDecimals)).toFixed(6),
+    noteTokensFormatted: (Number(repayAmountNoteTokensRaw) / Math.pow(10, loanNoteDecimals)).toFixed(6),
+  });
+
+  // Validate repay amount against user's loan note balance from portfolio
+  const loanNoteName = fullBroker.loanNote?.name;
+  if (!loanNoteName) {
+    throw new Error(`Loan note not found for broker ${brokerName}`);
+  }
+
+  const userLoanNotePosition = currentPortfolioState.liabilities.find(
+    (l) => l.instrumentId === loanNoteName
+  );
+
+  if (!userLoanNotePosition) {
+    throw new Error(
+      `You don't have any ${coinSymbol} borrowed. Cannot repay.`
+    );
+  }
+
+  const userLoanNoteBalanceRaw = BigInt(userLoanNotePosition.amount);
+  const repayAmountNoteTokensRawBigInt = BigInt(repayAmountNoteTokensRaw);
+
+  // Validate repay amount doesn't exceed user's loan note balance
+  if (repayAmountNoteTokensRawBigInt > userLoanNoteBalanceRaw) {
+    const userBalanceFormatted =
+      (Number(userLoanNoteBalanceRaw) / Math.pow(10, loanNoteDecimals)) *
+      loanNoteExchangeRate;
+    const repayAmountFormatted =
+      Number(amountBigInt) / Math.pow(10, coinDecimals);
+
+    throw new Error(
+      `Insufficient balance. You have ${userBalanceFormatted.toFixed(6)} ${coinSymbol} borrowed, but trying to repay ${repayAmountFormatted.toFixed(6)} ${coinSymbol}.`
+    );
+  }
+
+  console.log(`[RepayV2] Balance validation passed:`, {
+    userLoanNoteBalanceRaw: userLoanNoteBalanceRaw.toString(),
+    repayAmountNoteTokensRaw: repayAmountNoteTokensRaw,
+    userBalanceFormatted: (
+      (Number(userLoanNoteBalanceRaw) / Math.pow(10, loanNoteDecimals)) *
+      loanNoteExchangeRate
+    ).toFixed(6),
+    repayAmountFormatted: (
+      Number(amountBigInt) / Math.pow(10, coinDecimals)
+    ).toFixed(6),
+  });
+
   const signerPubkey = walletAddress;
   const network = "aptos";
+
+  console.log(`[RepayV2] API request details:`, {
+    amount: repayAmountNoteTokensRaw, // Note: This is now in note tokens!
+    amountOriginalUnderlying: amount,
+    amountBigInt: repayAmountNoteTokensRaw,
+    brokerName,
+    signerPubkey,
+    network,
+    currentPortfolioState,
+    loanNoteName,
+    loanNoteExchangeRate,
+  });
 
   if (onProgress) {
     onProgress("Requesting repay ticket...");
   }
+  // CRITICAL: API expects amount in NOTE TOKENS (raw), not underlying tokens
   const repayTicket = await superClient.default.repayV2({
-    amount,
+    amount: repayAmountNoteTokensRaw, // Use note tokens, not underlying tokens!
     signerPubkey,
     network,
     brokerName,

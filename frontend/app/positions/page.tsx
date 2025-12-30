@@ -901,6 +901,25 @@ function PositionsPageContent() {
         }
         walletAddress={walletAddress}
         healthFactor={healthFactor}
+        onSuccess={() => {
+          // Refresh portfolio data after successful transaction (matching MovePosition)
+          // This ensures the UI shows updated positions, health factor, and balances
+          if (walletAddress) {
+            const refreshPortfolio = async () => {
+              try {
+                const superClient = new superJsonApiClient.SuperClient({
+                  BASE: movementApiBase,
+                });
+                const data = await superClient.default.getPortfolio(walletAddress);
+                setPortfolioData(data as unknown as PortfolioResponse);
+                console.log("[PositionsPage] Portfolio refreshed after transaction");
+              } catch (error) {
+                console.error("[PositionsPage] Error refreshing portfolio:", error);
+              }
+            };
+            refreshPortfolio();
+          }
+        }}
       />
     </div>
   );
