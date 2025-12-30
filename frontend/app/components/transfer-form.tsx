@@ -193,94 +193,13 @@ export const TransferForm: React.FC<TransferFormProps> = ({
         parsedAmount * Math.pow(10, decimals)
       );
 
-      // Step 1: Check if recipient has CoinStore registered for AptosCoin (for native MOVE transfers)
-      let coinStoreRegistered = false;
-      if (selectedToken.isNative || selectedToken.assetType === "0x1::aptos_coin::AptosCoin") {
-        try {
-          const accountResources = await aptos.account.getAccountResources({
-            accountAddress: toAddress,
-          });
-
-          const nativeCoinStoreType =
-            "0x1::coin::CoinStore<0x1::aptos_coin::AptosCoin>";
-          const coinStore = accountResources.find(
-            (resource) => resource.type === nativeCoinStoreType
-          );
-
-          coinStoreRegistered = !!coinStore;
-        } catch (checkError: any) {
-          console.warn("Could not check coin store:", checkError);
-          coinStoreRegistered = false;
-        }
-
-        // Step 2: If CoinStore is not registered, try to register it first (only if self-transfer)
-        if (!coinStoreRegistered) {
-          const isSelfTransfer = senderAddress.toLowerCase() === toAddress.toLowerCase();
-          
-          if (isSelfTransfer) {
-            // Recipient is the same as sender - we can register for ourselves
-            try {
-              console.log("CoinStore not registered. Registering for self-transfer...");
-              
-              const registerTxn = await aptos.transaction.build.simple({
-                sender: senderAddress,
-                data: {
-                  function: "0x1::coin::register",
-                  typeArguments: ["0x1::aptos_coin::AptosCoin"],
-                  functionArguments: [],
-                },
-              });
-
-              const registerTxnObj = registerTxn as unknown as Record<
-                string,
-                Record<string, unknown>
-              >;
-              if (registerTxnObj.rawTransaction) {
-                const chainIdObj = new ChainId(movementChainId);
-                (registerTxnObj.rawTransaction as Record<string, unknown>).chain_id =
-                  chainIdObj;
-              }
-
-              const registerMessage = generateSigningMessageForTransaction(registerTxn);
-              const registerHash = toHex(registerMessage);
-
-              const registerSignature = await signRawHash({
-                address: senderAddress,
-                chainType: "aptos",
-                hash: registerHash,
-              });
-
-              const registerPublicKey = new Ed25519PublicKey(`0x${pubKeyNoScheme}`);
-              const registerSig = new Ed25519Signature(registerSignature.signature.slice(2));
-              const registerAuthenticator = new AccountAuthenticatorEd25519(
-                registerPublicKey,
-                registerSig
-              );
-
-              const registerPending = await aptos.transaction.submit.simple({
-                transaction: registerTxn,
-                senderAuthenticator: registerAuthenticator,
-              });
-
-              await aptos.waitForTransaction({
-                transactionHash: registerPending.hash,
-              });
-
-              console.log("✅ CoinStore registered successfully:", registerPending.hash);
-              coinStoreRegistered = true;
-            } catch (registerError: any) {
-              console.error("Failed to register CoinStore:", registerError);
-            }
-          } else {
-            console.log("CoinStore not registered for recipient. Cannot register automatically (requires recipient's signature).");
-          }
-        }
-      }
-
+      // Use aptos_account::transfer_coins which automatically registers CoinStore
+      // This is the recommended approach as it handles CoinStore registration automatically
+      // and can even create the account if needed (for normal accounts)
       const rawTxn = await aptos.transaction.build.simple({
         sender: senderAddress,
         data: {
-          function: "0x1::coin::transfer",
+          function: "0x1::aptos_account::transfer_coins",
           typeArguments: ["0x1::aptos_coin::AptosCoin"],
           functionArguments: [toAddress, amountInSmallestUnit],
         },
@@ -330,18 +249,17 @@ export const TransferForm: React.FC<TransferFormProps> = ({
       if (err instanceof Error) {
         errorMessage = err.message;
         
-        // Check for specific coin store error
+        // Note: With aptos_account::transfer_coins, CoinStore registration should be automatic
+        // If we still get this error, it might be a network or account type issue
         if (
           err.message.includes("ECOIN_STORE_NOT_PUBLISHED") ||
           err.message.includes("CoinStore") ||
           err.message.includes("0x60005")
         ) {
           errorMessage =
-            `The recipient address ${toAddress.slice(0, 10)}...${toAddress.slice(-8)} has not registered a CoinStore for AptosCoin. ` +
-            `CoinStore registration requires the recipient's signature, so we cannot register it automatically. ` +
-            `The recipient needs to register their CoinStore before they can receive tokens by calling: ` +
-            `0x1::coin::register<0x1::aptos_coin::AptosCoin>() ` +
-            `or use a different recipient address that has already registered their CoinStore.`;
+            `Transfer failed: The recipient address ${toAddress.slice(0, 10)}...${toAddress.slice(-8)} may not support automatic CoinStore registration. ` +
+            `This can happen if the recipient is not a normal account type. ` +
+            `Please verify the recipient address is correct and is a standard Aptos account.`;
         }
       }
       
