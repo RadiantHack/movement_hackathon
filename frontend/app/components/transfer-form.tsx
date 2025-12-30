@@ -11,6 +11,7 @@ import {
   Ed25519Signature,
   generateSigningMessageForTransaction,
   ChainId,
+  AccountAddress,
 } from "@aptos-labs/ts-sdk";
 import { toHex } from "viem";
 import { useSignRawHash } from "@privy-io/react-auth/extended-chains";
@@ -194,7 +195,7 @@ export const TransferForm: React.FC<TransferFormProps> = ({
       );
 
       // For native MOVE tokens, use aptos_account::transfer_coins which automatically registers CoinStore
-      // For other tokens, use coin::transfer (requires CoinStore to be registered)
+      // For fungible assets (other tokens), use primary_fungible_store::transfer
       const isNativeMove = selectedToken.isNative || selectedToken.assetType === "0x1::aptos_coin::AptosCoin";
       
       let rawTxn;
@@ -209,13 +210,18 @@ export const TransferForm: React.FC<TransferFormProps> = ({
           },
         });
       } else {
-        // Use coin::transfer for other tokens - requires CoinStore to be registered
+        // For fungible assets, use primary_fungible_store::transfer
+        // The assetType is the fungible asset metadata address
+        // Function signature: transfer<Metadata>(metadata_address: address, to: address, amount: u64)
+        const assetType = selectedToken.assetType.trim();
+        const recipientAddress = AccountAddress.fromString(toAddress);
+        
         rawTxn = await aptos.transaction.build.simple({
           sender: senderAddress,
           data: {
-            function: "0x1::coin::transfer",
-            typeArguments: [selectedToken.assetType],
-            functionArguments: [toAddress, amountInSmallestUnit],
+            function: "0x1::primary_fungible_store::transfer",
+            typeArguments: ["0x1::fungible_asset::Metadata"],
+            functionArguments: [assetType, recipientAddress, amountInSmallestUnit],
           },
         });
       }
