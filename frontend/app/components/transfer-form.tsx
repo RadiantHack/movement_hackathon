@@ -193,17 +193,32 @@ export const TransferForm: React.FC<TransferFormProps> = ({
         parsedAmount * Math.pow(10, decimals)
       );
 
-      // Use aptos_account::transfer_coins which automatically registers CoinStore
-      // This is the recommended approach as it handles CoinStore registration automatically
-      // and can even create the account if needed (for normal accounts)
-      const rawTxn = await aptos.transaction.build.simple({
-        sender: senderAddress,
-        data: {
-          function: "0x1::aptos_account::transfer_coins",
-          typeArguments: ["0x1::aptos_coin::AptosCoin"],
-          functionArguments: [toAddress, amountInSmallestUnit],
-        },
-      });
+      // For native MOVE tokens, use aptos_account::transfer_coins which automatically registers CoinStore
+      // For other tokens, use coin::transfer (requires CoinStore to be registered)
+      const isNativeMove = selectedToken.isNative || selectedToken.assetType === "0x1::aptos_coin::AptosCoin";
+      
+      let rawTxn;
+      if (isNativeMove) {
+        // Use aptos_account::transfer_coins for native MOVE - automatically registers CoinStore
+        rawTxn = await aptos.transaction.build.simple({
+          sender: senderAddress,
+          data: {
+            function: "0x1::aptos_account::transfer_coins",
+            typeArguments: ["0x1::aptos_coin::AptosCoin"],
+            functionArguments: [toAddress, amountInSmallestUnit],
+          },
+        });
+      } else {
+        // Use coin::transfer for other tokens - requires CoinStore to be registered
+        rawTxn = await aptos.transaction.build.simple({
+          sender: senderAddress,
+          data: {
+            function: "0x1::coin::transfer",
+            typeArguments: [selectedToken.assetType],
+            functionArguments: [toAddress, amountInSmallestUnit],
+          },
+        });
+      }
 
       const txnObj = rawTxn as unknown as Record<
         string,
@@ -249,17 +264,26 @@ export const TransferForm: React.FC<TransferFormProps> = ({
       if (err instanceof Error) {
         errorMessage = err.message;
         
-        // Note: With aptos_account::transfer_coins, CoinStore registration should be automatic
-        // If we still get this error, it might be a network or account type issue
+        // Check for CoinStore errors
         if (
           err.message.includes("ECOIN_STORE_NOT_PUBLISHED") ||
           err.message.includes("CoinStore") ||
           err.message.includes("0x60005")
         ) {
-          errorMessage =
-            `Transfer failed: The recipient address ${toAddress.slice(0, 10)}...${toAddress.slice(-8)} may not support automatic CoinStore registration. ` +
-            `This can happen if the recipient is not a normal account type. ` +
-            `Please verify the recipient address is correct and is a standard Aptos account.`;
+          const isNativeMove = selectedToken.isNative || selectedToken.assetType === "0x1::aptos_coin::AptosCoin";
+          if (isNativeMove) {
+            // For native MOVE, this shouldn't happen with aptos_account::transfer_coins
+            errorMessage =
+              `Transfer failed: The recipient address ${toAddress.slice(0, 10)}...${toAddress.slice(-8)} may not support automatic CoinStore registration. ` +
+              `This can happen if the recipient is not a normal account type. ` +
+              `Please verify the recipient address is correct and is a standard Aptos account.`;
+          } else {
+            // For other tokens, recipient needs to register CoinStore first
+            errorMessage =
+              `The recipient address ${toAddress.slice(0, 10)}...${toAddress.slice(-8)} has not registered a CoinStore for this token. ` +
+              `The recipient needs to register their CoinStore before they can receive tokens. ` +
+              `Please ask the recipient to register their CoinStore first, or use a different recipient address.`;
+          }
         }
       }
       

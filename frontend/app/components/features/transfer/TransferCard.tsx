@@ -135,9 +135,9 @@ export const TransferCard: React.FC<TransferCardProps> = ({
       }
       const amountInOctas = Math.floor(parsedAmount * 100000000);
 
+      // TransferCard is used for native MOVE transfers
       // Use aptos_account::transfer_coins which automatically registers CoinStore
-      // This is the recommended approach as it handles CoinStore registration automatically
-      // and can even create the account if needed (for normal accounts)
+      // This is the recommended approach for native MOVE tokens
       const rawTxn = await aptos.transaction.build.simple({
         sender: senderAddress,
         data: {
@@ -200,7 +200,7 @@ export const TransferCard: React.FC<TransferCardProps> = ({
       if (err instanceof Error) {
         errorMessage = err.message;
         
-        // Note: With aptos_account::transfer_coins, CoinStore registration should be automatic
+        // Note: With aptos_account::transfer_coins for native MOVE, CoinStore registration should be automatic
         // If we still get this error, it might be a network or account type issue
         if (
           err.message.includes("ECOIN_STORE_NOT_PUBLISHED") ||
