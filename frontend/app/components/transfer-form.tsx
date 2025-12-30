@@ -193,6 +193,37 @@ export const TransferForm: React.FC<TransferFormProps> = ({
         parsedAmount * Math.pow(10, decimals)
       );
 
+      // Check if recipient has CoinStore registered for AptosCoin (for native MOVE transfers)
+      if (selectedToken.isNative || selectedToken.assetType === "0x1::aptos_coin::AptosCoin") {
+        try {
+          const accountResources = await aptos.account.getAccountResources({
+            accountAddress: toAddress,
+          });
+
+          const nativeCoinStoreType =
+            "0x1::coin::CoinStore<0x1::aptos_coin::AptosCoin>";
+          const coinStore = accountResources.find(
+            (resource) => resource.type === nativeCoinStoreType
+          );
+
+          if (!coinStore) {
+            throw new Error(
+              `Recipient address ${toAddress.slice(0, 10)}...${toAddress.slice(-8)} has not registered a CoinStore for AptosCoin. ` +
+              `The recipient needs to register their CoinStore before they can receive tokens. ` +
+              `Please ask the recipient to register their CoinStore first, or use a different recipient address.`
+            );
+          }
+        } catch (checkError: any) {
+          if (
+            checkError.message &&
+            checkError.message.includes("CoinStore")
+          ) {
+            throw checkError;
+          }
+          console.warn("Could not check coin store, proceeding with transfer:", checkError);
+        }
+      }
+
       const rawTxn = await aptos.transaction.build.simple({
         sender: senderAddress,
         data: {
@@ -241,10 +272,24 @@ export const TransferForm: React.FC<TransferFormProps> = ({
       onTransferComplete?.();
     } catch (err: unknown) {
       console.error("Transfer error:", err);
-      const errorMessage =
-        err instanceof Error
-          ? err.message
-          : "Transfer failed. Please try again.";
+      let errorMessage = "Transfer failed. Please try again.";
+      
+      if (err instanceof Error) {
+        errorMessage = err.message;
+        
+        // Check for specific coin store error
+        if (
+          err.message.includes("ECOIN_STORE_NOT_PUBLISHED") ||
+          err.message.includes("CoinStore") ||
+          err.message.includes("0x60005")
+        ) {
+          errorMessage =
+            `The recipient address has not registered a CoinStore for AptosCoin. ` +
+            `The recipient needs to register their CoinStore before they can receive tokens. ` +
+            `Please ask the recipient to register their CoinStore first, or use a different recipient address.`;
+        }
+      }
+      
       setTransferError(errorMessage);
     } finally {
       setTransferring(false);

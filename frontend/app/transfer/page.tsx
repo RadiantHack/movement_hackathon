@@ -176,6 +176,37 @@ export default function TransferPage() {
         selectedToken.isNative ||
         assetType === "0x1::aptos_coin::AptosCoin"
       ) {
+        // Check if recipient has CoinStore registered for AptosCoin
+        setStep("Checking recipient CoinStore...");
+        try {
+          const accountResources = await aptos.account.getAccountResources({
+            accountAddress: recipient,
+          });
+
+          const nativeCoinStoreType =
+            "0x1::coin::CoinStore<0x1::aptos_coin::AptosCoin>";
+          const coinStore = accountResources.find(
+            (resource) => resource.type === nativeCoinStoreType
+          );
+
+          if (!coinStore) {
+            throw new Error(
+              `Recipient address ${recipient.slice(0, 10)}...${recipient.slice(-8)} has not registered a CoinStore for AptosCoin. ` +
+              `The recipient needs to register their CoinStore before they can receive tokens. ` +
+              `Please ask the recipient to register their CoinStore first, or use a different recipient address.`
+            );
+          }
+        } catch (checkError: any) {
+          if (
+            checkError.message &&
+            checkError.message.includes("CoinStore")
+          ) {
+            throw checkError;
+          }
+          console.warn("Could not check coin store, proceeding with transfer:", checkError);
+        }
+
+        setStep("Building transaction...");
         rawTxn = await aptos.transaction.build.simple({
           sender: senderAddress,
           data: {
@@ -266,7 +297,21 @@ export default function TransferPage() {
       }
     } catch (err: any) {
       console.error("Transfer error:", err);
-      setError(err.message || "Transaction failed");
+      let errorMessage = err.message || "Transaction failed";
+      
+      // Check for specific coin store error
+      if (
+        err.message?.includes("ECOIN_STORE_NOT_PUBLISHED") ||
+        err.message?.includes("CoinStore") ||
+        err.message?.includes("0x60005")
+      ) {
+        errorMessage =
+          `The recipient address has not registered a CoinStore for AptosCoin. ` +
+          `The recipient needs to register their CoinStore before they can receive tokens. ` +
+          `Please ask the recipient to register their CoinStore first, or use a different recipient address.`;
+      }
+      
+      setError(errorMessage);
       setStep("");
     } finally {
       setSubmitting(false);
