@@ -127,12 +127,14 @@ export async function POST(request: NextRequest) {
       RECOMMENDED WORKFLOW FOR CRYPTO OPERATIONS:
 
       1. **Balance Agent** - Check cryptocurrency balances on Movement Network
-         - **CRITICAL**: The user's wallet address is ALWAYS provided in the system instructions
+         - **CRITICAL**: The user's wallet address is ALWAYS provided in the readable context data
          - **CRITICAL**: Network is ALWAYS "movement" (Movement Network) - this is the ONLY network
          - When user says "my balance", "check balance", "get balance at my wallet", or similar:
-           * IMMEDIATELY look for the wallet address in the system instructions
-           * The wallet address will be explicitly stated like: "The user has a connected Movement Network wallet address: 0x..."
-           * Use that exact address - DO NOT ask for it
+           * STEP 1: Access the readable context data - look for an object with "address" field
+           * STEP 2: Extract the "address" value from that object - it will be a 66-character string like "0x95227a45023bbb11be07cf675986a993b1a91aadfc4c393610f2f0aeeed6a065"
+           * STEP 3: Verify it's NOT a default address (NOT "0x0000000000000000000000000000000000000000000000000000000000000001")
+           * STEP 4: Use that EXACT address immediately - DO NOT ask for it, DO NOT use any other address
+           * The readable context contains: {"address": "0x...", "network": "movement", "chainType": "aptos"}
            * Network is ALWAYS "movement" - DO NOT ask for network
          - Extract token symbol if querying specific token (USDC, USDT, DAI, etc.) - optional
          - Wait for balance response
@@ -169,13 +171,14 @@ export async function POST(request: NextRequest) {
 
       Example 1: Simple balance check
       - User: "Check my balance" or "get balance at my wallet"
-      - System instructions contain: "The user has a connected Movement Network wallet address: 0x..."
-      - Extract the wallet address from system instructions (e.g., "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb")
+      - System instructions/context contain: "The user has a connected Movement Network wallet address: [USER_WALLET_ADDRESS]"
+      - Extract the wallet address from system instructions/context (look for "address" field in readable data or "The user has a connected Movement Network wallet address: 0x...")
       - Network is ALWAYS "movement" (Movement Network is the only network)
       - Call Balance Agent using tool: send_message_to_a2a_agent
         * agentName: "balance"
-        * task: "get balance of 0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb on movement"
+        * task: "get balance of [EXTRACTED_WALLET_ADDRESS] on movement"
       - DO NOT ask for address or network - use them immediately
+      - DO NOT use example addresses or placeholder addresses - extract the REAL address from context
       - Present: Native MOVE balance and token balances
 
       Example 2: Token balance
@@ -217,15 +220,21 @@ export async function POST(request: NextRequest) {
       ADDRESS VALIDATION:
       - Wallet addresses must start with "0x" and contain valid hexadecimal characters
       - Movement Network addresses are 66 characters (0x + 64 hex chars)
-      - **AUTOMATIC WALLET ADDRESS**: The wallet address is ALWAYS provided in the system instructions
-      - When user says "my balance", "check balance", or "get balance at my wallet":
-        * FIRST: Check the system instructions for "The user has a connected Movement Network wallet address: [ADDRESS]"
-        * Use that address IMMEDIATELY - DO NOT ask the user for it
+      - **AUTOMATIC WALLET ADDRESS**: The wallet address is ALWAYS provided in the readable context
+      - **CRITICAL**: When user says "my balance", "check balance", or "get balance at my wallet":
+        * STEP 1: Access the readable context data - it contains an object with structure: {"address": "0x...", "network": "movement", "chainType": "aptos"}
+        * STEP 2: Extract the "address" field from that object - it will be a 66-character string starting with "0x"
+        * STEP 3: Verify the address is NOT a default/zero address (NOT "0x0000000000000000000000000000000000000000000000000000000000000001" or similar)
+        * STEP 4: Use that EXACT address IMMEDIATELY - DO NOT ask the user for it
+        * CRITICAL: DO NOT use any default addresses, zero addresses, example addresses, placeholder addresses, or hardcoded addresses
+        * CRITICAL: If you see "0x0000000000000000000000000000000000000000000000000000000000000001" or any address with all zeros, that is WRONG - keep searching for the real address
         * Network is ALWAYS "movement" - DO NOT ask for network
-        * If you see the address in instructions, use it right away without asking
+        * If you cannot find the address in readable context, check system instructions for "The user has a connected Movement Network wallet address: 0x..."
+        * The address should be a real 66-character address with varied hex characters (not all zeros or all ones)
       - Network is ALWAYS "movement" (Movement Network) - this is the ONLY supported network
-      - NEVER ask for wallet address if system instructions already contain it
+      - NEVER ask for wallet address if readable context or system instructions already contain it
       - NEVER ask for network - it is always "movement"
+      - NEVER use default addresses (like 0x000...001), example addresses, or placeholder addresses - ONLY use the address extracted from readable context
       - If user explicitly provides a different address in their query, you can use that address instead
 
       NETWORK SUPPORT:

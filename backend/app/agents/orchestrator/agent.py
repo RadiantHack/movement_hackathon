@@ -247,7 +247,7 @@ orchestrator_agent = LlmAgent(
 
          * toAddress: The recipient address (66 characters, must start with 0x)
 
-       - Example: initiate_transfer(amount="1", token="MOVE", toAddress="0x5eab3cef1bd13a0f5fdc0dfc22e99a56df5360fd9b48c5dcc4467e3129907498")
+       - Example: initiate_transfer(amount="1", token="MOVE", toAddress="[RECIPIENT_ADDRESS]")
 
     4. **Transfer Card Display**:
 
@@ -259,9 +259,9 @@ orchestrator_agent = LlmAgent(
 
     **Transfer Query Examples**:
 
-    - "transfer 1 MOVE to 0x5eab3cef1bd13a0f5fdc0dfc22e99a56df5360fd9b48c5dcc4467e3129907498"
+    - "transfer 1 MOVE to [RECIPIENT_ADDRESS]"
 
-      → initiate_transfer(amount="1", token="MOVE", toAddress="0x5eab3cef1bd13a0f5fdc0dfc22e99a56df5360fd9b48c5dcc4467e3129907498")
+      → initiate_transfer(amount="1", token="MOVE", toAddress="[RECIPIENT_ADDRESS]")
 
     - "I want to transfer 100 USDC to this address: 0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb"
 
@@ -547,17 +547,25 @@ orchestrator_agent = LlmAgent(
 
     **CRITICAL - WALLET ADDRESS EXTRACTION**:
 
-    The user's wallet address is ALWAYS provided in the system instructions/context from the frontend.
+    The user's wallet address is ALWAYS provided in the system instructions/context from the frontend via CopilotKit's readable context.
 
     - **STEP 1**: When user says "my balance", "check balance", "get balance at my wallet", "get my wallet balance", or similar:
 
       * IMMEDIATELY search the system instructions/context for the wallet address
 
+      * The wallet address is provided in the readable context as a JSON object with structure:
+        {
+          "address": "0x...",
+          "network": "movement",
+          "chainType": "aptos"
+        }
+
       * Look for patterns like:
         - "The user has a connected Movement Network wallet address: 0x..."
         - "User's connected wallet address for Movement Network: 0x..."
         - "address\":\"0x...\" in JSON context
-        - Any 66-character address starting with "0x" in the system message
+        - Any 66-character address starting with "0x" in the system message or readable context
+        - Check the readable context data for an object with an "address" field
 
     - **STEP 2**: Extract the EXACT wallet address from the system instructions
 
@@ -572,15 +580,23 @@ orchestrator_agent = LlmAgent(
 
       * Copy the address EXACTLY as it appears - do NOT modify it, do NOT truncate it
 
-      * Example: If you see "0x5eab3cef1bd13a0f5fdc0dfc22e99a56df5360fd9b48c5dcc4467e3129907498", use that EXACT string
-
       * CRITICAL: The address must be the FULL 66 characters - do NOT use partial addresses
 
-    - **STEP 3**: Use the extracted address immediately
+      * CRITICAL: DO NOT use any hardcoded or example addresses - ONLY use the address from system instructions
+
+    - **STEP 3**: Validate and use the extracted address immediately
+
+      * CRITICAL: Verify the address is NOT a default/zero address
+        - DO NOT use "0x0000000000000000000000000000000000000000000000000000000000000001" or similar
+        - DO NOT use any address with all zeros or all ones
+        - The address must have varied hex characters (mix of 0-9, a-f)
+        - If you extract an address with all zeros/ones, that is WRONG - keep searching for the real address
 
       * DO NOT ask the user for the address - it's already provided
 
-      * DO NOT use any other address - use ONLY the one from system instructions
+      * DO NOT use any other address - use ONLY the one from system instructions/readable context
+
+      * DO NOT use example addresses, placeholder addresses, or default addresses - extract the REAL address from context
 
       * Network is ALWAYS "movement" - DO NOT ask for network
 
@@ -588,14 +604,16 @@ orchestrator_agent = LlmAgent(
 
     - **EXAMPLE**:
 
-      System instructions contain: "The user has a connected Movement Network wallet address: 0x5eab3cef1bd13a0f5fdc0dfc22e99a56df5360fd9b48c5dcc4467e3129907498"
+      System instructions contain: "The user has a connected Movement Network wallet address: [USER_WALLET_ADDRESS]"
 
       User says: "get my wallet balance"
 
       You MUST:
-      1. Extract: 0x5eab3cef1bd13a0f5fdc0dfc22e99a56df5360fd9b48c5dcc4467e3129907498
-      2. Call: send_message_to_a2a_agent(agentName="balance", task="get balance of 0x5eab3cef1bd13a0f5fdc0dfc22e99a56df5360fd9b48c5dcc4467e3129907498 on movement")
-      3. DO NOT use any other address
+      1. Extract the wallet address from system instructions (look for "The user has a connected Movement Network wallet address: 0x..." or check the context/readable data)
+      2. Use that EXACT extracted address (e.g., if you extract "0xABC123...", use "0xABC123..." exactly)
+      3. Call: send_message_to_a2a_agent(agentName="balance", task="get balance of [EXTRACTED_ADDRESS] on movement")
+      4. DO NOT use any hardcoded addresses, example addresses, or placeholder addresses
+      5. DO NOT use any other address - use ONLY the one extracted from system instructions
 
     TOKEN SUPPORT:
 
