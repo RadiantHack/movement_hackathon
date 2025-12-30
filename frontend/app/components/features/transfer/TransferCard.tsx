@@ -22,6 +22,7 @@ import {
   Ed25519Signature,
   generateSigningMessageForTransaction,
   ChainId,
+  AccountAddress,
 } from "@aptos-labs/ts-sdk";
 import { toHex } from "viem";
 import { useSignRawHash } from "@privy-io/react-auth/extended-chains";
@@ -135,15 +136,29 @@ export const TransferCard: React.FC<TransferCardProps> = ({
       }
       const amountInOctas = Math.floor(parsedAmount * 100000000);
 
-      // Build the raw transaction
-      const rawTxn = await aptos.transaction.build.simple({
-        sender: senderAddress,
-        data: {
-          function: "0x1::coin::transfer",
-          typeArguments: ["0x1::aptos_coin::AptosCoin"],
-          functionArguments: [toAddress, amountInOctas],
-        },
-      });
+      // Determine if this is native MOVE token
+      const isNativeMove = (tokenSymbol || token || "").toUpperCase() === "MOVE";
+      
+      let rawTxn;
+      if (isNativeMove) {
+        // For native MOVE tokens, use aptos_account::transfer_coins which automatically registers CoinStore
+        rawTxn = await aptos.transaction.build.simple({
+          sender: senderAddress,
+          data: {
+            function: "0x1::aptos_account::transfer_coins",
+            typeArguments: ["0x1::aptos_coin::AptosCoin"],
+            functionArguments: [toAddress, amountInOctas],
+          },
+        });
+      } else {
+        // For other tokens (fungible assets), we need the assetType (fungible asset metadata address)
+        // Since TransferData doesn't include assetType, we'll need to fetch it or handle it differently
+        // For now, throw an error asking for assetType
+        throw new Error(
+          `Transfer of ${tokenSymbol || token} requires assetType information. ` +
+          `Please use the transfer page for non-native tokens or provide assetType in TransferData.`
+        );
+      }
 
       // Override chain ID to match Movement Network testnet
       // Create a proper ChainId instance and replace the chain_id in rawTransaction
