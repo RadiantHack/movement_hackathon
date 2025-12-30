@@ -167,15 +167,13 @@ export default function TransferPage() {
       setStep("Building transaction...");
 
       const assetType = selectedToken.assetType.trim();
+      const isNativeMove = selectedToken.isNative || assetType === "0x1::aptos_coin::AptosCoin";
 
       let rawTxn;
 
-      // For native tokens, use aptos_account::transfer_coins which automatically registers CoinStore
+      // For native MOVE tokens, use aptos_account::transfer_coins which automatically registers CoinStore
       // For fungible assets, use primary_fungible_store::transfer
-      if (
-        selectedToken.isNative ||
-        assetType === "0x1::aptos_coin::AptosCoin"
-      ) {
+      if (isNativeMove) {
         setStep("Building transaction...");
         // Use aptos_account::transfer_coins which automatically registers CoinStore
         // This is the recommended approach as it handles CoinStore registration automatically
@@ -278,7 +276,7 @@ export default function TransferPage() {
         err.message?.includes("CoinStore") ||
         err.message?.includes("0x60005")
       ) {
-        const isNativeMove = selectedToken.isNative || assetType === "0x1::aptos_coin::AptosCoin";
+        const isNativeMove = selectedToken?.isNative || selectedToken?.assetType === "0x1::aptos_coin::AptosCoin";
         if (isNativeMove) {
           // For native MOVE, this shouldn't happen with aptos_account::transfer_coins
           errorMessage =
