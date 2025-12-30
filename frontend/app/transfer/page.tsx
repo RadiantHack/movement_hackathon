@@ -176,26 +176,106 @@ export default function TransferPage() {
         selectedToken.isNative ||
         assetType === "0x1::aptos_coin::AptosCoin"
       ) {
-        // Check if recipient has CoinStore registered for AptosCoin
-        // We'll try the transfer anyway - if CoinStore is not registered, it will fail with a clear error
+        // Step 1: Check if recipient has CoinStore registered for AptosCoin
         setStep("Checking recipient CoinStore...");
-        try {
-          const accountResources = await aptos.account.getAccountResources({
-            accountAddress: recipient,
-          });
+        let coinStoreRegistered = false;
+        if (
+          selectedToken.isNative ||
+          assetType === "0x1::aptos_coin::AptosCoin"
+        ) {
+          try {
+            const accountResources = await aptos.account.getAccountResources({
+              accountAddress: recipient,
+            });
 
-          const nativeCoinStoreType =
-            "0x1::coin::CoinStore<0x1::aptos_coin::AptosCoin>";
-          const coinStore = accountResources.find(
-            (resource) => resource.type === nativeCoinStoreType
-          );
+            const nativeCoinStoreType =
+              "0x1::coin::CoinStore<0x1::aptos_coin::AptosCoin>";
+            const coinStore = accountResources.find(
+              (resource) => resource.type === nativeCoinStoreType
+            );
 
-          if (!coinStore) {
-            console.log("CoinStore not registered for recipient. Will attempt transfer - if it fails, recipient needs to register first.");
+            coinStoreRegistered = !!coinStore;
+          } catch (checkError: any) {
+            console.warn("Could not check coin store:", checkError);
+            coinStoreRegistered = false;
           }
-        } catch (checkError: any) {
-          // If we can't check, proceed with transfer - it will fail with clear error if needed
-          console.warn("Could not check coin store, proceeding with transfer:", checkError);
+
+          // Step 2: If CoinStore is not registered, try to register it first (only if self-transfer)
+          if (!coinStoreRegistered) {
+            const isSelfTransfer = senderAddress.toLowerCase() === recipient.toLowerCase();
+            
+            if (isSelfTransfer) {
+              // Recipient is the same as sender - we can register for ourselves
+              try {
+                setStep("Registering CoinStore...");
+                console.log("CoinStore not registered. Registering for self-transfer...");
+                
+                const registerTxn = await aptos.transaction.build.simple({
+                  sender: senderAddress,
+                  data: {
+                    function: "0x1::coin::register",
+                    typeArguments: ["0x1::aptos_coin::AptosCoin"],
+                    functionArguments: [],
+                  },
+                });
+
+                const registerTxnObj = registerTxn as any;
+                if (registerTxnObj.rawTransaction) {
+                  registerTxnObj.rawTransaction.chain_id = new ChainId(MOVEMENT_CHAIN_ID);
+                }
+
+                setStep("Waiting for registration signature...");
+                const registerMessage = generateSigningMessageForTransaction(registerTxn);
+                const registerHash = toHex(registerMessage);
+
+                const registerSignature = await signRawHash({
+                  address: senderAddress,
+                  chainType: "aptos",
+                  hash: registerHash as `0x${string}`,
+                });
+
+                setStep("Submitting registration...");
+                let registerPubKeyNoScheme = publicKey.startsWith("0x")
+                  ? publicKey.slice(2)
+                  : publicKey;
+                if (registerPubKeyNoScheme.startsWith("00") && registerPubKeyNoScheme.length > 64) {
+                  registerPubKeyNoScheme = registerPubKeyNoScheme.slice(2);
+                }
+                if (registerPubKeyNoScheme.length !== 64) {
+                  throw new Error(
+                    `Invalid public key length: expected 64 hex characters (32 bytes), got ${registerPubKeyNoScheme.length}`
+                  );
+                }
+
+                const registerPublicKeyObj = new Ed25519PublicKey(`0x${registerPubKeyNoScheme}`);
+                const registerSig = new Ed25519Signature(registerSignature.signature.slice(2));
+                const registerAuthenticator = new AccountAuthenticatorEd25519(
+                  registerPublicKeyObj,
+                  registerSig
+                );
+
+                const registerPending = await aptos.transaction.submit.simple({
+                  transaction: registerTxn,
+                  senderAuthenticator: registerAuthenticator,
+                });
+
+                setStep("Waiting for registration confirmation...");
+                await aptos.waitForTransaction({
+                  transactionHash: registerPending.hash,
+                  options: { checkSuccess: true },
+                });
+
+                console.log("✅ CoinStore registered successfully:", registerPending.hash);
+                coinStoreRegistered = true;
+                setStep("CoinStore registered. Proceeding with transfer...");
+              } catch (registerError: any) {
+                console.error("Failed to register CoinStore:", registerError);
+                // Continue with transfer attempt - it will fail with clear error if needed
+              }
+            } else {
+              console.log("CoinStore not registered for recipient. Cannot register automatically (requires recipient's signature).");
+            }
+          }
         }
 
         setStep("Building transaction...");

@@ -193,8 +193,8 @@ export const TransferForm: React.FC<TransferFormProps> = ({
         parsedAmount * Math.pow(10, decimals)
       );
 
-      // Check if recipient has CoinStore registered for AptosCoin (for native MOVE transfers)
-      // We'll try the transfer anyway - if CoinStore is not registered, it will fail with a clear error
+      // Step 1: Check if recipient has CoinStore registered for AptosCoin (for native MOVE transfers)
+      let coinStoreRegistered = false;
       if (selectedToken.isNative || selectedToken.assetType === "0x1::aptos_coin::AptosCoin") {
         try {
           const accountResources = await aptos.account.getAccountResources({
@@ -207,12 +207,73 @@ export const TransferForm: React.FC<TransferFormProps> = ({
             (resource) => resource.type === nativeCoinStoreType
           );
 
-          if (!coinStore) {
-            console.log("CoinStore not registered for recipient. Will attempt transfer - if it fails, recipient needs to register first.");
-          }
+          coinStoreRegistered = !!coinStore;
         } catch (checkError: any) {
-          // If we can't check, proceed with transfer - it will fail with clear error if needed
-          console.warn("Could not check coin store, proceeding with transfer:", checkError);
+          console.warn("Could not check coin store:", checkError);
+          coinStoreRegistered = false;
+        }
+
+        // Step 2: If CoinStore is not registered, try to register it first (only if self-transfer)
+        if (!coinStoreRegistered) {
+          const isSelfTransfer = senderAddress.toLowerCase() === toAddress.toLowerCase();
+          
+          if (isSelfTransfer) {
+            // Recipient is the same as sender - we can register for ourselves
+            try {
+              console.log("CoinStore not registered. Registering for self-transfer...");
+              
+              const registerTxn = await aptos.transaction.build.simple({
+                sender: senderAddress,
+                data: {
+                  function: "0x1::coin::register",
+                  typeArguments: ["0x1::aptos_coin::AptosCoin"],
+                  functionArguments: [],
+                },
+              });
+
+              const registerTxnObj = registerTxn as unknown as Record<
+                string,
+                Record<string, unknown>
+              >;
+              if (registerTxnObj.rawTransaction) {
+                const chainIdObj = new ChainId(movementChainId);
+                (registerTxnObj.rawTransaction as Record<string, unknown>).chain_id =
+                  chainIdObj;
+              }
+
+              const registerMessage = generateSigningMessageForTransaction(registerTxn);
+              const registerHash = toHex(registerMessage);
+
+              const registerSignature = await signRawHash({
+                address: senderAddress,
+                chainType: "aptos",
+                hash: registerHash,
+              });
+
+              const registerPublicKey = new Ed25519PublicKey(`0x${pubKeyNoScheme}`);
+              const registerSig = new Ed25519Signature(registerSignature.signature.slice(2));
+              const registerAuthenticator = new AccountAuthenticatorEd25519(
+                registerPublicKey,
+                registerSig
+              );
+
+              const registerPending = await aptos.transaction.submit.simple({
+                transaction: registerTxn,
+                senderAuthenticator: registerAuthenticator,
+              });
+
+              await aptos.waitForTransaction({
+                transactionHash: registerPending.hash,
+              });
+
+              console.log("✅ CoinStore registered successfully:", registerPending.hash);
+              coinStoreRegistered = true;
+            } catch (registerError: any) {
+              console.error("Failed to register CoinStore:", registerError);
+            }
+          } else {
+            console.log("CoinStore not registered for recipient. Cannot register automatically (requires recipient's signature).");
+          }
         }
       }
 

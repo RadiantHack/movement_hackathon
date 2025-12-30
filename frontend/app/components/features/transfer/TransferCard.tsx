@@ -135,8 +135,7 @@ export const TransferCard: React.FC<TransferCardProps> = ({
       }
       const amountInOctas = Math.floor(parsedAmount * 100000000);
 
-      // Check if recipient has CoinStore registered for AptosCoin
-      // If not registered, we'll try the transfer anyway and handle the error
+      // Step 1: Check if recipient has CoinStore registered for AptosCoin
       let coinStoreRegistered = false;
       try {
         const accountResources = await aptos.account.getAccountResources({
@@ -150,19 +149,82 @@ export const TransferCard: React.FC<TransferCardProps> = ({
         );
 
         coinStoreRegistered = !!coinStore;
-        
-        if (!coinStoreRegistered) {
-          console.log("CoinStore not registered for recipient. Will attempt transfer - if it fails, recipient needs to register first.");
-        }
       } catch (checkError: any) {
-        // If account doesn't exist or other error, assume coin store is not registered
-        console.warn("Could not check coin store, proceeding with transfer:", checkError);
+        console.warn("Could not check coin store:", checkError);
         coinStoreRegistered = false;
       }
 
-      // Build the transfer transaction
-      // We'll try the transfer first - if CoinStore is not registered, it will fail
-      // and we'll provide helpful error message
+      // Step 2: If CoinStore is not registered, try to register it first
+      // Note: We can only register if recipient == sender (same wallet)
+      // If recipient is different, registration requires their signature (we can't do it)
+      if (!coinStoreRegistered) {
+        const isSelfTransfer = senderAddress.toLowerCase() === toAddress.toLowerCase();
+        
+        if (isSelfTransfer) {
+          // Recipient is the same as sender - we can register for ourselves
+          try {
+            console.log("CoinStore not registered. Registering for self-transfer...");
+            
+            // Build register transaction (sender registers their own CoinStore)
+            const registerTxn = await aptos.transaction.build.simple({
+              sender: senderAddress,
+              data: {
+                function: "0x1::coin::register",
+                typeArguments: ["0x1::aptos_coin::AptosCoin"],
+                functionArguments: [],
+              },
+            });
+
+            // Override chain ID
+            const registerTxnObj = registerTxn as unknown as Record<
+              string,
+              Record<string, unknown>
+            >;
+            if (registerTxnObj.rawTransaction) {
+              const chainIdObj = new ChainId(movementChainId);
+              (registerTxnObj.rawTransaction as Record<string, unknown>).chain_id =
+                chainIdObj;
+            }
+
+            // Sign and submit registration
+            const registerMessage = generateSigningMessageForTransaction(registerTxn);
+            const registerHash = toHex(registerMessage);
+
+            const registerSignature = await signRawHash({
+              address: senderAddress,
+              chainType: "aptos",
+              hash: registerHash,
+            });
+
+            const registerPublicKey = new Ed25519PublicKey(`0x${pubKeyNoScheme}`);
+            const registerSig = new Ed25519Signature(registerSignature.signature.slice(2));
+            const registerAuthenticator = new AccountAuthenticatorEd25519(
+              registerPublicKey,
+              registerSig
+            );
+
+            const registerPending = await aptos.transaction.submit.simple({
+              transaction: registerTxn,
+              senderAuthenticator: registerAuthenticator,
+            });
+
+            await aptos.waitForTransaction({
+              transactionHash: registerPending.hash,
+            });
+
+            console.log("✅ CoinStore registered successfully:", registerPending.hash);
+            coinStoreRegistered = true;
+          } catch (registerError: any) {
+            console.error("Failed to register CoinStore:", registerError);
+            // Continue with transfer attempt - it will fail with clear error if needed
+          }
+        } else {
+          // Recipient is different - we can't register for them (requires their signature)
+          console.log("CoinStore not registered for recipient. Cannot register automatically (requires recipient's signature). Proceeding with transfer attempt...");
+        }
+      }
+
+      // Step 3: Build and execute the transfer transaction
       const rawTxn = await aptos.transaction.build.simple({
         sender: senderAddress,
         data: {
