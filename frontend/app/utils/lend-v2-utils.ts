@@ -126,6 +126,62 @@ async function getPortfolioStateFromAPI(
   };
 }
 
+/**
+ * Check gas balance (MOVE/APT) before transaction
+ * Matches MovePosition's checkAPTBalance implementation
+ */
+async function checkGasBalance(
+  aptos: Aptos,
+  address: string,
+  onProgress?: (step: string) => void
+): Promise<void> {
+  if (onProgress) {
+    onProgress("Checking gas balance...");
+  }
+
+  try {
+    // MovePosition uses: '0x1::coin::CoinStore<0x1::aptos_coin::AptosCoin>'
+    const aptResource = "0x1::coin::CoinStore<0x1::aptos_coin::AptosCoin>";
+
+    // Get account resources (new Aptos SDK method)
+    const resources = await aptos.account.getAccountResources({
+      accountAddress: address,
+    });
+
+    // Find APT/MOVE coin store resource
+    const gasToken = resources.find((r) => r.type === aptResource);
+
+    if (!gasToken) {
+      throw new Error(
+        "No MOVE balance found. You need MOVE tokens for transaction fees. Please add MOVE to your wallet."
+      );
+    }
+
+    const gasBal = BigInt((gasToken.data as any)?.coin?.value || "0");
+    const hasGas = gasBal > BigInt(0);
+
+    if (!hasGas) {
+      throw new Error(
+        "Insufficient gas. You need MOVE tokens for transaction fees. Please add MOVE to your wallet."
+      );
+    }
+
+    console.log(`[GasCheck] ✅ Gas balance: ${gasBal.toString()} (${(Number(gasBal) / Math.pow(10, 8)).toFixed(6)} MOVE)`);
+  } catch (e: any) {
+    console.error("[GasCheck] Error checking gas balance:", e);
+    
+    // If it's our custom error, throw it as-is
+    if (e.message.includes("MOVE") || e.message.includes("gas")) {
+      throw e;
+    }
+    
+    // Otherwise, wrap in a user-friendly error
+    throw new Error(
+      `Failed to check gas balance: ${e.message || "Unknown error"}. Please ensure you have MOVE tokens in your wallet for transaction fees.`
+    );
+  }
+}
+
 export async function executeLendV2(params: LendV2Params): Promise<string> {
   const { amount, coinSymbol, walletAddress, publicKey, signHash, onProgress } =
     params;
@@ -141,6 +197,9 @@ export async function executeLendV2(params: LendV2Params): Promise<string> {
   const API_BASE = movementApiBase;
 
   const aptos = getAptosInstance();
+
+  // Check gas balance before proceeding (like MovePosition does)
+  await checkGasBalance(aptos, walletAddress, onProgress);
 
   const sdk = new superSDK.SuperpositionAptosSDK(MOVEPOSITION_ADDRESS);
   const superClient = new superJsonApiClient.SuperClient({
@@ -1174,6 +1233,9 @@ export async function executeRedeemV2(params: LendV2Params): Promise<string> {
   const API_BASE = movementApiBase;
 
   const aptos = getAptosInstance();
+
+  // Check gas balance before proceeding (like MovePosition does)
+  await checkGasBalance(aptos, walletAddress, onProgress);
 
   const coinType = getCoinType(coinSymbol);
   const brokerAddress = getBrokerAddress(coinType);
