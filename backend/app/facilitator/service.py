@@ -372,13 +372,39 @@ class FacilitatorService:
                 "paymentRequirements": payment_requirements,
             }
             
-            # Add logging for debugging
-            import logging
-            logger = logging.getLogger(__name__)
-            logger.info(f"[facilitator] Calling remote facilitator: {settle_url}")
-            logger.info(f"[facilitator] Request body keys: {list(request_body.keys())}")
-            logger.info(f"[facilitator] paymentPayload keys: {list(payment_payload.keys())}")
-            logger.info(f"[facilitator] paymentRequirements keys: {list(payment_requirements.keys())}")
+            # Print settlement details to terminal
+            print("\n" + "="*80)
+            print("[FACILITATOR] SETTLEMENT REQUEST")
+            print("="*80)
+            print(f"[FACILITATOR] Settle URL: {settle_url}")
+            print(f"[FACILITATOR] Facilitator URL base: {self.facilitator_url}")
+            print(f"[FACILITATOR] x402Version: {x402_version}")
+            print(f"[FACILITATOR] Request body keys: {list(request_body.keys())}")
+            print(f"[FACILITATOR] paymentPayload keys: {list(payment_payload.keys())}")
+            print(f"[FACILITATOR] paymentRequirements keys: {list(payment_requirements.keys())}")
+            print("\n[FACILITATOR] paymentRequirements:")
+            print(json.dumps(payment_requirements, indent=2))
+            
+            # Print full request body (truncate large base64 fields for readability)
+            request_body_log = {}
+            for key, value in request_body.items():
+                if key == "paymentPayload" and isinstance(value, dict):
+                    # Log payment payload structure but truncate base64 fields
+                    payload_log = {}
+                    for pk, pv in value.items():
+                        if isinstance(pv, str) and len(pv) > 100:
+                            payload_log[pk] = f"{pv[:50]}... (truncated, length: {len(pv)})"
+                        else:
+                            payload_log[pk] = pv
+                    request_body_log[key] = payload_log
+                elif isinstance(value, str) and len(value) > 200:
+                    request_body_log[key] = f"{value[:100]}... (truncated, length: {len(value)})"
+                else:
+                    request_body_log[key] = value
+            
+            print("\n[FACILITATOR] Full request body (truncated for readability):")
+            print(json.dumps(request_body_log, indent=2))
+            print("="*80 + "\n")
             
             # Call remote facilitator service
             response = requests.post(
@@ -388,8 +414,7 @@ class FacilitatorService:
                 timeout=30,
             )
             
-            logger.info(f"[facilitator] Response status: {response.status_code}")
-            logger.info(f"[facilitator] Response body: {response.text[:500]}")
+ 
             
             if response.status_code == 200:
                 result = response.json()
