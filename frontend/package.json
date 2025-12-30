@@ -9,6 +9,8 @@
     "start": "next start",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
+    "clean": "rm -rf .next public/sw.js public/sw.js.map public/swe-worker-*.js public/workbox-*.js public/workbox-*.js.map public/fallback-*.js public/fallback-*.js.map",
+    "clean:all": "rm -rf .next node_modules/.cache public/sw.js public/sw.js.map public/swe-worker-*.js public/workbox-*.js public/workbox-*.js.map public/fallback-*.js public/fallback-*.js.map",
     "moveposition:lend": "ts-node scripts/lend_v2.ts",
     "moveposition:borrow": "ts-node scripts/borrow_v2.ts",
     "moveposition:repay": "ts-node scripts/repay_v2.ts",

@@ -11,6 +11,8 @@ import {
   getCoinDecimals,
   convertAmountToRaw,
 } from "../../../utils/token-utils";
+import * as superJsonApiClient from "../../../../lib/super-json-api-client/src";
+import { getMovementApiBase } from "@/lib/super-aptos-sdk/src/globals";
 
 interface BorrowCardProps {
   walletAddress: string | null;
@@ -28,6 +30,40 @@ interface TokenBalance {
   isNative: boolean;
 }
 
+interface PortfolioResponse {
+  id: string;
+  collaterals: Array<{
+    instrument: {
+      network: string;
+      networkAddress: string;
+      name: string;
+      decimals: number;
+    };
+    amount: string;
+    scaledAmount: string;
+  }>;
+  liabilities: Array<{
+    instrument: {
+      network: string;
+      networkAddress: string;
+      name: string;
+      decimals: number;
+    };
+    amount: string;
+    scaledAmount: string;
+  }>;
+  risk: {
+    requiredEquity: number;
+  };
+  evaluation: {
+    mm: number;
+    health_ratio: number;
+    total_collateral: number;
+    total_liability: number;
+    ltv: number;
+  };
+}
+
 export const BorrowCard: React.FC<BorrowCardProps> = ({ walletAddress }) => {
   const { user, ready, authenticated } = usePrivy();
   const { signRawHash } = useSignRawHash();
@@ -41,6 +77,12 @@ export const BorrowCard: React.FC<BorrowCardProps> = ({ walletAddress }) => {
   const [loadingBalance, setLoadingBalance] = useState(false);
   const [showMore, setShowMore] = useState(false);
   const [submissionStep, setSubmissionStep] = useState<string>("");
+  const [portfolioData, setPortfolioData] = useState<PortfolioResponse | null>(
+    null
+  );
+  const [loadingPortfolio, setLoadingPortfolio] = useState(false);
+
+  const movementApiBase = getMovementApiBase();
 
   const movementWallet = useMemo(() => {
     if (!ready || !authenticated || !user?.linkedAccounts) {
@@ -54,10 +96,30 @@ export const BorrowCard: React.FC<BorrowCardProps> = ({ walletAddress }) => {
     );
   }, [user, ready, authenticated]);
 
+  // Calculate health factor matching MovePosition's implementation
+  // Health Factor = equity / minRequiredEquity
+  // equity = total_collateral - total_liability
+  const healthFactor = useMemo(() => {
+    if (!portfolioData?.evaluation) {
+      return null;
+    }
+    const totalCollateral = portfolioData.evaluation.total_collateral ?? 0;
+    const totalLiability = portfolioData.evaluation.total_liability ?? 0;
+    const equity = totalCollateral - totalLiability;
+    const minRequiredEquity =
+      portfolioData?.risk?.requiredEquity ?? portfolioData?.evaluation?.mm ?? 0;
+
+    if (minRequiredEquity <= 0) {
+      return null;
+    }
+
+    // Use health_ratio from API if available, otherwise calculate
+    return portfolioData.evaluation.health_ratio ?? equity / minRequiredEquity;
+  }, [portfolioData]);
+
   // Mock data - replace with actual API calls
   const borrowed = 0;
   const borrowAPY = 8.5;
-  const healthFactor = "N/A";
   const maxBorrow = 0;
   const walletBalance = balance ? parseFloat(balance) : 0;
 
@@ -115,6 +177,32 @@ export const BorrowCard: React.FC<BorrowCardProps> = ({ walletAddress }) => {
 
     fetchBalance();
   }, [walletAddress, token]);
+
+  // Fetch portfolio data to calculate health factor
+  useEffect(() => {
+    if (!walletAddress) {
+      setPortfolioData(null);
+      return;
+    }
+
+    const fetchPortfolio = async () => {
+      setLoadingPortfolio(true);
+      try {
+        const superClient = new superJsonApiClient.SuperClient({
+          BASE: movementApiBase,
+        });
+        const data = await superClient.default.getPortfolio(walletAddress);
+        setPortfolioData(data as unknown as PortfolioResponse);
+      } catch (error) {
+        console.error("Error fetching portfolio:", error);
+        setPortfolioData(null);
+      } finally {
+        setLoadingPortfolio(false);
+      }
+    };
+
+    fetchPortfolio();
+  }, [walletAddress, movementApiBase]);
 
   const handleAmountChange = (value: string) => {
     const numericValue = value.replace(/[^0-9.]/g, "");
@@ -474,8 +562,24 @@ export const BorrowCard: React.FC<BorrowCardProps> = ({ walletAddress }) => {
             <span className="text-sm text-zinc-600 dark:text-zinc-400">
               Health factor
             </span>
-            <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
-              {healthFactor}
+            <span
+              className={`text-sm font-medium ${
+                healthFactor
+                  ? healthFactor >= 1.2
+                    ? "text-green-600 dark:text-green-400"
+                    : healthFactor >= 1.0
+                      ? "text-yellow-600 dark:text-yellow-400"
+                      : "text-red-600 dark:text-red-400"
+                  : "text-zinc-700 dark:text-zinc-300"
+              }`}
+            >
+              {loadingPortfolio ? (
+                <span className="inline-block animate-pulse">Loading...</span>
+              ) : healthFactor ? (
+                `${healthFactor.toFixed(2)}x`
+              ) : (
+                "N/A"
+              )}
             </span>
           </div>
           {activeTab === "borrow" && (

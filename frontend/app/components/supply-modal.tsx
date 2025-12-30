@@ -9,6 +9,98 @@ import { getCoinDecimals, convertAmountToRaw } from "../utils/token-utils";
 import { executeLendV2, executeRedeemV2 } from "../utils/lend-v2-utils";
 import * as superJsonApiClient from "../../lib/super-json-api-client/src";
 import { getMovementApiBase } from "@/lib/super-aptos-sdk/src/globals";
+import { selectBroker, validateBroker } from "../utils/broker-selection";
+
+// Utility functions for formatting (matching MovePosition's format.ts)
+function prettyTokenBal(num: number): string {
+  if (num === 0) {
+    return "0";
+  } else if (num < 1) {
+    return num.toFixed(8).replace(/\.?0+$/, "");
+  } else if (num < 1000) {
+    return num.toFixed(4).replace(/\.?0+$/, "");
+  } else if (num < 1_000_000) {
+    return Math.floor(num).toString();
+  } else if (num < 1_000_000_000) {
+    return (num / 1_000_000).toFixed(1) + "M";
+  } else if (num < 1_000_000_000_000) {
+    return (num / 1_000_000_000).toFixed(1) + "B";
+  }
+  return num.toString();
+}
+
+function formatPercentage(num: number): string {
+  if (num === 0 || num < 0.0001) {
+    return "0%";
+  }
+  return (num * 100).toFixed(2) + "%";
+}
+
+// Calculate interest rate from utilization and interest rate curve (matching MovePosition's SDK)
+function getInterestRate(
+  utilization: number,
+  interestRateCurve: {
+    u1: number;
+    u2: number;
+    r0: number;
+    r1: number;
+    r2: number;
+    r3: number;
+  }
+): number {
+  if (utilization === 0) {
+    return interestRateCurve.r0;
+  }
+
+  const u1 = interestRateCurve.u1;
+  const u2 = interestRateCurve.u2;
+
+  if (utilization < u1) {
+    return interpolate(
+      utilization,
+      0,
+      u1,
+      interestRateCurve.r0,
+      interestRateCurve.r1
+    );
+  } else if (utilization < u2) {
+    return interpolate(
+      utilization,
+      u1,
+      u2,
+      interestRateCurve.r1,
+      interestRateCurve.r2
+    );
+  } else {
+    return interpolate(
+      utilization,
+      u2,
+      1,
+      interestRateCurve.r2,
+      interestRateCurve.r3
+    );
+  }
+}
+
+function interpolate(
+  x: number,
+  x0: number,
+  x1: number,
+  y0: number,
+  y1: number
+): number {
+  if (x1 === x0) return y0;
+  return y0 + ((x - x0) / (x1 - x0)) * (y1 - y0);
+}
+
+// Calculate lending rate (matching MovePosition's calcLendRate)
+function calcLendRate(
+  borrowRate: number,
+  interestFeeRate: number,
+  utilization: number
+): number {
+  return borrowRate * (1 - interestFeeRate) * utilization;
+}
 
 interface SupplyModalProps {
   isOpen: boolean;
@@ -103,6 +195,8 @@ export function SupplyModal({
     null
   );
   const [brokerData, setBrokerData] = useState<any[]>([]);
+  const [selectedBroker, setSelectedBroker] =
+    useState<superJsonApiClient.Broker | null>(null);
   const [simulatedRiskData, setSimulatedRiskData] = useState<any | null>(null);
   const [loadingSimulation, setLoadingSimulation] = useState(false);
   const [loadingPortfolio, setLoadingPortfolio] = useState(false);
@@ -212,10 +306,12 @@ export function SupplyModal({
     fetchBalance();
   }, [walletAddress, asset?.symbol, isOpen]);
 
-  // Fetch portfolio data for risk simulation
+  // Fetch portfolio data for risk simulation and select broker
   useEffect(() => {
-    if (!walletAddress || !isOpen) {
+    if (!walletAddress || !isOpen || !asset) {
       setPortfolioData(null);
+      setBrokerData([]);
+      setSelectedBroker(null);
       return;
     }
 
@@ -229,19 +325,44 @@ export function SupplyModal({
           superClient.default.getPortfolio(walletAddress),
           superClient.default.getBrokers(),
         ]);
+
         setPortfolioData(portfolioRes as unknown as PortfolioResponse);
         setBrokerData(brokersRes as unknown as any[]);
+
+        // Select broker using robust selection logic (matching MovePosition)
+        const broker = selectBroker({
+          symbol: asset.symbol,
+          brokers: brokersRes as unknown as superJsonApiClient.Broker[],
+          walletAddress,
+          preferFungibleAsset: true,
+        });
+
+        if (validateBroker(broker)) {
+          setSelectedBroker(broker);
+          console.log("[SupplyModal] Selected broker:", {
+            name: broker.underlyingAsset.name,
+            networkAddress: broker.underlyingAsset.networkAddress,
+            symbol: asset.symbol,
+          });
+        } else {
+          console.warn(
+            "[SupplyModal] Failed to select valid broker for symbol:",
+            asset.symbol
+          );
+          setSelectedBroker(null);
+        }
       } catch (error) {
         console.error("Error fetching portfolio/brokers:", error);
         setPortfolioData(null);
         setBrokerData([]);
+        setSelectedBroker(null);
       } finally {
         setLoadingPortfolio(false);
       }
     };
 
     fetchPortfolioAndBrokers();
-  }, [walletAddress, isOpen, movementApiBase]);
+  }, [walletAddress, isOpen, movementApiBase, asset?.symbol]);
 
   const handleAmountChange = (value: string) => {
     const numericValue = value.replace(/[^0-9.]/g, "");
@@ -256,12 +377,14 @@ export function SupplyModal({
   /**
    * Get user's current supplied amount from portfolio data
    * Formula: scaledAmount × depositNoteExchangeRate
+   * Uses selectedBroker for more reliable matching
    */
   const userSuppliedAmount = useMemo(() => {
-    if (!portfolioData || !asset) return 0;
+    if (!portfolioData || !asset || !selectedBroker) return 0;
 
-    const brokerName = getBrokerName(asset.symbol);
-    const depositNoteName = `${brokerName}-super-aptos-deposit-note`;
+    // Use selectedBroker's depositNote name for matching
+    const depositNoteName = selectedBroker.depositNote?.name;
+    if (!depositNoteName) return 0;
 
     const collateral = portfolioData.collaterals.find(
       (c) => c.instrument.name === depositNoteName
@@ -269,25 +392,60 @@ export function SupplyModal({
 
     if (!collateral) return 0;
 
-    // Get deposit note exchange rate from broker data
-    const broker = brokerData.find(
-      (b: any) => b.depositNote?.name === depositNoteName
-    );
-    const exchangeRate = broker?.depositNoteExchangeRate || 1;
+    // Get deposit note exchange rate from selected broker
+    const exchangeRate = selectedBroker.depositNoteExchangeRate || 1;
 
     // scaledAmount × depositNoteExchangeRate = actual underlying amount
     return parseFloat(collateral.scaledAmount) * exchangeRate;
-  }, [portfolioData, asset, brokerData]);
+  }, [portfolioData, asset, selectedBroker]);
 
   /**
    * Get current health factor from portfolio data
+   * Matching MovePosition's selectHealthFactor and calcHealthFactor logic
+   * Formula: equity / minRequiredEquity
+   * where equity = total_collateral - total_liability
+   * and minRequiredEquity = mm (from evaluation) or requiredEquity (from risk)
    */
   const currentHealthFactor = useMemo(() => {
-    if (portfolioData?.evaluation?.health_ratio) {
+    // If portfolio not loaded, return null (will show N/A)
+    if (!portfolioData) {
+      return null;
+    }
+
+    // Calculate equity = total_collateral - total_liability (matching MovePosition)
+    const totalCollateral = portfolioData.evaluation?.total_collateral ?? 0;
+    const totalLiability = portfolioData.evaluation?.total_liability ?? 0;
+    const equity = totalCollateral - totalLiability;
+
+    // Get minRequiredEquity from mm (evaluation) or requiredEquity (risk)
+    // Matching MovePosition's calcHealthFactor: minReq = simRisk.mm
+    const minRequiredEquity =
+      portfolioData.evaluation?.mm ?? portfolioData.risk?.requiredEquity ?? 0;
+
+    // If no required equity, can't calculate health factor
+    if (minRequiredEquity <= 0) {
+      return null;
+    }
+
+    // Calculate health factor: equity / minRequiredEquity
+    const calculatedHF = equity / minRequiredEquity;
+
+    // If health factor is invalid, return null
+    if (calculatedHF <= 0 || !isFinite(calculatedHF)) {
+      return null;
+    }
+
+    // Prefer API health_ratio if available and valid, otherwise use calculated
+    if (
+      portfolioData.evaluation?.health_ratio &&
+      portfolioData.evaluation.health_ratio > 0 &&
+      isFinite(portfolioData.evaluation.health_ratio)
+    ) {
       return portfolioData.evaluation.health_ratio;
     }
-    return healthFactor;
-  }, [portfolioData, healthFactor]);
+
+    return calculatedHF;
+  }, [portfolioData]);
 
   /**
    * Build next portfolio state for risk simulation API
@@ -302,11 +460,11 @@ export function SupplyModal({
     const decimals = getCoinDecimals(asset.symbol);
     const amountInSmallestUnit = convertAmountToRaw(amount, decimals);
 
-    // Find the collateral instrument for this asset
-    // The instrument name format is like "movement-move-fa-super-aptos-deposit-note"
-    // This matches the format from the portfolio API response
-    const brokerName = getBrokerName(asset.symbol);
-    const depositNoteName = `${brokerName}-super-aptos-deposit-note`;
+    // Use selectedBroker's depositNote name for matching (more reliable)
+    if (!selectedBroker?.depositNote?.name) {
+      return null;
+    }
+    const depositNoteName = selectedBroker.depositNote.name;
 
     // Build collaterals - update the matching collateral
     const collaterals = portfolioData.collaterals
@@ -409,36 +567,354 @@ export function SupplyModal({
 
   /**
    * Handle Max button click - works for both Supply and Withdraw tabs
+   * Matching MovePosition's setMax logic
    */
   const handleMax = () => {
     if (activeTab === "supply") {
-      // For supply: use wallet balance
-      if (balance && parseFloat(balance) > 0) {
+      // For supply: use min of wallet balance and available deposit space
+      // Matching MovePosition's walletBalanceOrDepositDiffLessShaved
+      if (maxDepositableAmount !== null && maxDepositableAmount > 0) {
+        // Floor to 8 decimals like MovePosition
+        const floored = Math.floor(maxDepositableAmount * 1e8) / 1e8;
+        setAmount(floored.toFixed(6));
+      } else if (balance && parseFloat(balance) > 0) {
+        // Fallback to wallet balance if maxDepositableAmount not calculated
         setAmount(balance);
       }
     } else {
-      // For withdraw: use supplied amount (max withdrawable)
-      if (userSuppliedAmount > 0) {
-        // Format to avoid floating point issues
-        setAmount(userSuppliedAmount.toFixed(6));
+      // For withdraw: use max withdrawable (min of supplied amount and available liquidity)
+      // Matching MovePosition's maxWithdrawUnderlyingUserShaved
+      if (maxWithdrawableAmount > 0) {
+        // Format to avoid floating point issues, floor to 8 decimals like MovePosition
+        const floored = Math.floor(maxWithdrawableAmount * 1e8) / 1e8;
+        setAmount(floored.toFixed(6));
       }
     }
   };
 
   const usdValue = amount && asset ? parseFloat(amount) * asset.price : 0;
 
+  // Calculate max withdrawable amount (matching MovePosition's maxWithdrawUnderlyingUser)
+  // Max withdraw = min(userSuppliedAmount, availableLiquidity)
+  // Uses selectedBroker for more reliable matching
+  const maxWithdrawableAmount = useMemo(() => {
+    if (activeTab !== "withdraw" || !selectedBroker) return 0;
+
+    // Available liquidity is already in scaled (normalized) format
+    const availableLiquidity = parseFloat(
+      selectedBroker.scaledAvailableLiquidityUnderlying || "0"
+    );
+
+    // Return minimum of user's supplied amount and available liquidity
+    return Math.min(userSuppliedAmount, availableLiquidity);
+  }, [activeTab, selectedBroker, userSuppliedAmount]);
+
+  // Calculate max depositable amount (matching MovePosition's walletBalanceOrDepositDiffLess)
+  // Max deposit = min(walletBalance, depositDiffToBrokerLimit)
+  // Uses selectedBroker for more reliable matching
+  const maxDepositableAmount = useMemo(() => {
+    if (activeTab !== "supply" || !selectedBroker) return null;
+
+    // Use Number() like MovePosition does (line 250)
+    const maxDepositScaled = Number(selectedBroker.maxDepositScaled || "0");
+    const scaledTotalBorrowed = Number(
+      selectedBroker.scaledTotalBorrowedUnderlying || "0"
+    );
+    const scaledAvailableLiquidity = Number(
+      selectedBroker.scaledAvailableLiquidityUnderlying || "0"
+    );
+    const brokerTotal = scaledTotalBorrowed + scaledAvailableLiquidity;
+    const depositDiffToBrokerLimit = maxDepositScaled - brokerTotal;
+
+    // Pool is full if depositDiffToBrokerLimit <= 0
+    if (depositDiffToBrokerLimit <= 0) {
+      return 0; // Pool is full
+    }
+
+    const walletBalance = balance ? parseFloat(balance) : 0;
+
+    // Return minimum of wallet balance and available deposit space
+    return Math.min(walletBalance, depositDiffToBrokerLimit);
+  }, [activeTab, selectedBroker, balance]);
+
+  // Calculate next total supplied (matching MovePosition's nextTotalSupplied calculation)
+  // nextTotalSupplied = nextAvailable + nextTotalBorrowed
+  // This is used to check overBrokerDepositLimit
+  const nextTotalSupplied = useMemo(() => {
+    if (!selectedBroker || !amount || parseFloat(amount) <= 0) return null;
+
+    const amountNum = parseFloat(amount);
+    const scaledTotalBorrowed = Number(
+      selectedBroker.scaledTotalBorrowedUnderlying || "0"
+    );
+    const scaledAvailableLiquidity = Number(
+      selectedBroker.scaledAvailableLiquidityUnderlying || "0"
+    );
+
+    if (activeTab === "supply") {
+      // For supply: available increases, total supplied increases
+      const nextAvailable = scaledAvailableLiquidity + amountNum;
+      const nextTotalSupplied = nextAvailable + scaledTotalBorrowed;
+      return nextTotalSupplied;
+    } else if (activeTab === "withdraw") {
+      // For withdraw: available decreases, total supplied decreases
+      const nextAvailable = Math.max(0, scaledAvailableLiquidity - amountNum);
+      const nextTotalSupplied = nextAvailable + scaledTotalBorrowed;
+      return nextTotalSupplied;
+    }
+
+    return null;
+  }, [selectedBroker, amount, activeTab]);
+
+  // Check overBrokerDepositLimit (matching MovePosition's line 254)
+  // overBrokerDepositLimit = nextTotalSupplied > maxSupplyBroker
+  const overBrokerDepositLimit = useMemo(() => {
+    if (activeTab !== "supply" || !selectedBroker || !nextTotalSupplied)
+      return false;
+
+    const maxSupplyBroker = Number(selectedBroker.maxDepositScaled || "0");
+    return nextTotalSupplied > maxSupplyBroker;
+  }, [activeTab, selectedBroker, nextTotalSupplied]);
+
+  // Check poolIsFull (matching MovePosition's line 257)
+  const poolIsFull = useMemo(() => {
+    if (activeTab !== "supply" || !selectedBroker) return false;
+
+    const maxDepositScaled = Number(selectedBroker.maxDepositScaled || "0");
+    const scaledTotalBorrowed = Number(
+      selectedBroker.scaledTotalBorrowedUnderlying || "0"
+    );
+    const scaledAvailableLiquidity = Number(
+      selectedBroker.scaledAvailableLiquidityUnderlying || "0"
+    );
+    const brokerTotal = scaledTotalBorrowed + scaledAvailableLiquidity;
+    const depositDiffToBrokerLimit = maxDepositScaled - brokerTotal;
+
+    return depositDiffToBrokerLimit <= 0;
+  }, [activeTab, selectedBroker]);
+
+  // Check if amount exceeds limits (matching MovePosition's overLimit logic)
+  // For DEPOSIT_TAB: over = over || poolIsFull || overBrokerDepositLimit (line 350)
+  const isOverLimit = useMemo(() => {
+    if (!amount || parseFloat(amount) <= 0) return false;
+
+    const amountNum = parseFloat(amount);
+
+    if (activeTab === "supply") {
+      // For supply: check wallet balance and deposit limit
+      const overWalletBalance = balance
+        ? amountNum > parseFloat(balance)
+        : true;
+
+      // Check deposit limit (matching MovePosition's overLimit logic line 350)
+      // isOver = over || poolIsFull || overBrokerDepositLimit
+      return overWalletBalance || poolIsFull || overBrokerDepositLimit;
+    } else {
+      // For withdraw: check against max withdrawable
+      return amountNum > maxWithdrawableAmount;
+    }
+  }, [
+    amount,
+    activeTab,
+    balance,
+    maxWithdrawableAmount,
+    poolIsFull,
+    overBrokerDepositLimit,
+  ]);
+
+  // Get error message for over limit (matching MovePosition's overLimitInfoBox line 409)
+  const overLimitErrorMessage = useMemo(() => {
+    if (!isOverLimit || activeTab !== "supply") return null;
+
+    if (poolIsFull) {
+      return `${asset?.symbol || "Token"} pool is full. Pool limits are set by the broker and can be adjusted. They are in place to protect the health of the pool and the safety of the users.`;
+    }
+    if (overBrokerDepositLimit) {
+      return `Amount exceeds max deposit value set for ${asset?.symbol || "token"} by broker`;
+    }
+    if (balance && parseFloat(amount) > parseFloat(balance)) {
+      return `Amount exceeds wallet balance of ${asset?.symbol || "token"}`;
+    }
+
+    return null;
+  }, [
+    isOverLimit,
+    activeTab,
+    poolIsFull,
+    overBrokerDepositLimit,
+    asset,
+    balance,
+    amount,
+  ]);
+
+  // Check health factor simulation (matching MovePosition's simHealthRed)
+  const simHealthRed = useMemo(() => {
+    if (!simulatedRiskData?.health_ratio) return false;
+    const simHealthFactor = simulatedRiskData.health_ratio;
+    // Red zone: health factor <= 1.2 (matching MovePosition's isRedZone)
+    return simHealthFactor <= 1.2;
+  }, [simulatedRiskData]);
+
+  // Check if user would become unhealthy (health factor <= 1.0)
+  const isSimUnhealthy = useMemo(() => {
+    if (!simulatedRiskData?.health_ratio) return false;
+    return simulatedRiskData.health_ratio <= 1.0;
+  }, [simulatedRiskData]);
+
+  // Calculate Supply APY (current and next) matching MovePosition's logic
+  // Uses selectedBroker for more reliable matching
+  // Uses Number() like MovePosition does (line 224-225)
+  const supplyAPY = useMemo(() => {
+    if (!selectedBroker || !asset) return { current: 0, next: null };
+
+    const broker = selectedBroker;
+
+    if (!broker.interestRateCurve)
+      return { current: asset.supplyApy / 100, next: null };
+
+    // Current utilization and rates (matching MovePosition's calcUtil line 60-65)
+    // Use Number() like MovePosition does (line 224-225)
+    const totalAvailable = Number(
+      broker.scaledAvailableLiquidityUnderlying || "0"
+    );
+    const totalLoaned = Number(broker.scaledTotalBorrowedUnderlying || "0");
+    const totalSupplied = totalAvailable + totalLoaned;
+    const utilization = totalSupplied > 0 ? totalLoaned / totalSupplied : 0;
+
+    // Current borrow interest rate from curve
+    const currentBorrowInterestRate = getInterestRate(
+      utilization,
+      broker.interestRateCurve
+    );
+    const stabilityFeeRate = 0.0015; // 0.15%
+    const currentBorrowAPR = currentBorrowInterestRate + stabilityFeeRate;
+
+    // Current Supply APY = calcLendRate(borrowInterestRate, interestFeeRate, utilization)
+    // Note: MovePosition uses broker.interestRate (which is already calculated) for current
+    // But for next, they recalculate from the curve
+    const currentSupplyAPY = calcLendRate(
+      broker.interestRate || currentBorrowInterestRate,
+      broker.interestFeeRate || 0.22,
+      utilization
+    );
+
+    // Calculate next values if amount is entered
+    const hasInput = amount && parseFloat(amount) > 0;
+    let nextSupplyAPY: number | null = null;
+
+    if (hasInput) {
+      let nextAvailable = totalAvailable;
+      let nextTotalLoaned = totalLoaned;
+      let nextTotalSupplied = totalSupplied;
+
+      if (activeTab === "supply") {
+        // For supply: available increases, total supplied increases
+        nextAvailable = totalAvailable + parseFloat(amount);
+        nextTotalSupplied = totalSupplied + parseFloat(amount);
+      } else if (activeTab === "withdraw") {
+        // For withdraw: available decreases, total supplied decreases
+        nextAvailable = Math.max(0, totalAvailable - parseFloat(amount));
+        nextTotalSupplied = Math.max(0, totalSupplied - parseFloat(amount));
+      }
+
+      const nextUtilization =
+        nextTotalSupplied > 0 ? nextTotalLoaned / nextTotalSupplied : 0;
+
+      // Next borrow interest rate from curve
+      const nextBorrowInterestRate = getInterestRate(
+        nextUtilization,
+        broker.interestRateCurve
+      );
+      const nextBorrowAPR = nextBorrowInterestRate + stabilityFeeRate;
+
+      // Next Supply APY
+      nextSupplyAPY = calcLendRate(
+        nextBorrowAPR,
+        broker.interestFeeRate || 0.22,
+        nextUtilization
+      );
+    }
+
+    return {
+      current: currentSupplyAPY,
+      next: hasInput ? nextSupplyAPY : null,
+    };
+  }, [selectedBroker, asset, amount, activeTab]);
+
+  // Calculate broker stats (matching MovePosition's brokerStats)
+  // Uses selectedBroker for more reliable matching
+  // Uses Number() like MovePosition does (line 224-225)
+  const brokerStats = useMemo(() => {
+    if (!selectedBroker || !asset) return null;
+
+    const broker = selectedBroker;
+
+    // Use Number() like MovePosition does (line 224-225)
+    const totalAvailable = Number(
+      broker.scaledAvailableLiquidityUnderlying || "0"
+    );
+    const totalLoaned = Number(broker.scaledTotalBorrowedUnderlying || "0");
+    const totalSupplied = totalAvailable + totalLoaned;
+    const poolMaxLimit = Number(broker.maxDepositScaled || "0");
+    // Calculate utilization matching MovePosition's calcUtil (line 60-65)
+    const utilization = totalSupplied > 0 ? totalLoaned / totalSupplied : 0;
+
+    // Calculate next values if amount is entered
+    const hasInput = amount && parseFloat(amount) > 0;
+    const inputAmount = hasInput ? parseFloat(amount) : 0;
+
+    let nextAvailable = totalAvailable;
+    let nextTotalLoaned = totalLoaned;
+    let nextTotalSupplied = totalSupplied;
+    let nextUtilization = utilization;
+
+    if (hasInput && activeTab === "supply") {
+      // For supply: available increases, total supplied increases
+      nextAvailable = totalAvailable + inputAmount;
+      nextTotalSupplied = totalSupplied + inputAmount;
+      nextUtilization =
+        nextTotalSupplied > 0 ? nextTotalLoaned / nextTotalSupplied : 0;
+    } else if (hasInput && activeTab === "withdraw") {
+      // For withdraw: available decreases, total supplied decreases
+      nextAvailable = Math.max(0, totalAvailable - inputAmount);
+      nextTotalSupplied = Math.max(0, totalSupplied - inputAmount);
+      nextUtilization =
+        nextTotalSupplied > 0 ? nextTotalLoaned / nextTotalSupplied : 0;
+    }
+
+    return {
+      totalAvailable,
+      totalLoaned,
+      totalSupplied,
+      poolMaxLimit,
+      utilization,
+      nextAvailable: hasInput ? nextAvailable : null,
+      nextTotalLoaned: hasInput ? nextTotalLoaned : null,
+      nextTotalSupplied: hasInput ? nextTotalSupplied : null,
+      nextUtilization: hasInput ? nextUtilization : null,
+    };
+  }, [selectedBroker, asset, amount, activeTab]);
+
+  // Zero input check (matching MovePosition's zeroInput)
+  const zeroInput = !amount || parseFloat(amount) <= 0;
+
+  // Final canReview logic matching MovePosition's disabledForm
+  // disabledForm = !isLoadedUser || overLimit() || zeroInput || isSimulatedLoading
+  // For WITHDRAW: overLimit = over || simHealthRed || isLTVWarning
   const canReview =
     ready &&
     authenticated &&
     movementWallet &&
     walletAddress &&
-    amount &&
-    parseFloat(amount) > 0 &&
     !submitting &&
     asset &&
+    !loadingPortfolio && // isLoadedUser equivalent
+    !zeroInput &&
+    !loadingSimulation && // isSimulatedLoading equivalent
+    !isOverLimit &&
     (activeTab === "supply"
-      ? balance && parseFloat(amount) <= parseFloat(balance)
-      : userSuppliedAmount > 0 && parseFloat(amount) <= userSuppliedAmount);
+      ? true // Supply doesn't check health factor
+      : !simHealthRed); // Withdraw: disable if health would be in red zone
 
   /**
    * Calculate simulated risk/health factor after supply transaction
@@ -463,12 +939,29 @@ export function SupplyModal({
     let calculationSteps: string[];
 
     if (simulatedRiskData) {
-      // Use API response
-      newEquity =
-        simulatedRiskData.total_collateral || currentEquity + supplyAmountUSD;
-      newRequiredEquity =
-        simulatedRiskData.requiredEquity || currentRequiredEquity;
-      newHealthFactor = simulatedRiskData.health_ratio || null;
+      // Use API response - matching MovePosition's calcHealthFactor
+      // Formula: equity / minRequiredEquity
+      // where equity = total_collateral - total_liability
+      // and minRequiredEquity = mm (from evaluation)
+      const simTotalCollateral =
+        simulatedRiskData.total_collateral ?? currentEquity + supplyAmountUSD;
+      const simTotalLiability =
+        simulatedRiskData.total_liability ?? currentDebt;
+      const simEquity = simTotalCollateral - simTotalLiability;
+      const simMinRequiredEquity =
+        simulatedRiskData.mm ??
+        simulatedRiskData.requiredEquity ??
+        currentRequiredEquity;
+
+      // Calculate health factor from simulated data (matching MovePosition's calcHealthFactor)
+      if (simMinRequiredEquity > 0) {
+        newHealthFactor = simEquity / simMinRequiredEquity;
+      } else {
+        newHealthFactor = simulatedRiskData.health_ratio || null;
+      }
+
+      newEquity = simEquity;
+      newRequiredEquity = simMinRequiredEquity;
 
       calculationSteps = [
         `Current Equity: $${currentEquity.toFixed(2)}`,
@@ -540,11 +1033,29 @@ export function SupplyModal({
     };
   }, [portfolioData, amount, asset, simulatedRiskData]);
 
+  // Format health factor matching MovePosition's formatHealthFactor
+  // Returns 'N/A' if <= 0, 'MAX' if >= 135, otherwise compactNum + 'x'
+  const formatHealthFactor = (hf: number | null | undefined): string => {
+    if (!hf || hf <= 0) return "N/A";
+    if (hf >= 135) return "MAX";
+    // Use compact notation for large numbers, otherwise show 2 decimals
+    if (hf >= 100) {
+      return `${Math.floor(hf)}x`;
+    } else if (hf >= 10) {
+      return `${hf.toFixed(1)}x`;
+    } else {
+      return `${hf.toFixed(2)}x`;
+    }
+  };
+
   // Use simulated health factor from API if available, otherwise fallback to current
+  // Only show simulated when there's an amount input (matching MovePosition's logic)
   const displayHealthFactor =
-    simulatedRiskData?.health_ratio ??
-    getRiskSimulated?.newHealthFactor ??
-    currentHealthFactor;
+    amount && parseFloat(amount) > 0
+      ? (simulatedRiskData?.health_ratio ??
+        getRiskSimulated?.newHealthFactor ??
+        currentHealthFactor)
+      : null; // Don't show simulated when no input
 
   /**
    * Check if Max button should be shown
@@ -576,18 +1087,58 @@ export function SupplyModal({
       return;
     }
 
-    if (
-      activeTab === "supply" &&
-      balance &&
-      parseFloat(amount) > parseFloat(balance)
-    ) {
-      setSubmitError("Insufficient balance");
-      return;
+    if (activeTab === "supply") {
+      if (balance && parseFloat(amount) > parseFloat(balance)) {
+        setSubmitError("Insufficient balance");
+        return;
+      }
+
+      // Check deposit limits before submission (matching MovePosition's validation)
+      if (overBrokerDepositLimit) {
+        setSubmitError(
+          `Amount exceeds max deposit value set for ${asset.symbol} by broker`
+        );
+        return;
+      }
+
+      if (poolIsFull) {
+        setSubmitError(
+          `${asset.symbol} pool is full. Pool limits are set by the broker and can be adjusted.`
+        );
+        return;
+      }
     }
 
-    if (activeTab === "withdraw" && parseFloat(amount) > userSuppliedAmount) {
-      setSubmitError("Amount exceeds your supplied amount");
-      return;
+    if (activeTab === "withdraw") {
+      if (parseFloat(amount) > maxWithdrawableAmount) {
+        // Check which limit was exceeded (matching MovePosition's overLimitInfoBox)
+        const availableLiquidity = selectedBroker
+          ? parseFloat(selectedBroker.scaledAvailableLiquidityUnderlying || "0")
+          : 0;
+
+        if (userSuppliedAmount < availableLiquidity) {
+          setSubmitError(
+            `Amount exceeds your supplied balance of ${asset.symbol}`
+          );
+        } else {
+          setSubmitError(
+            `Amount exceeds available liquidity for ${asset.symbol} in broker`
+          );
+        }
+        return;
+      }
+
+      // Also check health factor (matching MovePosition's simHealthRed check)
+      if (simHealthRed) {
+        if (isSimUnhealthy) {
+          setSubmitError("Withdrawal would make your portfolio unhealthy");
+        } else {
+          setSubmitError(
+            "Withdrawal would put your position near liquidation threshold"
+          );
+        }
+        return;
+      }
     }
 
     setSubmitting(true);
@@ -672,6 +1223,7 @@ export function SupplyModal({
         setTxHash(null);
       }, 2000);
     } catch (err: any) {
+      debugger;
       console.error("Transaction error:", err);
       setSubmitError(
         err.message ||
@@ -783,6 +1335,7 @@ export function SupplyModal({
                   ${usdValue.toFixed(2)}
                 </div>
               </div>
+              {/* Single Max button - works for both supply and withdraw */}
               {showMaxButton && (
                 <button
                   onClick={handleMax}
@@ -791,18 +1344,18 @@ export function SupplyModal({
                   Max
                 </button>
               )}
-              {activeTab === "withdraw" && userSuppliedAmount > 0 && (
-                <button
-                  onClick={() => setAmount(userSuppliedAmount.toString())}
-                  className="px-4 py-1 bg-yellow-500 text-black text-sm font-medium rounded hover:bg-yellow-400 transition-colors"
-                >
-                  Max
-                </button>
-              )}
             </div>
 
-            {/* Available balance hint for withdraw */}
-            {activeTab === "withdraw" && (
+            {/* Available balance hint - different text for supply vs withdraw */}
+            {activeTab === "supply" && balance && parseFloat(balance) > 0 && (
+              <div className="text-xs text-zinc-500 dark:text-zinc-400 mt-2">
+                Available to supply:{" "}
+                <span className="text-zinc-700 dark:text-zinc-300 font-medium">
+                  {parseFloat(balance).toFixed(6)} {asset.symbol}
+                </span>
+              </div>
+            )}
+            {activeTab === "withdraw" && userSuppliedAmount > 0 && (
               <div className="text-xs text-zinc-500 dark:text-zinc-400 mt-2">
                 Available to withdraw:{" "}
                 {loadingPortfolio ? (
@@ -856,31 +1409,29 @@ export function SupplyModal({
                           : "text-red-600 dark:text-red-400"
                     }`}
                   >
-                    {currentHealthFactor
-                      ? `${currentHealthFactor.toFixed(2)}x`
-                      : "N/A"}
+                    {formatHealthFactor(currentHealthFactor)}
                   </span>
                 )}
-                {amount && parseFloat(amount) > 0 && (
-                  <>
-                    <span className="text-zinc-400">→</span>
-                    <span
-                      className={`${
-                        displayHealthFactor && displayHealthFactor >= 1.2
-                          ? "text-green-600 dark:text-green-400"
-                          : displayHealthFactor && displayHealthFactor >= 1.0
-                            ? "text-yellow-600 dark:text-yellow-400"
-                            : "text-red-600 dark:text-red-400"
-                      }`}
-                    >
-                      {loadingSimulation
-                        ? "--"
-                        : displayHealthFactor
-                          ? `${displayHealthFactor.toFixed(2)}x`
-                          : "N/A"}
-                    </span>
-                  </>
-                )}
+                {amount &&
+                  parseFloat(amount) > 0 &&
+                  displayHealthFactor !== null && (
+                    <>
+                      <span className="text-zinc-400">→</span>
+                      <span
+                        className={`${
+                          displayHealthFactor && displayHealthFactor >= 1.2
+                            ? "text-green-600 dark:text-green-400"
+                            : displayHealthFactor && displayHealthFactor >= 1.0
+                              ? "text-yellow-600 dark:text-yellow-400"
+                              : "text-red-600 dark:text-red-400"
+                        }`}
+                      >
+                        {loadingSimulation
+                          ? "--"
+                          : formatHealthFactor(displayHealthFactor)}
+                      </span>
+                    </>
+                  )}
               </span>
             </div>
 
@@ -939,26 +1490,242 @@ export function SupplyModal({
               </span>
             </div>
 
-            {/* Supply APY */}
+            {/* Supply APY with next value (matching MovePosition) */}
             <div className="flex justify-between items-center">
               <span className="text-sm text-zinc-500 dark:text-zinc-400">
                 Supply APY
               </span>
-              <span className="text-sm font-medium text-green-600 dark:text-green-400">
-                {asset.supplyApy.toFixed(2)}%
+              <span className="text-sm font-medium text-green-600 dark:text-green-400 flex items-center gap-2">
+                {formatPercentage(supplyAPY.current)}
+                {supplyAPY.next !== null && supplyAPY.next < 1 && (
+                  <>
+                    <span className="text-zinc-400">→</span>
+                    <span className="text-zinc-600 dark:text-zinc-400">
+                      {formatPercentage(supplyAPY.next)}
+                    </span>
+                  </>
+                )}
               </span>
             </div>
           </div>
 
-          {/* More Button */}
-          <button
-            onClick={() => setShowMore(!showMore)}
-            className="w-full text-yellow-500 dark:text-yellow-400 text-sm font-medium py-2 hover:text-yellow-600 dark:hover:text-yellow-300 transition-colors"
-          >
-            {showMore ? "Less" : "More"}
-          </button>
+          {/* More/Less Button (matching MovePosition's ParamList) */}
+          {brokerStats && (
+            <div className="flex items-center gap-3 my-4">
+              <div className="flex-1 h-px bg-zinc-200 dark:bg-zinc-700"></div>
+              <button
+                onClick={() => setShowMore(!showMore)}
+                className="text-yellow-500 dark:text-yellow-400 text-sm font-medium px-4 py-2 hover:text-yellow-600 dark:hover:text-yellow-300 transition-colors"
+              >
+                {showMore ? "Less" : "More"}
+              </button>
+              <div className="flex-1 h-px bg-zinc-200 dark:bg-zinc-700"></div>
+            </div>
+          )}
 
-          {/* Error Message */}
+          {/* Broker Stats Section (matching MovePosition's brokerStats) - Only shown when showMore is true */}
+          {brokerStats && showMore && (
+            <div className="mb-4 p-4 rounded-xl bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-700 space-y-3">
+              <div className="text-xs font-semibold text-zinc-600 dark:text-zinc-400 uppercase tracking-wide mb-2">
+                Broker Statistics
+              </div>
+
+              {/* Total Available In Broker */}
+              <div className="flex justify-between items-center">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-zinc-500 dark:text-zinc-400">
+                    Total Available In Broker
+                  </span>
+                  <div className="group relative">
+                    <svg
+                      className="w-3 h-3 text-zinc-400 cursor-help"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                      />
+                    </svg>
+                    <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-zinc-800 dark:bg-zinc-900 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-10">
+                      Liquidity available for borrowing or withdrawal in tokens
+                    </div>
+                  </div>
+                </div>
+                <span className="text-sm font-medium text-zinc-900 dark:text-zinc-50 flex items-center gap-2">
+                  {prettyTokenBal(brokerStats.totalAvailable)} {asset.symbol}
+                  {brokerStats.nextAvailable !== null && (
+                    <>
+                      <span className="text-zinc-400">→</span>
+                      <span className="text-zinc-600 dark:text-zinc-400">
+                        {prettyTokenBal(brokerStats.nextAvailable)}{" "}
+                        {asset.symbol}
+                      </span>
+                    </>
+                  )}
+                </span>
+              </div>
+
+              {/* Total Loaned By Broker */}
+              <div className="flex justify-between items-center">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-zinc-500 dark:text-zinc-400">
+                    Total Loaned By Broker
+                  </span>
+                  <div className="group relative">
+                    <svg
+                      className="w-3 h-3 text-zinc-400 cursor-help"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                      />
+                    </svg>
+                    <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-zinc-800 dark:bg-zinc-900 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-10">
+                      Liquidity currently loaned to borrowers in tokens
+                    </div>
+                  </div>
+                </div>
+                <span className="text-sm font-medium text-zinc-900 dark:text-zinc-50 flex items-center gap-2">
+                  {prettyTokenBal(brokerStats.totalLoaned)} {asset.symbol}
+                  {brokerStats.nextTotalLoaned !== null && (
+                    <>
+                      <span className="text-zinc-400">→</span>
+                      <span className="text-zinc-600 dark:text-zinc-400">
+                        {prettyTokenBal(brokerStats.nextTotalLoaned)}{" "}
+                        {asset.symbol}
+                      </span>
+                    </>
+                  )}
+                </span>
+              </div>
+
+              {/* Total Supplied In Broker */}
+              <div className="flex justify-between items-center">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-zinc-500 dark:text-zinc-400">
+                    Total Supplied In Broker
+                  </span>
+                  <div className="group relative">
+                    <svg
+                      className="w-3 h-3 text-zinc-400 cursor-help"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                      />
+                    </svg>
+                    <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-zinc-800 dark:bg-zinc-900 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-10">
+                      Liquidity supplied in tokens
+                    </div>
+                  </div>
+                </div>
+                <span className="text-sm font-medium text-zinc-900 dark:text-zinc-50 flex items-center gap-2">
+                  {prettyTokenBal(brokerStats.totalSupplied)} {asset.symbol}
+                  {brokerStats.nextTotalSupplied !== null && (
+                    <>
+                      <span className="text-zinc-400">→</span>
+                      <span className="text-zinc-600 dark:text-zinc-400">
+                        {prettyTokenBal(brokerStats.nextTotalSupplied)}{" "}
+                        {asset.symbol}
+                      </span>
+                    </>
+                  )}
+                </span>
+              </div>
+
+              {/* Pool Max Limit (shown for supply/withdraw tabs) */}
+              <div className="flex justify-between items-center">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-zinc-500 dark:text-zinc-400">
+                    Pool Max Limit
+                  </span>
+                  <div className="group relative">
+                    <svg
+                      className="w-3 h-3 text-zinc-400 cursor-help"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                      />
+                    </svg>
+                    <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-zinc-800 dark:bg-zinc-900 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-10">
+                      Maximum liquidity that can be supplied to the pool
+                    </div>
+                  </div>
+                </div>
+                <span className="text-sm font-medium text-zinc-900 dark:text-zinc-50">
+                  {prettyTokenBal(brokerStats.poolMaxLimit)} {asset.symbol}
+                </span>
+              </div>
+
+              {/* Utilization */}
+              <div className="flex justify-between items-center">
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-zinc-500 dark:text-zinc-400">
+                    Utilization
+                  </span>
+                  <div className="group relative">
+                    <svg
+                      className="w-3 h-3 text-zinc-400 cursor-help"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                      />
+                    </svg>
+                    <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-zinc-800 dark:bg-zinc-900 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-10">
+                      Ratio of debt / collateral. High utilization increases
+                      interest
+                    </div>
+                  </div>
+                </div>
+                <span className="text-sm font-medium text-zinc-900 dark:text-zinc-50 flex items-center gap-2">
+                  {formatPercentage(brokerStats.utilization)}
+                  {brokerStats.nextUtilization !== null && (
+                    <>
+                      <span className="text-zinc-400">→</span>
+                      <span className="text-zinc-600 dark:text-zinc-400">
+                        {formatPercentage(brokerStats.nextUtilization)}
+                      </span>
+                    </>
+                  )}
+                </span>
+              </div>
+            </div>
+          )}
+
+          {/* Error Message - Show over limit errors before submission */}
+          {overLimitErrorMessage && (
+            <div className="mb-4 p-3 rounded-lg bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 text-sm text-yellow-700 dark:text-yellow-400">
+              {overLimitErrorMessage}
+            </div>
+          )}
+
+          {/* Transaction Error Message */}
           {submitError && (
             <div className="mb-4 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-sm text-red-700 dark:text-red-400">
               {submitError}

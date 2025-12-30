@@ -13,6 +13,7 @@ import {
 import { store, type RootState, type AppDispatch } from "../store";
 import { loadConfig } from "../store/configSlice";
 import { useMovementConfig } from "./hooks/useMovementConfig";
+import { ServiceWorkerCleanup } from "./components/service-worker-cleanup";
 
 interface ProvidersProps {
   children: ReactNode;
@@ -128,6 +129,7 @@ export function Providers({ children }: ProvidersProps) {
 
   return (
     <ReduxProvider store={store}>
+      <ServiceWorkerCleanup />
       <PrivyProviderWithConfig
         appId={appId}
         clientId={clientId}

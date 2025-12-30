@@ -57,16 +57,19 @@ export interface PortfolioState {
   liabilities: Array<{ instrumentId: string; amount: string }>;
 }
 
-async function getBrokerNameFromAPI(
+async function getBrokerFromAPI(
   superClient: superJsonApiClient.SuperClient,
   brokerAddress: string
-): Promise<string> {
+): Promise<{ name: string; networkAddress: string }> {
   const brokers = await superClient.default.getBrokers();
   const broker = brokers.find((b) => b.networkAddress === brokerAddress);
   if (!broker) {
     throw new Error(`Broker not found for address: ${brokerAddress}`);
   }
-  return broker.underlyingAsset.name;
+  return {
+    name: broker.underlyingAsset.name,
+    networkAddress: broker.underlyingAsset.networkAddress,
+  };
 }
 
 async function getPortfolioStateFromAPI(
@@ -112,7 +115,12 @@ export async function executeBorrowV2(params: BorrowV2Params): Promise<string> {
   if (onProgress) {
     onProgress("Fetching broker information...");
   }
-  const brokerName = await getBrokerNameFromAPI(superClient, brokerAddress);
+  // Get broker data to use the exact networkAddress (coinType) from API
+  // This matches MovePosition's approach: broker.underlyingAsset.networkAddress
+  const broker = await getBrokerFromAPI(superClient, brokerAddress);
+  const brokerName = broker.name;
+  // Use the networkAddress from the broker API response (matches MovePosition)
+  const coinTypeFromBroker = broker.networkAddress;
 
   if (onProgress) {
     onProgress("Fetching portfolio state...");
@@ -140,6 +148,9 @@ export async function executeBorrowV2(params: BorrowV2Params): Promise<string> {
     onProgress("Decoding transaction packet...");
   }
 
+  // Convert hex string to Uint8Array (matching MovePosition approach)
+  // MovePosition uses: const packetHex = Hex.fromHexString(packet.packet)
+  // const ar = packetHex.toUint8Array()
   const ticketHex = borrowTicket.packet.startsWith("0x")
     ? borrowTicket.packet
     : `0x${borrowTicket.packet}`;
@@ -148,18 +159,26 @@ export async function executeBorrowV2(params: BorrowV2Params): Promise<string> {
     hexBytes.map((byte) => parseInt(byte, 16))
   );
 
-  const borrowIX = sdk.borrowV2Ix(ticketUintArray, coinType);
+  // Convert Uint8Array to Array (like MovePosition's super* methods do)
+  // MovePosition's superBorrowV2Ix converts Uint8Array to Array internally
+  // This is required because wallets prefer Array over Uint8Array
+  const packetArray = Array.from(ticketUintArray);
+
+  // Use the coinType from broker API response (matches MovePosition's broker.underlyingAsset.networkAddress)
+  const borrowIX = sdk.borrowV2Ix(ticketUintArray, coinTypeFromBroker);
 
   if (onProgress) {
     onProgress("Building transaction...");
   }
 
+  // Build transaction using Aptos SDK
+  // Convert arguments to Array format (matching MovePosition's super* approach)
   const rawTxn = await aptos.transaction.build.simple({
     sender: walletAddress,
     data: {
       function: borrowIX.function as `${string}::${string}::${string}`,
       typeArguments: borrowIX.type_arguments || [],
-      functionArguments: borrowIX.arguments || [],
+      functionArguments: [packetArray], // Use Array instead of Uint8Array
     },
   });
 
@@ -167,6 +186,91 @@ export async function executeBorrowV2(params: BorrowV2Params): Promise<string> {
   if (txnObj.rawTransaction) {
     const movementChainId = new ChainId(MOVEMENT_CHAIN_ID);
     txnObj.rawTransaction.chain_id = movementChainId;
+  }
+
+  // SIMULATE TRANSACTION BEFORE SIGNING (like MovePosition does)
+  // This catches errors like ERR_MAX_DEPOSIT_EXCEEDED before the user signs
+  if (onProgress) {
+    onProgress("Simulating transaction...");
+  }
+
+  try {
+    console.log(`[BorrowV2] 🔍 Simulating transaction before signing...`);
+
+    // Create a simulation transaction (unsigned)
+    const simulationTxn = await aptos.transaction.build.simple({
+      sender: walletAddress,
+      data: {
+        function: borrowIX.function as `${string}::${string}::${string}`,
+        typeArguments: borrowIX.type_arguments || [],
+        functionArguments: [packetArray],
+      },
+    });
+
+    // Override chain ID for simulation too
+    const simTxnObj = simulationTxn as any;
+    if (simTxnObj.rawTransaction) {
+      const movementChainIdObj = new ChainId(MOVEMENT_CHAIN_ID);
+      simTxnObj.rawTransaction.chain_id = movementChainIdObj;
+    }
+
+    // Prepare public key for simulation
+    let pubKeyForSim = publicKey.startsWith("0x")
+      ? publicKey.slice(2)
+      : publicKey;
+    if (pubKeyForSim.startsWith("00") && pubKeyForSim.length > 64) {
+      pubKeyForSim = pubKeyForSim.slice(2);
+    }
+
+    // Simulate the transaction
+    const simulationResult = await aptos.transaction.simulate.simple({
+      signerPublicKey: pubKeyForSim,
+      transaction: simulationTxn,
+    });
+
+    console.log(`[BorrowV2] 📊 Simulation result:`, {
+      success: simulationResult[0]?.success,
+      vmStatus: simulationResult[0]?.vm_status,
+      gasUsed: simulationResult[0]?.gas_used,
+    });
+
+    // Check if simulation failed
+    if (!simulationResult[0]?.success) {
+      const vmStatus = simulationResult[0]?.vm_status || "";
+      let userFriendlyError = vmStatus;
+
+      if (vmStatus.includes("ERR_MAX_DEPOSIT_EXCEEDED")) {
+        userFriendlyError = `Maximum deposit limit exceeded. The amount you're trying to borrow exceeds the broker's limits. Please try a smaller amount.`;
+      } else if (vmStatus.includes("ERR_INSUFFICIENT_BALANCE")) {
+        userFriendlyError = `Insufficient balance. You don't have enough collateral to complete this transaction.`;
+      } else if (vmStatus.includes("Move abort")) {
+        const abortMatch = vmStatus.match(
+          /Move abort in [^:]+: ([^(]+)\([^)]+\): (.+)/
+        );
+        if (abortMatch) {
+          userFriendlyError = `${abortMatch[1]}: ${abortMatch[2]}`;
+        }
+      }
+
+      throw new Error(
+        `Transaction simulation failed: ${userFriendlyError}. Broker used: ${brokerName}, CoinType: ${coinTypeFromBroker}`
+      );
+    }
+
+    console.log(`[BorrowV2] ✅ Simulation passed - transaction will succeed`);
+  } catch (simError: any) {
+    if (
+      simError.message.includes("simulation failed") ||
+      simError.message.includes("ERR_") ||
+      simError.message.includes("Maximum deposit") ||
+      simError.message.includes("Insufficient balance")
+    ) {
+      throw simError;
+    }
+    console.warn(
+      `[BorrowV2] ⚠️ Simulation warning (continuing anyway):`,
+      simError.message
+    );
   }
 
   const message = generateSigningMessageForTransaction(rawTxn);
@@ -262,7 +366,12 @@ export async function executeRepayV2(params: BorrowV2Params): Promise<string> {
   if (onProgress) {
     onProgress("Fetching broker information...");
   }
-  const brokerName = await getBrokerNameFromAPI(superClient, brokerAddress);
+  // Get broker data to use the exact networkAddress (coinType) from API
+  // This matches MovePosition's approach: broker.underlyingAsset.networkAddress
+  const broker = await getBrokerFromAPI(superClient, brokerAddress);
+  const brokerName = broker.name;
+  // Use the networkAddress from the broker API response (matches MovePosition)
+  const coinTypeFromBroker = broker.networkAddress;
 
   if (onProgress) {
     onProgress("Fetching portfolio state...");
@@ -290,6 +399,9 @@ export async function executeRepayV2(params: BorrowV2Params): Promise<string> {
     onProgress("Decoding transaction packet...");
   }
 
+  // Convert hex string to Uint8Array (matching MovePosition approach)
+  // MovePosition uses: const packetHex = Hex.fromHexString(packet.packet)
+  // const ar = packetHex.toUint8Array()
   const ticketHex = repayTicket.packet.startsWith("0x")
     ? repayTicket.packet
     : `0x${repayTicket.packet}`;
@@ -298,18 +410,26 @@ export async function executeRepayV2(params: BorrowV2Params): Promise<string> {
     hexBytes.map((byte) => parseInt(byte, 16))
   );
 
-  const repayIX = sdk.repayV2Ix(ticketUintArray, coinType);
+  // Convert Uint8Array to Array (like MovePosition's super* methods do)
+  // MovePosition's superRepayV2Ix converts Uint8Array to Array internally
+  // This is required because wallets prefer Array over Uint8Array
+  const packetArray = Array.from(ticketUintArray);
+
+  // Use the coinType from broker API response (matches MovePosition's broker.underlyingAsset.networkAddress)
+  const repayIX = sdk.repayV2Ix(ticketUintArray, coinTypeFromBroker);
 
   if (onProgress) {
     onProgress("Building transaction...");
   }
 
+  // Build transaction using Aptos SDK
+  // Convert arguments to Array format (matching MovePosition's super* approach)
   const rawTxn = await aptos.transaction.build.simple({
     sender: walletAddress,
     data: {
       function: repayIX.function as `${string}::${string}::${string}`,
       typeArguments: repayIX.type_arguments || [],
-      functionArguments: repayIX.arguments || [],
+      functionArguments: [packetArray], // Use Array instead of Uint8Array
     },
   });
 
@@ -317,6 +437,91 @@ export async function executeRepayV2(params: BorrowV2Params): Promise<string> {
   if (txnObj.rawTransaction) {
     const movementChainIdObj = new ChainId(MOVEMENT_CHAIN_ID);
     txnObj.rawTransaction.chain_id = movementChainIdObj;
+  }
+
+  // SIMULATE TRANSACTION BEFORE SIGNING (like MovePosition does)
+  // This catches errors like ERR_MAX_DEPOSIT_EXCEEDED before the user signs
+  if (onProgress) {
+    onProgress("Simulating transaction...");
+  }
+
+  try {
+    console.log(`[RepayV2] 🔍 Simulating transaction before signing...`);
+
+    // Create a simulation transaction (unsigned)
+    const simulationTxn = await aptos.transaction.build.simple({
+      sender: walletAddress,
+      data: {
+        function: repayIX.function as `${string}::${string}::${string}`,
+        typeArguments: repayIX.type_arguments || [],
+        functionArguments: [packetArray],
+      },
+    });
+
+    // Override chain ID for simulation too
+    const simTxnObj = simulationTxn as any;
+    if (simTxnObj.rawTransaction) {
+      const movementChainIdObj = new ChainId(MOVEMENT_CHAIN_ID);
+      simTxnObj.rawTransaction.chain_id = movementChainIdObj;
+    }
+
+    // Prepare public key for simulation
+    let pubKeyForSim = publicKey.startsWith("0x")
+      ? publicKey.slice(2)
+      : publicKey;
+    if (pubKeyForSim.startsWith("00") && pubKeyForSim.length > 64) {
+      pubKeyForSim = pubKeyForSim.slice(2);
+    }
+
+    // Simulate the transaction
+    const simulationResult = await aptos.transaction.simulate.simple({
+      signerPublicKey: pubKeyForSim,
+      transaction: simulationTxn,
+    });
+
+    console.log(`[RepayV2] 📊 Simulation result:`, {
+      success: simulationResult[0]?.success,
+      vmStatus: simulationResult[0]?.vm_status,
+      gasUsed: simulationResult[0]?.gas_used,
+    });
+
+    // Check if simulation failed
+    if (!simulationResult[0]?.success) {
+      const vmStatus = simulationResult[0]?.vm_status || "";
+      let userFriendlyError = vmStatus;
+
+      if (vmStatus.includes("ERR_MAX_DEPOSIT_EXCEEDED")) {
+        userFriendlyError = `Maximum deposit limit exceeded. The amount you're trying to repay exceeds the broker's limits. Please try a smaller amount.`;
+      } else if (vmStatus.includes("ERR_INSUFFICIENT_BALANCE")) {
+        userFriendlyError = `Insufficient balance. You don't have enough ${coinSymbol} to complete this transaction.`;
+      } else if (vmStatus.includes("Move abort")) {
+        const abortMatch = vmStatus.match(
+          /Move abort in [^:]+: ([^(]+)\([^)]+\): (.+)/
+        );
+        if (abortMatch) {
+          userFriendlyError = `${abortMatch[1]}: ${abortMatch[2]}`;
+        }
+      }
+
+      throw new Error(
+        `Transaction simulation failed: ${userFriendlyError}. Broker used: ${brokerName}, CoinType: ${coinTypeFromBroker}`
+      );
+    }
+
+    console.log(`[RepayV2] ✅ Simulation passed - transaction will succeed`);
+  } catch (simError: any) {
+    if (
+      simError.message.includes("simulation failed") ||
+      simError.message.includes("ERR_") ||
+      simError.message.includes("Maximum deposit") ||
+      simError.message.includes("Insufficient balance")
+    ) {
+      throw simError;
+    }
+    console.warn(
+      `[RepayV2] ⚠️ Simulation warning (continuing anyway):`,
+      simError.message
+    );
   }
 
   const message = generateSigningMessageForTransaction(rawTxn);
