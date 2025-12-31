@@ -153,6 +153,49 @@ div.copilotKitMessages {
   height: 100% !important;
 }
 
+/* Hide scrollbar for suggestions horizontal scroll on mobile */
+.scrollbar-hide {
+  -ms-overflow-style: none; /* IE and Edge */
+  scrollbar-width: none; /* Firefox */
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none; /* Chrome, Safari and Opera */
+}
+
+/* Touch manipulation for better mobile performance */
+.touch-manipulation {
+  touch-action: manipulation;
+}
+
+/* Mobile suggestions positioning */
+@media (max-width: 640px) {
+  /* Ensure suggestions are visible on mobile */
+  [class*="Suggestions"] {
+    position: relative !important;
+  }
+  
+  /* Fix for suggestions container on mobile */
+  .suggestions-container-mobile {
+    position: fixed !important;
+    bottom: 8rem !important;
+    left: 0 !important;
+    right: 0 !important;
+    z-index: 1000 !important;
+    background: transparent !important;
+  }
+  
+  html.dark .suggestions-container-mobile {
+    background: transparent !important;
+  }
+  
+  /* Ensure input container has proper spacing */
+  .copilotKitInputContainer {
+    margin-top: auto !important;
+    padding-bottom: 0.5rem !important;
+  }
+}
+
 /* Find and enable scrolling on the messages container */
 .copilotKitChat > div:first-child {
   display: flex !important;
@@ -189,7 +232,7 @@ div.copilotKitMessages {
   .copilotKitChat {
     height: calc(100vh - 65px) !important;
     position: relative !important;
-    overflow: hidden !important;
+    overflow: visible !important;
   }
 
   .copilotKitChat [class*="MessagesContainer"],
@@ -448,4 +491,18 @@ div.copilotKitMessages {
 
 .liquid-shimmer {
   animation: liquid-shimmer 3s ease-in-out infinite;
+}
+
+/* Shimmer animation for quest progress bar */
+@keyframes shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+.animate-shimmer {
+  animation: shimmer 2s ease-in-out infinite;
 }

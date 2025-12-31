@@ -24,13 +24,17 @@ import { LendCard } from "../features/lend/LendCard";
 import { EchelonSupplyModal } from "../echelon-supply-modal";
 import { TransferData } from "../types";
 import { getAllTokens } from "../../utils/token-constants";
+import { QuestManager } from "../quest/QuestManager";
+import { Suggestions } from "./Suggestions";
 
 interface MovementChatProps {
   walletAddress: string | null;
 }
 
 const ChatInner = ({ walletAddress }: MovementChatProps) => {
-  const { visibleMessages } = useCopilotChat();
+  const { visibleMessages, appendMessage } = useCopilotChat();
+  const [hasScrolled, setHasScrolled] = useState(false);
+  const [suggestionSubmitted, setSuggestionSubmitted] = useState(false);
   const [lendingRecommendation, setLendingRecommendation] = useState<{
     action: "borrow" | "lend";
     asset: string;
@@ -282,6 +286,60 @@ const ChatInner = ({ walletAddress }: MovementChatProps) => {
       );
     },
   });
+
+  // Detect scroll to hide suggestions
+  useEffect(() => {
+    const handleScroll = (e: Event) => {
+      const target = e.target as HTMLElement;
+      // Hide suggestions if scrolled more than 50px
+      if (target.scrollTop > 50) {
+        setHasScrolled(true);
+      }
+    };
+
+    const handleWindowScroll = () => setHasScrolled(true);
+
+    // Find the messages container - try multiple selectors
+    const findMessagesContainer = () => {
+      return (
+        document.querySelector('.copilotKitChat [class*="MessagesContainer"]') ||
+        document.querySelector('.copilotKitChat [class*="messages-container"]') ||
+        document.querySelector('.copilotKitChat > div > div:first-child') ||
+        document.querySelector('.copilotKitChat')
+      );
+    };
+
+    const messagesContainer = findMessagesContainer();
+
+    if (messagesContainer) {
+      messagesContainer.addEventListener('scroll', handleScroll, { passive: true });
+    }
+
+    // Also check for scroll on window (mobile browsers)
+    window.addEventListener('scroll', handleWindowScroll, { passive: true });
+
+    return () => {
+      if (messagesContainer) {
+        messagesContainer.removeEventListener('scroll', handleScroll);
+      }
+      window.removeEventListener('scroll', handleWindowScroll);
+    };
+  }, []);
+
+  // Reset scroll state when messages are cleared
+  useEffect(() => {
+    if (!visibleMessages || visibleMessages.length === 0) {
+      setHasScrolled(false);
+      setSuggestionSubmitted(false);
+    }
+  }, [visibleMessages]);
+
+  // Hide suggestions when a new user message is sent (suggestion was submitted)
+  useEffect(() => {
+    if (visibleMessages && visibleMessages.length > 2) {
+      setSuggestionSubmitted(true);
+    }
+  }, [visibleMessages]);
 
   // Extract structured data from A2A agent responses and detect supply confirmations
   useEffect(() => {
@@ -648,6 +706,14 @@ const ChatInner = ({ walletAddress }: MovementChatProps) => {
 
   const instructions = `You are a Web3 and cryptocurrency assistant for Movement Network. Help users with blockchain operations, balance checks, token swaps, and market analysis. Always be helpful and provide clear, actionable information.
 
+**BEGINNER DETECTION & ONBOARDING:**
+- If a user says they are "new", "beginner", "new to crypto", "new to DeFi", "first time", "just started", "help me learn", "I don't understand", or asks "what is" or "how do I" questions:
+  - Acknowledge they're new and welcome them warmly
+  - Explain that an interactive quest will appear to guide them step-by-step
+  - Encourage them to follow the quest cards that appear above the chat
+  - Be patient and explain concepts in simple terms
+  - The quest system will automatically detect when they complete each step
+
 CRITICAL: This application works EXCLUSIVELY with Movement Network. All operations default to Movement Network.
 
 AVAILABLE ACTIONS:
@@ -683,48 +749,80 @@ REMEMBER: The wallet address is ${walletAddress} - use it exactly as shown.`
 }`;
 
   return (
-    <div className="h-full w-full">
-      {lendingRecommendation && (
-        <PlatformSelectionCard
-          action={lendingRecommendation.action}
-          asset={lendingRecommendation.asset}
-          recommendedProtocol={lendingRecommendation.recommendedProtocol}
-          echelonRate={lendingRecommendation.echelonRate}
-          movepositionRate={lendingRecommendation.movepositionRate}
-          reason={lendingRecommendation.reason}
+    <div className="h-full w-full flex flex-col">
+      {/* Quest Manager - Shows onboarding quest for beginners */}
+      <div className="flex-shrink-0">
+        <QuestManager
           walletAddress={walletAddress}
-          onClose={() => setLendingRecommendation(null)}
+          onQuestComplete={(questId) => {
+            console.log("Quest completed:", questId);
+          }}
         />
-      )}
-      {supplyConfirmation && (
-        <>
-          {supplyConfirmation.protocol === "moveposition" ? (
-            <div className="my-3">
-              <LendCard walletAddress={walletAddress} />
+      </div>
+
+      {/* Main Chat Area */}
+      <div className="flex-1 min-h-0 overflow-visible flex flex-col">
+        {lendingRecommendation && (
+          <PlatformSelectionCard
+            action={lendingRecommendation.action}
+            asset={lendingRecommendation.asset}
+            recommendedProtocol={lendingRecommendation.recommendedProtocol}
+            echelonRate={lendingRecommendation.echelonRate}
+            movepositionRate={lendingRecommendation.movepositionRate}
+            reason={lendingRecommendation.reason}
+            walletAddress={walletAddress}
+            onClose={() => setLendingRecommendation(null)}
+          />
+        )}
+        {supplyConfirmation && (
+          <>
+            {supplyConfirmation.protocol === "moveposition" ? (
+              <div className="my-3">
+                <LendCard walletAddress={walletAddress} />
+              </div>
+            ) : (
+              <EchelonSupplyModal
+                isOpen={true}
+                onClose={() => setSupplyConfirmation(null)}
+                asset={{
+                  symbol: supplyConfirmation.asset,
+                  name: supplyConfirmation.asset,
+                  icon: "",
+                  price: 1,
+                  supplyApr: 0,
+                }}
+              />
+            )}
+          </>
+        )}
+        <div className="flex-1 min-h-0 overflow-visible relative">
+          <CopilotChat
+            className="h-full w-full"
+            instructions={instructions}
+            labels={{
+              title: "Movement Assistant",
+              initial: "Hi! 👋 How can I assist you today?",
+            }}
+          />
+          
+          {/* Suggestions - Positioned just above chat input box, hide when scrolled or submitted */}
+          {(!visibleMessages || visibleMessages.length <= 2) && !hasScrolled && !suggestionSubmitted && (
+            <div className={`fixed sm:absolute bottom-32 sm:bottom-32 left-0 right-0 z-[100] pointer-events-none sm:left-auto sm:right-auto suggestions-container-mobile transition-all duration-300 ${hasScrolled || suggestionSubmitted ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
+              <div className="pointer-events-auto max-w-full sm:max-w-none">
+                <Suggestions
+                  walletAddress={walletAddress}
+                  appendMessage={appendMessage}
+                  onSuggestionClick={(text) => {
+                    console.log("Suggestion clicked:", text);
+                    // Hide suggestions immediately when clicked
+                    setSuggestionSubmitted(true);
+                  }}
+                />
+              </div>
             </div>
-          ) : (
-            <EchelonSupplyModal
-              isOpen={true}
-              onClose={() => setSupplyConfirmation(null)}
-              asset={{
-                symbol: supplyConfirmation.asset,
-                name: supplyConfirmation.asset,
-                icon: "",
-                price: 1,
-                supplyApr: 0,
-              }}
-            />
           )}
-        </>
-      )}
-      <CopilotChat
-        className="h-full w-full"
-        instructions={instructions}
-        labels={{
-          title: "Movement Assistant",
-          initial: "Hi! 👋 How can I assist you today?",
-        }}
-      />
+        </div>
+      </div>
     </div>
   );
 };
