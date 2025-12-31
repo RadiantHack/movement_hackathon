@@ -227,8 +227,8 @@ export const Suggestions: React.FC<SuggestionsProps> = ({
           </p>
         </div>
 
-        {/* Suggestions Grid - Horizontal scroll on mobile, wrap on larger screens */}
-        <div className="flex gap-1 sm:gap-1.5 md:gap-2 overflow-x-auto pb-1 sm:pb-0 scrollbar-hide sm:flex-wrap sm:overflow-x-visible w-full -mx-2 sm:-mx-3 md:mx-0 justify-center sm:justify-center">
+        {/* Suggestions Grid - Vertical on mobile, horizontal wrap on larger screens */}
+        <div className="flex flex-col sm:flex-row gap-1.5 sm:gap-1.5 md:gap-2 sm:flex-wrap sm:overflow-x-visible w-full justify-center sm:justify-center">
           {availableSuggestions.map((suggestion) => {
             const isClicked = clickedSuggestions.has(suggestion.id);
             return (
@@ -238,20 +238,21 @@ export const Suggestions: React.FC<SuggestionsProps> = ({
                 disabled={isClicked}
                 className={`
                   group relative
-                  px-2 py-1 sm:px-2.5 sm:py-1.5 md:px-3 md:py-2
+                  px-3 py-2 sm:px-2.5 sm:py-1.5 md:px-3 md:py-2
                   rounded-md sm:rounded-lg
-                  text-[10px] sm:text-xs md:text-sm font-medium
+                  text-xs sm:text-xs md:text-sm font-medium
                   transition-all duration-200
                   border
-                  flex-shrink-0
+                  sm:flex-shrink-0
                   touch-manipulation
-                  min-h-[28px] sm:min-h-[32px] md:min-h-[36px]
+                  min-h-[40px] sm:min-h-[32px] md:min-h-[36px]
+                  w-full sm:w-auto
                   ${
                     isClicked
                       ? "bg-zinc-100/60 dark:bg-zinc-800/60 border-zinc-300/50 dark:border-zinc-700/50 text-zinc-500 dark:text-zinc-500 cursor-not-allowed"
-                      : "bg-zinc-50/80 dark:bg-zinc-800/80 border-zinc-200/50 dark:border-zinc-700/50 text-gray-700 dark:text-gray-300 hover:border-purple-300/70 dark:hover:border-purple-600/70 hover:bg-purple-50/70 dark:hover:bg-purple-950/30 hover:shadow-sm active:scale-[0.95] sm:active:scale-[0.98] cursor-pointer"
+                      : "bg-zinc-50/80 dark:bg-zinc-800/80 border-zinc-200/50 dark:border-zinc-700/50 text-gray-700 dark:text-gray-300 hover:border-purple-300/70 dark:hover:border-purple-600/70 hover:bg-purple-50/70 dark:hover:bg-purple-950/30 hover:shadow-sm active:scale-[0.98] sm:active:scale-[0.98] cursor-pointer"
                   }
-                  flex items-center gap-1 sm:gap-1.5 md:gap-2
+                  flex items-center justify-center sm:justify-start gap-1.5 sm:gap-1.5 md:gap-2
                 `}
               >
                 <span className="text-xs sm:text-sm md:text-base flex-shrink-0">

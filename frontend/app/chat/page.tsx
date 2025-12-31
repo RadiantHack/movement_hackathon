@@ -134,7 +134,7 @@ export default function ChatPage() {
   }
 
   return (
-    <div className="flex h-screen w-full overflow-hidden bg-zinc-50 dark:bg-black">
+    <div className="flex h-screen w-full overflow-hidden sm:overflow-hidden bg-zinc-50 dark:bg-black">
       <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
 
       <div className="flex flex-1 flex-col min-h-0 border-x border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
@@ -194,8 +194,8 @@ export default function ChatPage() {
             <ThemeToggle />
           </div>
         </div>
-        <div className="flex flex-1 flex-col min-h-0 overflow-hidden rounded-b-lg border-b border-zinc-200 dark:border-zinc-800">
-          <div className="flex-1 min-h-0 overflow-hidden">
+        <div className="flex flex-1 flex-col min-h-0 overflow-y-auto overflow-x-hidden sm:overflow-hidden rounded-b-lg border-b border-zinc-200 dark:border-zinc-800">
+          <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden sm:overflow-hidden">
             <MovementChat walletAddress={walletAddress} />
           </div>
         </div>
