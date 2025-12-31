@@ -2,16 +2,19 @@
 
 **Your AI-Powered Gateway to Movement Network DeFi**
 
-Multi-agent AI platform orchestrating 2 specialized agents for seamless DeFi operations on Movement Network. Built for the Movement M1 Hackathon.
+Multi-agent AI platform orchestrating 9 specialized agents for seamless DeFi operations on Movement Network. Built for the Movement M1 Hackathon.
 
 ## Features
 
-- 🤖 **2 Specialized AI Agents**: Bridge, Lending
-- 🎯 **Intelligent Orchestration**: Gemini-powered orchestrator coordinates all agents seamlessly
+- 🤖 **9 Specialized AI Agents**: Balance, Bridge, Lending, Swap, Transfer, Orchestrator, Premium Lending, Sentiment & Trading
+- 🎯 **Intelligent Orchestration**: Gemini 2.5 Pro-powered orchestrator coordinates all agents seamlessly
 - 🔗 **Multi-Protocol Architecture**: AG-UI Protocol (frontend ↔ orchestrator) + A2A Protocol (orchestrator ↔ agents)
 - ⚡ **LangGraph-Powered**: Each agent uses LangGraph for sophisticated reasoning
-- 🌐 **Full-Stack Integration**: Next.js frontend + FastAPI backend
+- 🎮 **Interactive Quest System**: Onboarding quests guide beginners through DeFi operations step-by-step
+- 🌐 **Full-Stack Integration**: Next.js 15 frontend + FastAPI backend
 - 🔐 **Privy Authentication**: Secure wallet connection and user management
+- 📊 **Advanced Analytics**: Sentiment analysis + trading recommendations using Google ADK SequentialAgent
+- 💎 **Premium Features**: Advanced lending operations and premium chat interface
 
 ## How to Run
 
@@ -225,28 +228,252 @@ Both services will be available:
 
 ## Agent Ecosystem
 
-### Infrastructure
-- **Balance Agent** - Multi-chain cryptocurrency balance checking
-- **Bridge Agent** - Cross-chain asset bridging via Movement Bridge
+### Core Infrastructure Agents
 
-### DeFi
-- **Lending Agent** - MovePosition & Echelon lending/borrowing
+1. **Balance Agent** (`/balance`)
+   - Check cryptocurrency balances on Movement Network
+   - Supports native MOVE token and all ERC-20 tokens
+   - Fetches popular/trending tokens with balances
+   - Uses Movement Network indexer API
+
+2. **Bridge Agent** (`/bridge`)
+   - Cross-chain asset bridging via Movement Bridge
+   - Bridges between Ethereum, BNB, Polygon, and Movement Network
+   - Supports native tokens (ETH, BNB, MATIC) and ERC-20 tokens (USDC, USDT, DAI)
+   - Transaction status tracking and fee estimation
+
+3. **Transfer Agent** (`/transfer`)
+   - Transfer tokens between addresses on Movement Network
+   - Supports all Movement Network tokens
+   - Automatic wallet address detection
+
+4. **Swap Agent** (`/swap`)
+   - Execute token swaps on Movement Network
+   - Integrates with Mosaic API for quotes
+   - Supports verified tokens (MOVE, USDC.e, USDT.e, WBTC.e, WETH.e, etc.)
+
+### DeFi Agents
+
+5. **Lending Agent** (`/lending`)
+   - Unified lending operations for MovePosition & Echelon protocols
+   - Supply collateral and borrow assets
+   - Compare lending/borrowing rates between protocols
+   - Repay loans and check health factors
+   - Platform selection recommendations
+
+6. **Premium Lending Agent** (`/premium_lending_agent`)
+   - Advanced lending operations with premium features
+   - Enhanced rate comparisons and analytics
+   - Advanced risk assessment
+
+### Orchestration & Analytics
+
+7. **Orchestrator Agent** (`/orchestrator`)
+   - Coordinates multiple specialized agents using AG-UI Protocol
+   - Powered by Google Gemini 2.5 Pro
+   - Intelligent routing of user queries to appropriate agents
+   - Sequential agent execution for optimal performance
+
+8. **Sentiment & Trading Agent** (`/sentiment`)
+   - Combined sentiment analysis and trading recommendations
+   - Uses Google ADK SequentialAgent for multi-stage orchestration
+   - **Data Fetcher Agent**: Fetches sentiment data (sentiment balance, social volume, social dominance) and price data
+   - **Trading Analysis Agent**: Analyzes technical indicators (RSI, MACD, moving averages) and generates buy/sell/hold recommendations
+   - Features:
+     - Sentiment balance, social volume, and social dominance tracking
+     - Technical analysis (RSI, MACD, MA20/50/200, volatility)
+     - Trading recommendations with confidence levels, entry/exit prices, stop loss, and target prices
+     - Risk level assessment and detailed reasoning
+
+### Agent Communication
+
+- **A2A Protocol**: Agent-to-Agent communication between orchestrator and specialized agents
+- **AG-UI Protocol**: Frontend-to-Orchestrator communication via CopilotKit
+- **A2A Middleware**: Transparent agent routing and tool injection
 
 ## Tech Stack
 
 ### Frontend
-- ✅ Next.js 15 with App Router
-- ✅ TypeScript
-- ✅ Tailwind CSS
-- ✅ CopilotKit for AI chat interface
-- ✅ Privy Authentication
-- ✅ PWA Support
+- ✅ **Next.js 15** with App Router
+- ✅ **TypeScript** for type safety
+- ✅ **Tailwind CSS** for styling with dark mode support
+- ✅ **CopilotKit** for AI chat interface and agent integration
+- ✅ **Privy** for authentication and wallet management
+- ✅ **PWA Support** with service workers
+- ✅ **Quest System** for interactive onboarding
+- ✅ **Redux Toolkit** for state management
+- ✅ **Aptos SDK** for Movement Network integration
 
 ### Backend
-- ✅ FastAPI with async support
-- ✅ LangGraph for agent orchestration
-- ✅ OpenAI GPT-4 for specialized agents
-- ✅ Google Gemini 2.5 Pro for orchestrator
-- ✅ A2A Protocol for agent-to-agent communication
-- ✅ AG-UI Protocol for frontend integration
-- ✅ Docker support
+- ✅ **FastAPI** with async support
+- ✅ **LangGraph** for agent orchestration and reasoning
+- ✅ **OpenAI GPT-4** for specialized agents (Balance, Bridge, Lending, Swap, Transfer)
+- ✅ **Google Gemini 2.5 Pro** for orchestrator agent
+- ✅ **Google ADK SequentialAgent** for multi-stage agent pipelines (Sentiment & Trading Agent)
+- ✅ **A2A Protocol** for agent-to-agent communication
+- ✅ **AG-UI Protocol** for frontend integration
+- ✅ **Docker** support with docker-compose
+- ✅ **Movement Network Indexer** for blockchain data
+- ✅ **Mosaic API** for token swap quotes
+- ✅ **Santiment API** for sentiment data (optional)
+
+## Architecture
+
+### Communication Flow
+
+```
+Frontend (CopilotKit)
+    ↓ AG-UI Protocol
+Orchestrator Agent (Gemini 2.5 Pro)
+    ↓ A2A Protocol
+Specialized Agents (LangGraph + GPT-4)
+    ↓ Tools & APIs
+Movement Network / External APIs
+```
+
+### Key Components
+
+1. **Frontend Middleware** (`frontend/app/api/copilotkit/route.ts`)
+   - A2A Middleware Agent wraps orchestrator
+   - Injects `send_message_to_a2a_agent` tool
+   - Handles wallet address extraction from readable context
+   - Beginner detection and quest system integration
+
+2. **Orchestrator Agent** (`backend/app/agents/orchestrator/agent.py`)
+   - Uses Google ADK LlmAgent with Gemini 2.5 Pro
+   - Routes queries to appropriate specialized agents
+   - Enforces sequential agent execution
+   - Validates wallet addresses and network parameters
+
+3. **Specialized Agents** (`backend/app/agents/*/agent.py`)
+   - Each agent uses LangGraph for reasoning
+   - Implements A2A Protocol AgentExecutor interface
+   - Provides agent cards for discovery
+   - Tools execute blockchain operations and API calls
+
+4. **Quest System** (`frontend/app/components/quest/`)
+   - Interactive onboarding for beginners
+   - Detects beginner keywords in chat
+   - Guides users through 5 core DeFi operations
+   - Auto-detects quest step completion
+
+## Frontend Pages
+
+- **`/`** - Landing page with authentication
+- **`/chat`** - Main AI chat interface with orchestrator
+- **`/premiumchat`** - Premium chat with access to premium agents
+- **`/overview`** - Portfolio overview with token balances
+- **`/positions`** - MovePosition lending positions
+- **`/echelon`** - Echelon lending interface
+- **`/swap`** - Token swap interface
+- **`/transfer`** - Token transfer interface
+- **`/bridge`** - Cross-chain bridge interface
+
+## Environment Variables
+
+### Frontend (`.env.local`)
+```bash
+NEXT_PUBLIC_PRIVY_APP_ID=your-privy-app-id
+NEXT_PUBLIC_PRIVY_CLIENT_ID=your-privy-client-id  # Optional
+PRIVY_APP_SECRET=your-privy-app-secret  # Required for transfers
+```
+
+### Backend (`.env`)
+```bash
+# Required
+OPENAI_API_KEY=your-openai-api-key
+GOOGLE_API_KEY=your-google-api-key
+
+# Optional
+OPENAI_MODEL=gpt-4o-mini  # Default model for agents
+MOVEMENT_INDEXER_URL=...  # Movement Network indexer endpoint
+MOVEMENT_RPC_URL=...      # Movement Network RPC endpoint
+SANTIMENT_API_KEY=...     # Optional, for premium sentiment metrics
+
+# Deployment
+RAILWAY_PUBLIC_DOMAIN=...  # For Railway deployments
+RENDER_EXTERNAL_URL=...    # For Render deployments
+AGENTS_PORT=8000           # Backend port
+```
+
+## Development
+
+### Code Formatting
+
+**Frontend:**
+```bash
+cd frontend
+npm run format
+```
+
+**Backend:**
+```bash
+make format-backend
+# or
+make docker-format
+```
+
+### Linting
+
+**Frontend:**
+```bash
+cd frontend
+npm run format:check
+```
+
+**Backend:**
+```bash
+make lint-backend
+# or
+make docker-lint
+```
+
+### Testing
+
+**Backend:**
+```bash
+make test-backend
+# or
+make docker-test
+```
+
+## Project Structure
+
+```
+movement/
+├── frontend/
+│   ├── app/
+│   │   ├── api/              # API routes (CopilotKit, agents)
+│   │   ├── components/       # React components
+│   │   │   ├── chat/         # Chat interface components
+│   │   │   ├── quest/        # Quest system components
+│   │   │   └── features/     # Feature-specific components
+│   │   ├── [pages]/         # Next.js pages
+│   │   └── utils/            # Utility functions
+│   └── package.json
+├── backend/
+│   ├── app/
+│   │   ├── agents/           # All agent implementations
+│   │   │   ├── balance/
+│   │   │   ├── bridge/
+│   │   │   ├── lending_comparison/
+│   │   │   ├── orchestrator/
+│   │   │   ├── premium_lending/
+│   │   │   ├── sentiment/
+│   │   │   ├── swap/
+│   │   │   └── transfer/
+│   │   ├── facilitator/      # x402 payment protocol
+│   │   └── main.py           # FastAPI app entry point
+│   └── pyproject.toml
+└── Makefile                  # Development commands
+```
+
+## Learn More
+
+- [Movement Network](https://movementlabs.xyz)
+- [CopilotKit Documentation](https://docs.copilotkit.ai)
+- [Privy Documentation](https://docs.privy.io)
+- [LangGraph Documentation](https://langchain-ai.github.io/langgraph/)
+- [Google ADK Documentation](https://ai.google.dev/adk)
+- [A2A Protocol](https://github.com/ag-ui/a2a-sdk)
+- [AG-UI Protocol](https://github.com/ag-ui/ag-ui-adk)
