@@ -2,7 +2,7 @@
 
 /**
  * QuestCard Component
- * 
+ *
  * Innovative, compact quest card with modern design and smooth animations
  */
 
@@ -27,9 +27,16 @@ export const QuestCard: React.FC<QuestCardProps> = ({
   if (isMinimized) {
     return (
       <div className="bg-gradient-to-r from-purple-500/10 via-blue-500/10 to-indigo-500/10 dark:from-purple-500/20 dark:via-blue-500/20 dark:to-indigo-500/20 backdrop-blur-sm border-l-4 border-purple-500 dark:border-purple-400 rounded-r-lg p-2 my-1.5 shadow-sm hover:shadow-md transition-all duration-300 cursor-pointer group">
-        <div className="flex items-center justify-between gap-2" onClick={() => setIsMinimized(false)}>
+        <div
+          className="flex items-center justify-between gap-2"
+          onClick={() => setIsMinimized(false)}
+        >
           <div className="flex items-center gap-2 min-w-0 flex-1">
-            {step.icon && <span className="text-base flex-shrink-0 animate-pulse">{step.icon}</span>}
+            {step.icon && (
+              <span className="text-base flex-shrink-0 animate-pulse">
+                {step.icon}
+              </span>
+            )}
             <div className="min-w-0 flex-1">
               <p className="text-xs font-semibold text-gray-900 dark:text-gray-100 truncate group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors">
                 {step.title}
@@ -66,14 +73,16 @@ export const QuestCard: React.FC<QuestCardProps> = ({
     <div className="relative bg-gradient-to-br from-purple-50/80 via-blue-50/80 to-indigo-50/80 dark:from-purple-950/40 dark:via-blue-950/40 dark:to-indigo-950/40 backdrop-blur-sm border-l-4 border-purple-500 dark:border-purple-400 rounded-r-xl p-3 my-2 shadow-lg hover:shadow-xl transition-all duration-300 animate-in fade-in slide-in-from-top-2">
       {/* Animated gradient background effect */}
       <div className="absolute inset-0 bg-gradient-to-r from-purple-500/5 via-transparent to-indigo-500/5 rounded-r-xl opacity-0 hover:opacity-100 transition-opacity duration-500 pointer-events-none" />
-      
+
       {/* Header with icon and progress */}
       <div className="relative flex items-start justify-between gap-2 mb-2.5">
         <div className="flex items-center gap-2.5 min-w-0 flex-1">
           {step.icon && (
             <div className="relative flex-shrink-0">
               <span className="text-2xl relative z-10">{step.icon}</span>
-              <span className="absolute inset-0 text-2xl blur-sm opacity-30 animate-pulse">{step.icon}</span>
+              <span className="absolute inset-0 text-2xl blur-sm opacity-30 animate-pulse">
+                {step.icon}
+              </span>
             </div>
           )}
           <div className="min-w-0 flex-1">
@@ -157,4 +166,3 @@ export const QuestCard: React.FC<QuestCardProps> = ({
     </div>
   );
 };
-

@@ -2,7 +2,7 @@
 
 /**
  * QuestManager Component
- * 
+ *
  * Manages quest state and displays quest cards in the chat interface
  */
 
@@ -31,7 +31,8 @@ const ONBOARDING_QUEST: Quest = {
       title: "Check Your Balance",
       description:
         "Learn how to check your cryptocurrency balance. This is the first step to managing your assets on Movement Network.",
-      instruction: 'Type "check my balance" or "get my wallet balance" in the chat',
+      instruction:
+        'Type "check my balance" or "get my wallet balance" in the chat',
       agentName: "balance",
       actionType: "balance",
       reward: "Balance Explorer",
@@ -110,8 +111,8 @@ export const QuestManager: React.FC<QuestManagerProps> = ({
 
       if (lastUserMessage) {
         const text = (
-          (lastUserMessage as any).content || 
-          (lastUserMessage as any).text || 
+          (lastUserMessage as any).content ||
+          (lastUserMessage as any).text ||
           ""
         ).toLowerCase();
         const beginnerKeywords = [
@@ -156,7 +157,10 @@ export const QuestManager: React.FC<QuestManagerProps> = ({
 
     // Check if we got a response from the expected agent
     const hasAgentResponse = messages.some((m: any) => {
-      if (m.type === "ResultMessage" && m.actionName === "send_message_to_a2a_agent") {
+      if (
+        m.type === "ResultMessage" &&
+        m.actionName === "send_message_to_a2a_agent"
+      ) {
         const args = m.args as any;
         return args?.agentName === currentStep?.agentName;
       }
@@ -169,10 +173,14 @@ export const QuestManager: React.FC<QuestManagerProps> = ({
         const actionName = m.actionName || "";
         const stepAction = currentStep?.actionType;
 
-        if (stepAction === "swap" && actionName === "initiate_swap") return true;
+        if (stepAction === "swap" && actionName === "initiate_swap")
+          return true;
         if (stepAction === "transfer" && actionName === "initiate_transfer")
           return true;
-        if (stepAction === "lending" && actionName === "show_lending_platform_selection")
+        if (
+          stepAction === "lending" &&
+          actionName === "show_lending_platform_selection"
+        )
           return true;
       }
       return false;
@@ -220,7 +228,11 @@ export const QuestManager: React.FC<QuestManagerProps> = ({
     completeCurrentStep();
   }, [completeCurrentStep]);
 
-  if (!isVisible || quest.status === "completed" || quest.status === "skipped") {
+  if (
+    !isVisible ||
+    quest.status === "completed" ||
+    quest.status === "skipped"
+  ) {
     return null;
   }
 
@@ -232,9 +244,7 @@ export const QuestManager: React.FC<QuestManagerProps> = ({
     currentStep: quest.currentStepIndex + 1,
     totalSteps: quest.steps.length,
     completedSteps: quest.currentStepIndex,
-    percentage: Math.round(
-      (quest.currentStepIndex / quest.steps.length) * 100
-    ),
+    percentage: Math.round((quest.currentStepIndex / quest.steps.length) * 100),
     status: quest.status,
   };
 
@@ -247,4 +257,3 @@ export const QuestManager: React.FC<QuestManagerProps> = ({
     />
   );
 };
-

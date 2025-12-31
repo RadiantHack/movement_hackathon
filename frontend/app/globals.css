@@ -174,7 +174,7 @@ div.copilotKitMessages {
   [class*="Suggestions"] {
     position: relative !important;
   }
-  
+
   /* Fix for suggestions container on mobile */
   .suggestions-container-mobile {
     position: fixed !important;
@@ -184,11 +184,11 @@ div.copilotKitMessages {
     z-index: 1000 !important;
     background: transparent !important;
   }
-  
+
   html.dark .suggestions-container-mobile {
     background: transparent !important;
   }
-  
+
   /* Ensure input container has proper spacing */
   .copilotKitInputContainer {
     margin-top: auto !important;

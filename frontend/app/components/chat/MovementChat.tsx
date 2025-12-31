@@ -302,27 +302,33 @@ const ChatInner = ({ walletAddress }: MovementChatProps) => {
     // Find the messages container - try multiple selectors
     const findMessagesContainer = () => {
       return (
-        document.querySelector('.copilotKitChat [class*="MessagesContainer"]') ||
-        document.querySelector('.copilotKitChat [class*="messages-container"]') ||
-        document.querySelector('.copilotKitChat > div > div:first-child') ||
-        document.querySelector('.copilotKitChat')
+        document.querySelector(
+          '.copilotKitChat [class*="MessagesContainer"]'
+        ) ||
+        document.querySelector(
+          '.copilotKitChat [class*="messages-container"]'
+        ) ||
+        document.querySelector(".copilotKitChat > div > div:first-child") ||
+        document.querySelector(".copilotKitChat")
       );
     };
 
     const messagesContainer = findMessagesContainer();
 
     if (messagesContainer) {
-      messagesContainer.addEventListener('scroll', handleScroll, { passive: true });
+      messagesContainer.addEventListener("scroll", handleScroll, {
+        passive: true,
+      });
     }
 
     // Also check for scroll on window (mobile browsers)
-    window.addEventListener('scroll', handleWindowScroll, { passive: true });
+    window.addEventListener("scroll", handleWindowScroll, { passive: true });
 
     return () => {
       if (messagesContainer) {
-        messagesContainer.removeEventListener('scroll', handleScroll);
+        messagesContainer.removeEventListener("scroll", handleScroll);
       }
-      window.removeEventListener('scroll', handleWindowScroll);
+      window.removeEventListener("scroll", handleWindowScroll);
     };
   }, []);
 
@@ -804,23 +810,27 @@ REMEMBER: The wallet address is ${walletAddress} - use it exactly as shown.`
               initial: "Hi! 👋 How can I assist you today?",
             }}
           />
-          
+
           {/* Suggestions - Positioned just above chat input box, hide when scrolled or submitted */}
-          {(!visibleMessages || visibleMessages.length <= 2) && !hasScrolled && !suggestionSubmitted && (
-            <div className={`fixed sm:absolute bottom-32 sm:bottom-32 left-0 right-0 z-[100] pointer-events-none sm:left-auto sm:right-auto suggestions-container-mobile transition-all duration-300 ${hasScrolled || suggestionSubmitted ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
-              <div className="pointer-events-auto max-w-full sm:max-w-none">
-                <Suggestions
-                  walletAddress={walletAddress}
-                  appendMessage={appendMessage}
-                  onSuggestionClick={(text) => {
-                    console.log("Suggestion clicked:", text);
-                    // Hide suggestions immediately when clicked
-                    setSuggestionSubmitted(true);
-                  }}
-                />
+          {(!visibleMessages || visibleMessages.length <= 2) &&
+            !hasScrolled &&
+            !suggestionSubmitted && (
+              <div
+                className={`fixed sm:absolute bottom-32 sm:bottom-32 left-0 right-0 z-[100] pointer-events-none sm:left-auto sm:right-auto suggestions-container-mobile transition-all duration-300 ${hasScrolled || suggestionSubmitted ? "opacity-0 pointer-events-none" : "opacity-100"}`}
+              >
+                <div className="pointer-events-auto max-w-full sm:max-w-none">
+                  <Suggestions
+                    walletAddress={walletAddress}
+                    appendMessage={appendMessage}
+                    onSuggestionClick={(text) => {
+                      console.log("Suggestion clicked:", text);
+                      // Hide suggestions immediately when clicked
+                      setSuggestionSubmitted(true);
+                    }}
+                  />
+                </div>
               </div>
-            </div>
-          )}
+            )}
         </div>
       </div>
     </div>

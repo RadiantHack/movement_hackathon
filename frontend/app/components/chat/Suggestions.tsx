@@ -2,7 +2,7 @@
 
 /**
  * Suggestions Component
- * 
+ *
  * Displays clickable suggestion prompts to help users get started
  */
 
@@ -86,12 +86,12 @@ export const Suggestions: React.FC<SuggestionsProps> = ({
     const submitViaInput = () => {
       // Try multiple selectors to find the textarea
       const selectors = [
-        '.copilotKitInput textarea',
-        '.copilotKitInputContainer textarea',
+        ".copilotKitInput textarea",
+        ".copilotKitInputContainer textarea",
         'textarea[placeholder*="Message"]',
         'textarea[placeholder*="message"]',
         'textarea[placeholder*="Type"]',
-        '.copilotKitChat textarea',
+        ".copilotKitChat textarea",
       ];
 
       let textarea: HTMLTextAreaElement | null = null;
@@ -104,9 +104,9 @@ export const Suggestions: React.FC<SuggestionsProps> = ({
         // Set the value using React's value setter
         const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
           window.HTMLTextAreaElement.prototype,
-          'value'
+          "value"
         )?.set;
-        
+
         if (nativeInputValueSetter) {
           nativeInputValueSetter.call(textarea, suggestion.text);
         } else {
@@ -114,11 +114,17 @@ export const Suggestions: React.FC<SuggestionsProps> = ({
         }
 
         // Create and dispatch input event (React listens to this)
-        const inputEvent = new Event('input', { bubbles: true, cancelable: true });
+        const inputEvent = new Event("input", {
+          bubbles: true,
+          cancelable: true,
+        });
         textarea.dispatchEvent(inputEvent);
 
         // Create and dispatch change event
-        const changeEvent = new Event('change', { bubbles: true, cancelable: true });
+        const changeEvent = new Event("change", {
+          bubbles: true,
+          cancelable: true,
+        });
         textarea.dispatchEvent(changeEvent);
 
         // Focus the textarea
@@ -149,9 +155,9 @@ export const Suggestions: React.FC<SuggestionsProps> = ({
             submitButton.click();
           } else {
             // Fallback: simulate Enter key press
-            const enterEvent = new KeyboardEvent('keydown', {
-              key: 'Enter',
-              code: 'Enter',
+            const enterEvent = new KeyboardEvent("keydown", {
+              key: "Enter",
+              code: "Enter",
               keyCode: 13,
               which: 13,
               bubbles: true,
@@ -160,9 +166,9 @@ export const Suggestions: React.FC<SuggestionsProps> = ({
             textarea.dispatchEvent(enterEvent);
 
             // Also try keypress
-            const keypressEvent = new KeyboardEvent('keypress', {
-              key: 'Enter',
-              code: 'Enter',
+            const keypressEvent = new KeyboardEvent("keypress", {
+              key: "Enter",
+              code: "Enter",
               keyCode: 13,
               which: 13,
               bubbles: true,
@@ -184,7 +190,7 @@ export const Suggestions: React.FC<SuggestionsProps> = ({
     if (!inputFound && appendMessage) {
       setTimeout(() => {
         try {
-          if (typeof appendMessage === 'function') {
+          if (typeof appendMessage === "function") {
             appendMessage({
               role: "user",
               content: suggestion.text,
@@ -195,9 +201,9 @@ export const Suggestions: React.FC<SuggestionsProps> = ({
           // Retry input field after error
           setTimeout(() => {
             submitViaInput();
-        }, 300);
-      }
-    }, 100);
+          }, 300);
+        }
+      }, 100);
     }
   };
 
@@ -248,10 +254,14 @@ export const Suggestions: React.FC<SuggestionsProps> = ({
                   flex items-center gap-1 sm:gap-1.5 md:gap-2
                 `}
               >
-                <span className="text-xs sm:text-sm md:text-base flex-shrink-0">{suggestion.icon}</span>
+                <span className="text-xs sm:text-sm md:text-base flex-shrink-0">
+                  {suggestion.icon}
+                </span>
                 <span className="whitespace-nowrap">{suggestion.text}</span>
                 {isClicked && (
-                  <span className="ml-0.5 sm:ml-1 md:ml-1.5 text-[10px] sm:text-xs flex-shrink-0">✓</span>
+                  <span className="ml-0.5 sm:ml-1 md:ml-1.5 text-[10px] sm:text-xs flex-shrink-0">
+                    ✓
+                  </span>
                 )}
               </button>
             );
@@ -270,4 +280,3 @@ export const Suggestions: React.FC<SuggestionsProps> = ({
     </div>
   );
 };
-

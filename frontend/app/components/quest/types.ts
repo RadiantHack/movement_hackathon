@@ -1,10 +1,14 @@
 /**
  * Quest System Types
- * 
+ *
  * Defines types for the interactive onboarding quest system
  */
 
-export type QuestStatus = "not_started" | "in_progress" | "completed" | "skipped";
+export type QuestStatus =
+  | "not_started"
+  | "in_progress"
+  | "completed"
+  | "skipped";
 
 export interface QuestStep {
   id: string;
@@ -12,7 +16,13 @@ export interface QuestStep {
   description: string;
   instruction: string; // What the user should do
   agentName?: string; // Which agent to interact with
-  actionType?: "balance" | "swap" | "transfer" | "lending" | "bridge" | "sentiment";
+  actionType?:
+    | "balance"
+    | "swap"
+    | "transfer"
+    | "lending"
+    | "bridge"
+    | "sentiment";
   expectedResponse?: string; // Pattern to match for completion
   reward?: string; // Achievement/badge name
   icon?: string;
@@ -101,4 +111,3 @@ export const QUEST_ACHIEVEMENTS: QuestAchievement[] = [
     rarity: "legendary",
   },
 ];
-
