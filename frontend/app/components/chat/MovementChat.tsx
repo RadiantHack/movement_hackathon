@@ -301,6 +301,117 @@ const ChatInner = ({ walletAddress }: MovementChatProps) => {
     },
   });
 
+  // Detect message submission to hide suggestions immediately
+  useEffect(() => {
+    const handleMessageSubmit = () => {
+      // Hide suggestions immediately when user submits a message
+      setSuggestionSubmitted(true);
+    };
+
+    // Store handlers for cleanup
+    const handlers: Array<{
+      element: Element | Document;
+      event: string;
+      handler: EventListener;
+      options?: any;
+    }> = [];
+
+    // Set up event listeners for message submission
+    const setupListeners = () => {
+      // Find textarea and listen for Enter key (most reliable method)
+      const textarea =
+        (document.querySelector(
+          ".copilotKitInput textarea"
+        ) as HTMLTextAreaElement) ||
+        (document.querySelector(
+          ".copilotKitInputContainer textarea"
+        ) as HTMLTextAreaElement) ||
+        (document.querySelector(
+          ".copilotKitChat textarea"
+        ) as HTMLTextAreaElement);
+
+      if (textarea && !textarea.hasAttribute("data-suggestion-listener")) {
+        const keyDownHandler = (e: Event) => {
+          const keyEvent = e as KeyboardEvent;
+          // Check if Enter is pressed (without Shift for new line)
+          if (
+            keyEvent.key === "Enter" &&
+            !keyEvent.shiftKey &&
+            !keyEvent.isComposing
+          ) {
+            handleMessageSubmit();
+          }
+        };
+        textarea.addEventListener("keydown", keyDownHandler, { capture: true });
+        textarea.setAttribute("data-suggestion-listener", "true");
+        handlers.push({
+          element: textarea,
+          event: "keydown",
+          handler: keyDownHandler,
+          options: { capture: true },
+        });
+      }
+
+      // Listen for submit button clicks
+      const submitButtons = document.querySelectorAll(
+        '.copilotKitInput button[type="submit"], ' +
+          '.copilotKitInputContainer button[type="submit"], ' +
+          '.copilotKitChat button[type="submit"], ' +
+          '.copilotKitInput button[aria-label*="Send"], ' +
+          '.copilotKitInput button[aria-label*="send"]'
+      );
+
+      submitButtons.forEach((button) => {
+        if (!button.hasAttribute("data-suggestion-listener")) {
+          button.addEventListener("click", handleMessageSubmit, {
+            capture: true,
+          });
+          button.setAttribute("data-suggestion-listener", "true");
+          handlers.push({
+            element: button,
+            event: "click",
+            handler: handleMessageSubmit,
+            options: { capture: true },
+          });
+        }
+      });
+    };
+
+    // Initial setup with a small delay to ensure DOM is ready
+    let timeoutId: NodeJS.Timeout | null = setTimeout(setupListeners, 100);
+
+    // Also set up a MutationObserver to catch dynamically added inputs
+    const observer = new MutationObserver(() => {
+      // Debounce to avoid too many calls
+      if (timeoutId) clearTimeout(timeoutId);
+      timeoutId = setTimeout(setupListeners, 50);
+    });
+
+    // Observe the chat container for changes
+    const chatContainer =
+      document.querySelector(".copilotKitChat") ||
+      document.querySelector(".copilotKitInput") ||
+      document.querySelector(".copilotKitInputContainer") ||
+      document.body;
+
+    if (chatContainer) {
+      observer.observe(chatContainer, {
+        childList: true,
+        subtree: true,
+      });
+    }
+
+    return () => {
+      if (timeoutId) clearTimeout(timeoutId);
+      // Cleanup: remove all event listeners
+      handlers.forEach(({ element, event, handler, options }) => {
+        element.removeEventListener(event, handler, options);
+      });
+      handlers.length = 0;
+      observer.disconnect();
+    };
+  }, []);
+
   // Detect scroll to hide suggestions
   useEffect(() => {
     const handleScroll = (e: Event) => {

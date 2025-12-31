@@ -411,8 +411,8 @@ export const BorrowCard: React.FC<BorrowCardProps> = ({ walletAddress }) => {
   }, [ready, authenticated, walletAddress, amount, borrowing]);
 
   return (
-    <div className="w-full max-w-md mx-auto">
-      <div className="rounded-2xl p-6 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-lg">
+    <div className="w-full max-w-full sm:max-w-md mx-auto px-2 sm:px-0">
+      <div className="rounded-2xl p-4 sm:p-5 md:p-6 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-lg overflow-hidden">
         <div className="flex items-center gap-3 mb-6">
           <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center">
             <svg
