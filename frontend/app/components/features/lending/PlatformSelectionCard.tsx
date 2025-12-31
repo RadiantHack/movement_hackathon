@@ -99,8 +99,8 @@ export const PlatformSelectionCard: React.FC<PlatformSelectionCardProps> = ({
 
   // Show platform selection UI
   return (
-    <div className="my-3">
-      <div className="rounded-2xl p-6 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-lg">
+    <div className="my-3 mx-2 sm:mx-0">
+      <div className="rounded-2xl p-4 sm:p-5 md:p-6 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 shadow-lg max-w-full overflow-hidden">
         <div className="mb-4">
           <h3 className="text-lg font-semibold text-zinc-950 dark:text-zinc-50 mb-2">
             Choose a Platform to {action === "borrow" ? "Borrow" : "Lend"}{" "}

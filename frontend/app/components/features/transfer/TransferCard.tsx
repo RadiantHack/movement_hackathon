@@ -241,7 +241,7 @@ export const TransferCard: React.FC<TransferCardProps> = ({
   );
 
   return (
-    <div className="rounded-2xl p-6 my-4 backdrop-blur-xl bg-white/40 border border-white/20 shadow-[0_8px_24px_rgba(0,0,0,0.08)] animate-fade-in-up">
+    <div className="rounded-2xl p-4 sm:p-5 md:p-6 my-4 backdrop-blur-xl bg-white/40 border border-white/20 shadow-[0_8px_24px_rgba(0,0,0,0.08)] animate-fade-in-up max-w-full overflow-hidden mx-2 sm:mx-0">
       <div className="flex items-center gap-4 mb-6">
         <div className="w-12 h-12 rounded-xl bg-linear-to-br from-purple-200 to-purple-300 flex items-center justify-center shadow-inner">
           <span className="text-2xl">💸</span>
