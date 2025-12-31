@@ -35,6 +35,20 @@ const ChatInner = ({ walletAddress }: MovementChatProps) => {
   const { visibleMessages, appendMessage } = useCopilotChat();
   const [hasScrolled, setHasScrolled] = useState(false);
   const [suggestionSubmitted, setSuggestionSubmitted] = useState(false);
+
+  // Wrapper function to adapt simple message format to CopilotKit Message format
+  // Note: appendMessage is deprecated but still used as fallback in Suggestions component
+  const handleAppendMessage = (message: { role: string; content: string }) => {
+    // appendMessage expects a DeprecatedGqlMessage, but we'll use the content directly
+    // This is only used as a fallback in Suggestions if input field submission fails
+    if (message.role === "user" && appendMessage) {
+      // Type assertion to work around deprecated API
+      (appendMessage as any)({
+        role: "user",
+        content: message.content,
+      });
+    }
+  };
   const [lendingRecommendation, setLendingRecommendation] = useState<{
     action: "borrow" | "lend";
     asset: string;
@@ -755,7 +769,7 @@ REMEMBER: The wallet address is ${walletAddress} - use it exactly as shown.`
 }`;
 
   return (
-    <div className="h-full w-full flex flex-col">
+    <div className="h-full w-full flex flex-col min-h-0">
       {/* Quest Manager - Shows onboarding quest for beginners */}
       <div className="flex-shrink-0">
         <QuestManager
@@ -767,7 +781,7 @@ REMEMBER: The wallet address is ${walletAddress} - use it exactly as shown.`
       </div>
 
       {/* Main Chat Area */}
-      <div className="flex-1 min-h-0 overflow-visible flex flex-col">
+      <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden sm:overflow-visible flex flex-col">
         {lendingRecommendation && (
           <PlatformSelectionCard
             action={lendingRecommendation.action}
@@ -801,9 +815,9 @@ REMEMBER: The wallet address is ${walletAddress} - use it exactly as shown.`
             )}
           </>
         )}
-        <div className="flex-1 min-h-0 overflow-visible relative">
+        <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden sm:overflow-visible relative">
           <CopilotChat
-            className="h-full w-full"
+            className="h-full w-full min-h-0"
             instructions={instructions}
             labels={{
               title: "Movement Assistant",
@@ -821,7 +835,7 @@ REMEMBER: The wallet address is ${walletAddress} - use it exactly as shown.`
                 <div className="pointer-events-auto max-w-full sm:max-w-none">
                   <Suggestions
                     walletAddress={walletAddress}
-                    appendMessage={appendMessage}
+                    appendMessage={handleAppendMessage}
                     onSuggestionClick={(text) => {
                       console.log("Suggestion clicked:", text);
                       // Hide suggestions immediately when clicked
