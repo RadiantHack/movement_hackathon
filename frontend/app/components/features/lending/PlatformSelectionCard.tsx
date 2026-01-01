@@ -73,7 +73,11 @@ export const PlatformSelectionCard: React.FC<PlatformSelectionCardProps> = ({
               price: 1, // Default price, will be fetched if needed
               borrowApr: parseFloat(echelonRate.replace("%", "")), // Already in percentage format
               borrowCap: 0,
+              ltv: 0.7, // Default LTV, should be fetched from asset data if available
             }}
+            availableBalance={0} // Will be calculated by parent component
+            totalSupplyBalance={0} // Will be calculated by parent component
+            totalBorrowBalance={0} // Will be calculated by parent component
           />
         </div>
       );
