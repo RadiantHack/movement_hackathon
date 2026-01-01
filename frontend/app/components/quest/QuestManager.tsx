@@ -128,6 +128,8 @@ export const QuestManager: React.FC<QuestManagerProps> = ({
             startedAt: new Date(),
           }));
           setIsVisible(true);
+          // Track message count when quest first starts
+          setStepStartMessageCount((visibleMessages || []).length);
         }
       }
     };
@@ -138,11 +140,18 @@ export const QuestManager: React.FC<QuestManagerProps> = ({
   // Track if current step has been completed (user action detected)
   // But don't auto-advance - wait for user confirmation via "I've Done This" button
   const [stepActionDetected, setStepActionDetected] = useState(false);
+  
+  // Track the message count when the current step started
+  // This ensures we only detect actions that occurred AFTER the step started
+  const [stepStartMessageCount, setStepStartMessageCount] = useState(0);
 
-  // Reset action detection when step changes
+  // Reset action detection and track message count when step changes
   useEffect(() => {
     setStepActionDetected(false);
-  }, [quest.currentStepIndex]);
+    // Track the current message count when step changes
+    // Only reset when step index changes, not when messages change
+    setStepStartMessageCount((visibleMessages || []).length);
+  }, [quest.currentStepIndex]); // Removed visibleMessages from dependencies
 
   // Check for quest step completion based on agent responses
   // Only track that action was detected, but don't auto-advance
@@ -154,9 +163,15 @@ export const QuestManager: React.FC<QuestManagerProps> = ({
 
     const messages = visibleMessages || [];
     const currentStep = quest.steps[quest.currentStepIndex];
+    
+    // Only check messages that occurred AFTER the step started
+    // This prevents false positives from actions triggered before the quest step began
+    const messagesAfterStepStart = messages.slice(stepStartMessageCount);
 
     // Check if we got a response from the expected agent
-    const hasAgentResponse = messages.some((m: any) => {
+    // Only check messages that occurred AFTER the step started
+    const hasAgentResponse = messagesAfterStepStart.some((m: any) => {
+      // Check for ResultMessage with send_message_to_a2a_agent
       if (
         m.type === "ResultMessage" &&
         m.actionName === "send_message_to_a2a_agent"
@@ -189,13 +204,32 @@ export const QuestManager: React.FC<QuestManagerProps> = ({
         }
         
         // For other agents, just check if agent name matches
-        return agentName === currentStep?.agentName;
+        if (agentName === currentStep?.agentName) {
+          return true;
+        }
       }
+      
+      // Also check for assistant messages that contain balance information
+      // This is a fallback in case the ResultMessage format is different
+      if (currentStep?.actionType === "balance" && m.role === "assistant") {
+        const content = m.content || m.text || "";
+        const contentLower = typeof content === "string" ? content.toLowerCase() : "";
+        // Check if the message mentions balance results (MOVE, USDT, USDC, etc.)
+        const hasBalanceInfo = 
+          (contentLower.includes("move:") || contentLower.includes("move ")) &&
+          (contentLower.includes("balance") || contentLower.includes("usdt") || contentLower.includes("usdc"));
+        
+        if (hasBalanceInfo) {
+          return true;
+        }
+      }
+      
       return false;
     });
 
     // Check for action completions and action rendering
-    const hasActionCompletion = messages.some((m: any) => {
+    // Only check messages that occurred AFTER the step started
+    const hasActionCompletion = messagesAfterStepStart.some((m: any) => {
       const actionName = m.actionName || "";
       const stepAction = currentStep?.actionType;
 
@@ -241,7 +275,22 @@ export const QuestManager: React.FC<QuestManagerProps> = ({
     } else {
       setStepActionDetected(false);
     }
-  }, [visibleMessages, quest, isVisible]);
+    
+    // Debug logging (can be removed in production)
+    if (process.env.NODE_ENV === "development") {
+      console.log("[QuestManager] Detection check:", {
+        stepIndex: quest.currentStepIndex,
+        stepAction: currentStep?.actionType,
+        stepAgentName: currentStep?.agentName,
+        totalMessages: messages.length,
+        messagesAfterStepStart: messagesAfterStepStart.length,
+        stepStartMessageCount,
+        hasAgentResponse,
+        hasActionCompletion,
+        actionDetected: hasAgentResponse || hasActionCompletion,
+      });
+    }
+  }, [visibleMessages, quest, isVisible, stepStartMessageCount]);
 
   const completeCurrentStep = useCallback(() => {
     setQuest((prev) => {

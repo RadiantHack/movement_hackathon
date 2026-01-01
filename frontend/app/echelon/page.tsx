@@ -1071,11 +1071,20 @@ export default function EchelonPage() {
         }}
         asset={selectedAsset}
         availableBalance={
-          selectedAsset
-            ? (totalSupplyBalance * 0.7 - totalBorrowBalance) /
-              (selectedAsset.price || 1)
+          selectedAsset && totalSupplyBalance > 0
+            ? // Use asset's actual LTV (loan-to-value) ratio instead of hardcoded 70%
+              // Formula: (Total Collateral Value * LTV) - Existing Borrows = Available Borrow Power (in USD)
+              // Then convert to asset amount: Available Borrow Power / Asset Price
+              Math.max(
+                0,
+                (totalSupplyBalance * (selectedAsset.ltv || 0.7) -
+                  totalBorrowBalance) /
+                  (selectedAsset.price || 1)
+              )
             : 0
         }
+        totalSupplyBalance={totalSupplyBalance}
+        totalBorrowBalance={totalBorrowBalance}
         onSuccess={async () => {
           // Wait a bit for blockchain state to update after transaction confirmation
           await new Promise((resolve) => setTimeout(resolve, 2000));

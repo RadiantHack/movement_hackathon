@@ -589,16 +589,23 @@ export function BorrowModal({
     }
 
     if (activeTab === "borrow") {
-      // Check if exceeds max borrow from portfolio
+      // MovePosition validation: maxBorrowFromPortfolio is the authoritative source
+      // It's calculated by the portfolio API based on collateral, health factor, and LTV
+      // If null, it means no borrowing power (handled in handleSubmit for early feedback)
+      // If zero or negative, also no borrowing power
+      if (maxBorrowFromPortfolio !== null && maxBorrowFromPortfolio <= 0) {
+        return "No borrowing power available. Please supply more collateral or check your health factor.";
+      }
+      // Check if exceeds max borrow from portfolio (MovePosition's primary validation)
       if (
         maxBorrowFromPortfolio !== null &&
         parsedAmount > maxBorrowFromPortfolio
       ) {
-        return "Exceeds max safe borrow based on your collateral";
+        return `Exceeds max safe borrow. You can borrow up to ${maxBorrowFromPortfolio.toFixed(6)} ${asset.symbol} based on your collateral and health factor.`;
       }
-      // Check if exceeds available liquidity
+      // Check if exceeds available liquidity in the broker (MovePosition's secondary check)
       if (parsedAmount > asset.availableLiquidity) {
-        return "Exceeds available liquidity";
+        return `Exceeds available liquidity. Maximum available: ${asset.availableLiquidity.toFixed(6)} ${asset.symbol}`;
       }
       // Check health factor zones (matching MovePosition)
       if (simHealthRed) {
@@ -646,6 +653,17 @@ export function BorrowModal({
   const canReview =
     amount && parsedAmount > 0 && !submitting && !validationError;
 
+  /**
+   * Check if user has collateral
+   */
+  const hasCollateral = useMemo(() => {
+    if (!portfolioData) return false;
+    // Check if there are any collaterals with non-zero amount
+    return portfolioData.collaterals.some(
+      (c) => BigInt(c.amount) > 0
+    );
+  }, [portfolioData]);
+
   const handleSubmit = async () => {
     if (!movementWallet || !walletAddress || !asset) {
       setSubmitError("Wallet not connected");
@@ -662,6 +680,30 @@ export function BorrowModal({
     if (isNaN(parsedAmountValue) || parsedAmountValue <= 0) {
       setSubmitError("Please enter a valid amount greater than 0");
       return;
+    }
+
+    // MovePosition validation: Check borrowing power from portfolio API
+    // The portfolio API's maxBorrow is the source of truth - it's null when:
+    // 1. No collateral exists
+    // 2. Insufficient collateral (health factor too low)
+    // 3. Already at max borrow capacity
+    if (activeTab === "borrow") {
+      if (maxBorrowFromPortfolio === null) {
+        // Check if it's because of no collateral or insufficient borrowing power
+        if (!hasCollateral) {
+          setSubmitError("You need to supply collateral before you can borrow. Please supply assets first.");
+        } else {
+          // Has collateral but no borrowing power - likely health factor issue
+          setSubmitError("Insufficient borrowing power. Your health factor may be too low or you've reached your borrowing limit. Please supply more assets or repay existing borrows.");
+        }
+        return;
+      }
+      
+      // Additional check: if maxBorrow is 0 or very small, user can't borrow
+      if (maxBorrowFromPortfolio <= 0) {
+        setSubmitError("No borrowing power available. Please supply more collateral or check your health factor.");
+        return;
+      }
     }
 
     // Use validation error if present
