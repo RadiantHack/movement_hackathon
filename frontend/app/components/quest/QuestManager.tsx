@@ -77,19 +77,6 @@ const ONBOARDING_QUEST: Quest = {
       icon: "📤",
       estimatedTime: 45,
     },
-    {
-      id: "step_5_bridge",
-      title: "Bridge Tokens",
-      description:
-        "Learn how to bridge tokens from other networks to Movement Network. This allows you to bring assets from Ethereum, BNB, Polygon, and other chains.",
-      instruction:
-        'Type "bridge tokens to Movement" or "bridge USDC from Ethereum to Movement"',
-      agentName: "bridge",
-      actionType: "bridge",
-      reward: "Bridge Master",
-      icon: "🌉",
-      estimatedTime: 90,
-    },
   ],
 };
 
@@ -162,17 +149,63 @@ export const QuestManager: React.FC<QuestManagerProps> = ({
         m.actionName === "send_message_to_a2a_agent"
       ) {
         const args = m.args as any;
-        return args?.agentName === currentStep?.agentName;
+        const agentName = args?.agentName;
+        
+        // For bridge quest, we need to verify it's Movement -> Ethereum
+        if (currentStep?.actionType === "bridge" && agentName === "bridge") {
+          const task = args?.task || "";
+          const result = m.result || "";
+          const taskLower = task.toLowerCase();
+          const resultLower = typeof result === "string" ? result.toLowerCase() : "";
+          
+          // Check if it mentions Movement to Ethereum (or Movement -> Ethereum)
+          const isMovementToEthereum = 
+            (taskLower.includes("movement") && taskLower.includes("ethereum")) ||
+            (taskLower.includes("movement") && taskLower.includes("eth")) ||
+            (resultLower.includes("movement") && resultLower.includes("ethereum")) ||
+            (resultLower.includes("movement") && resultLower.includes("eth"));
+          
+          // Also check that it's FROM movement (not TO movement)
+          const isFromMovement = 
+            taskLower.includes("from movement") ||
+            taskLower.includes("movement to") ||
+            resultLower.includes("from movement") ||
+            resultLower.includes("movement to");
+          
+          return isMovementToEthereum && isFromMovement;
+        }
+        
+        // For other agents, just check if agent name matches
+        return agentName === currentStep?.agentName;
       }
       return false;
     });
 
-    // Check for action completions
+    // Check for action completions and action rendering
     const hasActionCompletion = messages.some((m: any) => {
-      if (m.type === "ResultMessage") {
-        const actionName = m.actionName || "";
-        const stepAction = currentStep?.actionType;
+      const actionName = m.actionName || "";
+      const stepAction = currentStep?.actionType;
 
+      // For transfer, swap, and lending - check if action exists in messages
+      // This catches both when actions are rendered (cards open) and when they complete
+      if (stepAction === "transfer" && actionName === "initiate_transfer") {
+        // TransferCard is rendered when initiate_transfer action is called
+        return true;
+      }
+      if (stepAction === "swap" && actionName === "initiate_swap") {
+        // SwapCard is rendered when initiate_swap action is called
+        return true;
+      }
+      if (
+        stepAction === "lending" &&
+        actionName === "show_lending_platform_selection"
+      ) {
+        // PlatformSelectionCard is rendered when show_lending_platform_selection action is called
+        return true;
+      }
+
+      // Also check for ResultMessage type (action completed)
+      if (m.type === "ResultMessage") {
         if (stepAction === "swap" && actionName === "initiate_swap")
           return true;
         if (stepAction === "transfer" && actionName === "initiate_transfer")
@@ -182,7 +215,9 @@ export const QuestManager: React.FC<QuestManagerProps> = ({
           actionName === "show_lending_platform_selection"
         )
           return true;
+        // Bridge completion is handled in hasAgentResponse above
       }
+
       return false;
     });
 

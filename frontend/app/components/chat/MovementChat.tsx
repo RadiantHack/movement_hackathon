@@ -937,13 +937,14 @@ REMEMBER: The wallet address is ${walletAddress} - use it exactly as shown.`
           />
 
           {/* Suggestions - Positioned just above chat input box, hide when scrolled or submitted */}
+          {/* Only show within chat container, not in sidebars */}
           {(!visibleMessages || visibleMessages.length <= 2) &&
             !hasScrolled &&
             !suggestionSubmitted && (
               <div
-                className={`fixed sm:absolute bottom-32 sm:bottom-32 left-0 right-0 z-[100] pointer-events-none sm:left-auto sm:right-auto suggestions-container-mobile transition-all duration-300 ${hasScrolled || suggestionSubmitted ? "opacity-0 pointer-events-none" : "opacity-100"}`}
+                className={`absolute bottom-32 left-0 right-0 z-[100] pointer-events-none transition-all duration-300 ${hasScrolled || suggestionSubmitted ? "opacity-0 pointer-events-none" : "opacity-100"}`}
               >
-                <div className="pointer-events-auto max-w-full sm:max-w-none">
+                <div className="pointer-events-auto max-w-full px-2 sm:px-4">
                   <Suggestions
                     walletAddress={walletAddress}
                     appendMessage={handleAppendMessage}
