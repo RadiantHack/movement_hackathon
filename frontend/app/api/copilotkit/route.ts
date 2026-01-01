@@ -124,6 +124,16 @@ export async function POST(request: NextRequest) {
         * The quest system automatically detects when they complete each step
         * Help them understand what each action does (e.g., "Checking your balance shows what tokens you have")
       
+      **CRITICAL - QUEST BEHAVIOR (MANDATORY):**
+      - DO NOT proactively trigger actions for quest steps that the user hasn't explicitly requested
+      - DO NOT automatically initiate the next quest step's action after completing the current step
+      - ONLY respond to what the user explicitly asks for - wait for the user to type the next action
+      - If a user completes a quest step (e.g., checks balance), DO NOT automatically trigger the next step (e.g., swap)
+      - The quest card will guide the user - you should NOT take initiative to complete quest steps for them
+      - Example: If user completes "check my balance" and the next quest step is "swap tokens", DO NOT call initiate_swap unless the user explicitly says "swap" or "I want to swap"
+      - Wait for explicit user requests - do NOT anticipate or pre-empt quest steps
+      - The quest system handles step progression - you only respond to user queries
+      
       CRITICAL: This application works EXCLUSIVELY with Movement Network. All operations default to Movement Network.
 
 

@@ -229,9 +229,14 @@ export const QuestManager: React.FC<QuestManagerProps> = ({
 
     // Check for action completions and action rendering
     // Only check messages that occurred AFTER the step started
+    // CRITICAL: Only detect actions that match the CURRENT step's action type
     const hasActionCompletion = messagesAfterStepStart.some((m: any) => {
       const actionName = m.actionName || "";
       const stepAction = currentStep?.actionType;
+
+      // CRITICAL: Only check if the action matches the CURRENT step's action type
+      // This prevents detecting actions from future quest steps
+      if (!stepAction) return false;
 
       // For transfer, swap, and lending - check if action exists in messages
       // This catches both when actions are rendered (cards open) and when they complete
