@@ -339,15 +339,29 @@ orchestrator_agent = LlmAgent(
 
     2. **Call Frontend Swap Action**:
 
+       - **CRITICAL - FUNCTION CALL FORMAT**: Call the action as a PURE function call with ONLY the required parameters
+
+       - **DO NOT** include any response text, explanations, or additional text in the function call
+
+       - **DO NOT** write "I've initiated the swap" or similar text as part of the function name
+
+       - **ONLY** call: initiate_swap(fromToken="MOVE", toToken="USDC.e")
+
+       - **AFTER** the function call completes, THEN you can provide a response message to the user
+
        - Use the action: **initiate_swap**
 
        - Parameters:
 
-         * fromToken: The token symbol to swap from (e.g., "MOVE", "USDC", "USDT")
+         * fromToken: The token symbol to swap from (e.g., "MOVE", "USDC", "USDT") - string value only
 
-         * toToken: The token symbol to swap to (e.g., "USDC", "MOVE", "DAI")
+         * toToken: The token symbol to swap to (e.g., "USDC", "MOVE", "DAI") - string value only
 
-       - Example: initiate_swap(fromToken="MOVE", toToken="USDC")
+       - Example: initiate_swap(fromToken="MOVE", toToken="USDC.e")
+
+       - **WRONG**: "I've initiated the swap. initiate_swap(...)" or "initiate_swap with MOVE to USDC"
+
+       - **CORRECT**: initiate_swap(fromToken="MOVE", toToken="USDC.e")
 
     3. **Swap Card Display**:
 
@@ -367,11 +381,15 @@ orchestrator_agent = LlmAgent(
 
     - "swap MOVE for USDC"
 
-      → initiate_swap(fromToken="MOVE", toToken="USDC")
+      → Call: initiate_swap(fromToken="MOVE", toToken="USDC")
+
+      → Then respond: "I've opened the swap interface. Please enter the amount you'd like to swap."
 
     - "exchange USDT to MOVE"
 
-      → initiate_swap(fromToken="USDT", toToken="MOVE")
+      → Call: initiate_swap(fromToken="USDT", toToken="MOVE")
+
+      → Then respond: "I've opened the swap interface. Please enter the amount you'd like to swap."
 
     - "swap tokens" (missing tokens)
 
@@ -379,7 +397,23 @@ orchestrator_agent = LlmAgent(
 
     - "swap USDC" (only one token)
 
-      → initiate_swap(fromToken="USDC", toToken="MOVE") (assume swapping to MOVE)
+      → Call: initiate_swap(fromToken="USDC", toToken="MOVE") (assume swapping to MOVE)
+
+      → Then respond: "I've opened the swap interface. Please enter the amount you'd like to swap."
+
+    **CRITICAL - FUNCTION CALL RULES**:
+
+    - ALWAYS call frontend actions as PURE function calls with ONLY the required parameters
+
+    - DO NOT include response text, explanations, or additional text in the function call
+
+    - DO NOT write "I've initiated..." or similar text as part of the function name
+
+    - Call the function FIRST, wait for it to complete, THEN provide a response message
+
+    - Example of WRONG: "I've initiated the swap. initiate_swap(...)" or "initiate_swap with MOVE to USDC"
+
+    - Example of CORRECT: initiate_swap(fromToken="MOVE", toToken="USDC.e")
 
     **CRITICAL RULES FOR SWAPS**:
 
