@@ -186,8 +186,19 @@ export async function POST(request: NextRequest) {
          - Extract token symbol if querying specific token (USDC, USDT, DAI, etc.) - optional
          - Wait for balance response
          - Present results in a clear, user-friendly format
+         - **CRITICAL - AFTER BALANCE CHECK**: After presenting balance results, STOP and wait for the user's next request
+         - **DO NOT** automatically call initiate_swap or any other action after showing balance
+         - **DO NOT** suggest or trigger swap actions unless the user explicitly asks for it
+         - **DO NOT** anticipate what the user wants to do next - wait for explicit instructions
+         - If the user is on a quest, the quest card will guide them - you should NOT take initiative
 
       2. **Swap Tokens** - Use Frontend Action (initiate_swap)
+         - **⚠️ CRITICAL - ONLY CALL THIS IF USER EXPLICITLY ASKS FOR SWAP**:
+           * DO NOT call initiate_swap after balance checks, even if the user has tokens
+           * DO NOT call initiate_swap proactively or suggestively
+           * ONLY call initiate_swap when the user EXPLICITLY says they want to swap (e.g., "swap", "exchange", "I want to swap")
+           * If user just checked balance, STOP and wait - do NOT call swap
+           * If user is on a quest, wait for them to explicitly request swap - do NOT anticipate
          - When user wants to swap tokens (e.g., "swap MOVE for USDC", "exchange USDT to MOVE", "swap tokens"):
            * Extract the "from" token symbol (e.g., "MOVE", "USDC", "USDT", "USDC.e", "USDT.e", "WBTC.e", "WETH.e")
            * Extract the "to" token symbol (e.g., "USDC", "MOVE", "USDT", "USDC.e", "USDT.e", "WBTC.e", "WETH.e")
@@ -238,6 +249,10 @@ export async function POST(request: NextRequest) {
       - DO NOT ask for address or network - use them immediately
       - DO NOT use example addresses or placeholder addresses - extract the REAL address from the system message
       - Present: Native MOVE balance and token balances
+      - **CRITICAL - AFTER PRESENTING BALANCE**: STOP HERE - do NOT call any other actions
+      - **DO NOT** call initiate_swap or any other action after showing balance
+      - **DO NOT** suggest swap actions unless the user explicitly asks
+      - Wait for the user's next explicit request before taking any further action
 
       Example 2: Token balance
       - User: "Check my USDC balance" or "Get my USDC balance"
@@ -312,7 +327,7 @@ export async function POST(request: NextRequest) {
       - Always use uppercase for token symbols in responses
 
       RESPONSE STRATEGY:
-      - After each agent response, acknowledge what you received
+      - After each agent response, acknowledge what you received ONCE
       - Format balance results clearly with:
         * Network name
         * Token symbol (if applicable)
@@ -320,6 +335,12 @@ export async function POST(request: NextRequest) {
         * Wallet address (truncated for display: 0x...last4)
       - For multiple queries, organize results by network or token type
       - If there's an error, explain it clearly and suggest alternatives
+      - **CRITICAL - NO DUPLICATE MESSAGES**:
+        * DO NOT send the same message twice
+        * DO NOT repeat information you've already told the user
+        * DO NOT send multiple responses for the same action
+        * Send ONE clear response per user query
+        * If you've already responded about an action, do NOT respond again unless the user asks
 
       IMPORTANT: Once you have received a response from an agent, do NOT call that same
       agent again for the same information. Use the information you already have.
