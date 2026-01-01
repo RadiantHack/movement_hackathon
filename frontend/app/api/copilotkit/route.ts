@@ -201,11 +201,18 @@ export async function POST(request: NextRequest) {
            * If user says "swap X with Y" or "swap X for Y", X is fromToken and Y is toToken
            * If user says "exchange X to Y", X is fromToken and Y is toToken
            * If only one token is mentioned, assume the other is MOVE (native token)
+           * **CRITICAL - FUNCTION CALL FORMAT**: Call the action as a PURE function call with ONLY the required parameters
+           * **DO NOT** include any response text, explanations, or additional text in the function call
+           * **DO NOT** write "I've initiated the swap" or similar text as part of the function name
+           * **ONLY** call: initiate_swap(fromToken="MOVE", toToken="USDC.e")
+           * **AFTER** the function call completes, THEN you can provide a response message to the user
            * Use the action: **initiate_swap**
            * Parameters:
-             - fromToken: The token to swap from (must be from available token list)
-             - toToken: The token to swap to (must be from available token list)
+             - fromToken: The token to swap from (must be from available token list) - string value only
+             - toToken: The token to swap to (must be from available token list) - string value only
            * Example: initiate_swap(fromToken="MOVE", toToken="USDC.e")
+           * **WRONG**: "I've initiated the swap. initiate_swap(...)" or "initiate_swap with MOVE to USDC"
+           * **CORRECT**: initiate_swap(fromToken="MOVE", toToken="USDC.e")
          - The frontend will display a SwapCard with:
            * Pre-filled token selections
            * Automatic balance fetching
@@ -213,6 +220,7 @@ export async function POST(request: NextRequest) {
            * User can enter amount and execute swap
          - DO NOT execute the swap yourself - let the frontend handle it
          - If a token is not available, the frontend will show an error message
+         - After calling initiate_swap, wait for it to complete, then provide a brief response like "I've opened the swap interface for you. Please enter the amount you'd like to swap."
 
       WORKFLOW EXAMPLES:
 
@@ -256,7 +264,8 @@ export async function POST(request: NextRequest) {
       - User: "swap MOVE for USDC" or "exchange USDT to MOVE" or "swap tokens"
       - Extract fromToken: "MOVE" (or first mentioned token)
       - Extract toToken: "USDC" (or second mentioned token)
-      - Use action: initiate_swap(fromToken="MOVE", toToken="USDC")
+      - **CRITICAL**: Call the action as a PURE function call: initiate_swap(fromToken="MOVE", toToken="USDC")
+      - **DO NOT** include response text in the function call - call it first, then provide response after
       - Frontend will display SwapCard with pre-filled tokens and balances
       - User can enter amount and execute swap
 
