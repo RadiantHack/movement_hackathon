@@ -135,9 +135,22 @@ export const QuestManager: React.FC<QuestManagerProps> = ({
     checkForBeginnerSignal();
   }, [visibleMessages, quest.status]);
 
-  // Check for quest step completion based on agent responses
+  // Track if current step has been completed (user action detected)
+  // But don't auto-advance - wait for user confirmation via "I've Done This" button
+  const [stepActionDetected, setStepActionDetected] = useState(false);
+
+  // Reset action detection when step changes
   useEffect(() => {
-    if (quest.status !== "in_progress" || !isVisible) return;
+    setStepActionDetected(false);
+  }, [quest.currentStepIndex]);
+
+  // Check for quest step completion based on agent responses
+  // Only track that action was detected, but don't auto-advance
+  useEffect(() => {
+    if (quest.status !== "in_progress" || !isVisible) {
+      setStepActionDetected(false);
+      return;
+    }
 
     const messages = visibleMessages || [];
     const currentStep = quest.steps[quest.currentStepIndex];
@@ -221,11 +234,12 @@ export const QuestManager: React.FC<QuestManagerProps> = ({
       return false;
     });
 
+    // Only track that action was detected - don't auto-advance
+    // User must click "I've Done This" button to proceed
     if (hasAgentResponse || hasActionCompletion) {
-      // Mark step as complete and move to next
-      setTimeout(() => {
-        completeCurrentStep();
-      }, 2000); // Give user time to see the result
+      setStepActionDetected(true);
+    } else {
+      setStepActionDetected(false);
     }
   }, [visibleMessages, quest, isVisible]);
 
@@ -233,6 +247,9 @@ export const QuestManager: React.FC<QuestManagerProps> = ({
     setQuest((prev) => {
       const nextIndex = prev.currentStepIndex + 1;
       const isComplete = nextIndex >= prev.steps.length;
+
+      // Reset action detection when moving to next step
+      setStepActionDetected(false);
 
       if (isComplete) {
         onQuestComplete?.(prev.id);
@@ -289,6 +306,7 @@ export const QuestManager: React.FC<QuestManagerProps> = ({
       progress={progress}
       onComplete={completeCurrentStep}
       onSkip={skipCurrentStep}
+      actionDetected={stepActionDetected}
     />
   );
 };

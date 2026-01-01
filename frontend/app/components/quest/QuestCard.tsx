@@ -14,6 +14,7 @@ interface QuestCardProps {
   progress: QuestProgress;
   onComplete?: () => void;
   onSkip?: () => void;
+  actionDetected?: boolean;
 }
 
 export const QuestCard: React.FC<QuestCardProps> = ({
@@ -21,6 +22,7 @@ export const QuestCard: React.FC<QuestCardProps> = ({
   progress,
   onComplete,
   onSkip,
+  actionDetected = false,
 }) => {
   const [isMinimized, setIsMinimized] = useState(false);
 
@@ -150,17 +152,38 @@ export const QuestCard: React.FC<QuestCardProps> = ({
         </div>
       </div>
 
+      {/* Action Status Message */}
+      {actionDetected && (
+        <div className="mb-2.5 p-2 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
+          <p className="text-xs text-green-700 dark:text-green-300 font-medium flex items-center gap-1.5">
+            <span>✓</span>
+            <span>Great! Action completed. Click below to continue to the next step.</span>
+          </p>
+        </div>
+      )}
+
       {/* Action Button */}
       {onComplete && (
         <button
           onClick={onComplete}
-          className="relative w-full bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white text-xs font-bold py-2 px-4 rounded-lg transition-all duration-200 shadow-md hover:shadow-lg transform hover:scale-[1.02] active:scale-[0.98] overflow-hidden group"
+          disabled={!actionDetected}
+          className={`relative w-full text-xs font-bold py-2 px-4 rounded-lg transition-all duration-200 shadow-md transform hover:scale-[1.02] active:scale-[0.98] overflow-hidden group ${
+            actionDetected
+              ? "bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white hover:shadow-lg cursor-pointer"
+              : "bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed opacity-60"
+          }`}
         >
           <span className="relative z-10 flex items-center justify-center gap-1.5">
             <span>✓</span>
-            <span>I've Done This</span>
+            <span>
+              {actionDetected
+                ? "I've Done This - Continue"
+                : "Complete the action above first"}
+            </span>
           </span>
-          <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/20 to-white/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700" />
+          {actionDetected && (
+            <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/20 to-white/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700" />
+          )}
         </button>
       )}
     </div>
