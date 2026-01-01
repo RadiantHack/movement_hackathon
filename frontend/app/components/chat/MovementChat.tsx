@@ -35,6 +35,7 @@ const ChatInner = ({ walletAddress }: MovementChatProps) => {
   const { visibleMessages, appendMessage } = useCopilotChat();
   const [hasScrolled, setHasScrolled] = useState(false);
   const [suggestionSubmitted, setSuggestionSubmitted] = useState(false);
+  const [inputFocused, setInputFocused] = useState(false);
 
   // Wrapper function to adapt simple message format to CopilotKit Message format
   // Note: appendMessage is deprecated but still used as fallback in Suggestions component
@@ -62,6 +63,55 @@ const ChatInner = ({ walletAddress }: MovementChatProps) => {
     asset: string;
     amount: string;
   } | null>(null);
+
+  // Detect when chat input is focused to hide suggestions
+  useEffect(() => {
+    const handleFocus = (e: FocusEvent) => {
+      const target = e.target as HTMLElement;
+      // Check if the focused element is the CopilotKit input (textarea or input)
+      if (
+        target.closest('.copilotKitInput') ||
+        target.closest('.copilotKitInputContainer') ||
+        target.tagName === 'TEXTAREA' ||
+        target.tagName === 'INPUT'
+      ) {
+        setInputFocused(true);
+      }
+    };
+
+    const handleBlur = (e: FocusEvent) => {
+      const target = e.target as HTMLElement;
+      // Only reset if blurring from the input area
+      if (
+        target.closest('.copilotKitInput') ||
+        target.closest('.copilotKitInputContainer') ||
+        target.tagName === 'TEXTAREA' ||
+        target.tagName === 'INPUT'
+      ) {
+        // Small delay to check if focus moved to another input
+        setTimeout(() => {
+          const activeElement = document.activeElement;
+          if (
+            !activeElement?.closest('.copilotKitInput') &&
+            !activeElement?.closest('.copilotKitInputContainer') &&
+            activeElement?.tagName !== 'TEXTAREA' &&
+            activeElement?.tagName !== 'INPUT'
+          ) {
+            setInputFocused(false);
+          }
+        }, 100);
+      }
+    };
+
+    // Listen for focus events on the document
+    document.addEventListener('focusin', handleFocus);
+    document.addEventListener('focusout', handleBlur);
+
+    return () => {
+      document.removeEventListener('focusin', handleFocus);
+      document.removeEventListener('focusout', handleBlur);
+    };
+  }, []);
 
   // Provide wallet address to CopilotKit so orchestrator can use it automatically
   useCopilotReadable({
@@ -926,6 +976,7 @@ REMEMBER: The wallet address is ${walletAddress} - use it exactly as shown.`
             )}
           </>
         )}
+
         <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden sm:overflow-visible relative">
           <CopilotChat
             className="h-full w-full min-h-0"
@@ -935,29 +986,25 @@ REMEMBER: The wallet address is ${walletAddress} - use it exactly as shown.`
               initial: "Hi! 👋 How can I assist you today?",
             }}
           />
-
-          {/* Suggestions - Positioned just above chat input box, hide when scrolled or submitted */}
-          {/* Only show within chat container, not in sidebars */}
-          {(!visibleMessages || visibleMessages.length <= 2) &&
-            !hasScrolled &&
-            !suggestionSubmitted && (
-              <div
-                className={`absolute bottom-32 left-0 right-0 z-[100] pointer-events-none transition-all duration-300 ${hasScrolled || suggestionSubmitted ? "opacity-0 pointer-events-none" : "opacity-100"}`}
-              >
-                <div className="pointer-events-auto max-w-full px-2 sm:px-4">
-                  <Suggestions
-                    walletAddress={walletAddress}
-                    appendMessage={handleAppendMessage}
-                    onSuggestionClick={(text) => {
-                      console.log("Suggestion clicked:", text);
-                      // Hide suggestions immediately when clicked
-                      setSuggestionSubmitted(true);
-                    }}
-                  />
-                </div>
-              </div>
-            )}
         </div>
+
+        {/* Suggestions - Positioned between messages and input container */}
+        {(!visibleMessages || visibleMessages.length <= 2) &&
+          !hasScrolled &&
+          !suggestionSubmitted &&
+          !inputFocused && (
+            <div className="flex-shrink-0 relative z-20 px-2 sm:px-4 py-2 sm:py-3">
+              <Suggestions
+                walletAddress={walletAddress}
+                appendMessage={handleAppendMessage}
+                onSuggestionClick={(text) => {
+                  console.log("Suggestion clicked:", text);
+                  // Hide suggestions immediately when clicked
+                  setSuggestionSubmitted(true);
+                }}
+              />
+            </div>
+          )}
       </div>
     </div>
   );
