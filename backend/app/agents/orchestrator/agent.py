@@ -584,6 +584,8 @@ orchestrator_agent = LlmAgent(
 
       * CRITICAL: DO NOT use any hardcoded or example addresses - ONLY use the address from system instructions
 
+      * CRITICAL: When constructing the task string for send_message_to_a2a_agent, you MUST use the REAL extracted address, NOT any example addresses mentioned in these instructions
+
     - **STEP 3**: Validate and use the extracted address immediately
 
       * CRITICAL: Verify the address is NOT a default/zero address
@@ -612,8 +614,10 @@ orchestrator_agent = LlmAgent(
       1. Extract the wallet address from system instructions (look for "The user has a connected Movement Network wallet address: 0x..." or check the context/readable data)
       2. Use that EXACT extracted address (e.g., if you extract "0xABC123...", use "0xABC123..." exactly)
       3. Call: send_message_to_a2a_agent(agentName="balance", task="get balance of [EXTRACTED_ADDRESS] on movement")
-      4. DO NOT use any hardcoded addresses, example addresses, or placeholder addresses
-      5. DO NOT use any other address - use ONLY the one extracted from system instructions
+      4. CRITICAL: [EXTRACTED_ADDRESS] in step 3 means the REAL address you extracted in step 1, NOT an example address
+      5. CRITICAL: The task string must contain the actual extracted address, not any example addresses from these instructions
+      6. DO NOT use any hardcoded addresses, example addresses, or placeholder addresses
+      7. DO NOT use any other address - use ONLY the one extracted from system instructions
 
     TOKEN SUPPORT:
 
