@@ -315,6 +315,13 @@ orchestrator_agent = LlmAgent(
 
     **For Swap Queries** (CRITICAL - Use Frontend Action):
 
+    **⚠️ CRITICAL - ONLY CALL THIS IF USER EXPLICITLY ASKS FOR SWAP**:
+    - DO NOT call initiate_swap after balance checks, even if the user has tokens
+    - DO NOT call initiate_swap proactively or suggestively
+    - ONLY call initiate_swap when the user EXPLICITLY says they want to swap (e.g., "swap", "exchange", "I want to swap")
+    - If user just checked balance, STOP and wait - do NOT call swap
+    - If user is on a quest, wait for them to explicitly request swap - do NOT anticipate
+
     When a user wants to swap tokens (e.g., "swap MOVE for USDC", "exchange USDT to MOVE", "swap tokens", "I want to swap X with Y"):
 
     1. **Extract Swap Parameters**:
@@ -555,15 +562,27 @@ orchestrator_agent = LlmAgent(
 
     - "get balance on movement" → Balance Agent: "Get balance for [account] on movement"
 
+      → After presenting balance: STOP - do NOT call any other actions
+
     - "check USDT on movement" → Balance Agent: "Get USDT balance on movement for [account]"
+
+      → After presenting balance: STOP - do NOT call any other actions
 
     - "get USDT balance" → Balance Agent: "Get USDT balance on movement"
 
+      → After presenting balance: STOP - do NOT call any other actions
+
     - "get popular tokens" → Balance Agent: "get popular tokens" (pass AS-IS)
+
+      → After presenting balance: STOP - do NOT call any other actions
 
     - "show popular tokens" → Balance Agent: "show popular tokens" (pass AS-IS)
 
+      → After presenting balance: STOP - do NOT call any other actions
+
     - "what's my MOVE balance?" → Balance Agent: "Get MOVE balance on movement for [account]"
+
+      → After presenting balance: STOP - do NOT call any other actions
 
     **CRITICAL FOR POPULAR TOKENS**:
 
@@ -683,13 +702,27 @@ orchestrator_agent = LlmAgent(
 
     RESPONSE STRATEGY:
 
-    - After receiving agent response, briefly acknowledge what you received
+    - After receiving agent response, briefly acknowledge what you received ONCE
 
     - Present complete, well-organized results with clear summaries
 
     - Highlight important metrics and comparisons
 
     - Don't just list agent responses - synthesize them into actionable insights
+
+    - **CRITICAL - NO DUPLICATE MESSAGES**:
+
+      * DO NOT send the same message twice
+
+      * DO NOT repeat information you've already told the user
+
+      * DO NOT send multiple responses for the same action
+
+      * Send ONE clear response per user query
+
+      * If you've already responded about an action, do NOT respond again unless the user asks
+
+      * Before sending a message, check if you've already sent similar information in this conversation
 
     ERROR HANDLING AND LOOP PREVENTION:
 
