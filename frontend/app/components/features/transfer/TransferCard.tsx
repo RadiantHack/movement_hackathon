@@ -44,21 +44,21 @@ export const TransferCard: React.FC<TransferCardProps> = ({
   const config = useMovementConfig();
 
   // Create Aptos instance with config from Redux store
-  // Use testnet network since TransferCard is for testnet operations
+  // Use CUSTOM network with mainnet RPC (same as transfer page)
   const aptos = useMemo(() => {
     if (!config.movementFullNode) return null;
     return new Aptos(
       new AptosConfig({
-        network: Network.TESTNET,
+        network: Network.CUSTOM,
         fullnode: config.movementFullNode,
       })
     );
   }, [config.movementFullNode]);
 
   const movementChainId = useMemo(() => {
-    // Use testnet chain ID from config
-    return config.movementTestNetChainId || 250;
-  }, [config.movementTestNetChainId]);
+    // Use mainnet chain ID (126) - same as transfer page
+    return 126;
+  }, []);
 
   const [transferring, setTransferring] = useState(false);
   const [transferError, setTransferError] = useState<string | null>(null);
@@ -110,13 +110,24 @@ export const TransferCard: React.FC<TransferCardProps> = ({
       }
 
       const senderAddress = aptosWallet.address as string;
-      const senderPubKeyWithScheme = aptosWallet.publicKey as string; // "004a4b8e35..."
+      const publicKey = aptosWallet.publicKey as string;
 
-      if (!senderPubKeyWithScheme || senderPubKeyWithScheme.length < 2) {
-        throw new Error("Invalid public key format");
+      if (!publicKey) {
+        throw new Error("Public key not found");
       }
 
-      const pubKeyNoScheme = senderPubKeyWithScheme.slice(2); // drop leading "00"
+      // Handle public key format - same as transfer page
+      let pubKeyNoScheme = publicKey.startsWith("0x")
+        ? publicKey.slice(2)
+        : publicKey;
+      if (pubKeyNoScheme.startsWith("00") && pubKeyNoScheme.length > 64) {
+        pubKeyNoScheme = pubKeyNoScheme.slice(2);
+      }
+      if (pubKeyNoScheme.length !== 64) {
+        throw new Error(
+          `Invalid public key length: expected 64 hex characters (32 bytes), got ${pubKeyNoScheme.length}`
+        );
+      }
 
       // Validate recipient address
       if (
@@ -161,17 +172,10 @@ export const TransferCard: React.FC<TransferCardProps> = ({
         );
       }
 
-      // Override chain ID to match Movement Network testnet
-      // Create a proper ChainId instance and replace the chain_id in rawTransaction
-      const txnObj = rawTxn as unknown as Record<
-        string,
-        Record<string, unknown>
-      >;
+      // Override chain ID to match Movement Network mainnet (same as transfer page)
+      const txnObj = rawTxn as any;
       if (txnObj.rawTransaction) {
-        // Use the chain ID from config
-        const chainIdObj = new ChainId(movementChainId);
-        (txnObj.rawTransaction as Record<string, unknown>).chain_id =
-          chainIdObj;
+        txnObj.rawTransaction.chain_id = new ChainId(movementChainId);
       }
 
       // Generate signing message and hash
@@ -185,11 +189,11 @@ export const TransferCard: React.FC<TransferCardProps> = ({
         hash: hash,
       });
 
-      // Create authenticator from signature
-      const publicKey = new Ed25519PublicKey(`0x${pubKeyNoScheme}`);
+      // Create authenticator from signature (same as transfer page)
+      const publicKeyObj = new Ed25519PublicKey(`0x${pubKeyNoScheme}`);
       const sig = new Ed25519Signature(signatureResponse.signature.slice(2)); // drop 0x from sig
       const senderAuthenticator = new AccountAuthenticatorEd25519(
-        publicKey,
+        publicKeyObj,
         sig
       );
 
@@ -199,13 +203,13 @@ export const TransferCard: React.FC<TransferCardProps> = ({
         senderAuthenticator,
       });
 
-      // Wait for transaction to be executed
-      const executed = await aptos.waitForTransaction({
+      // Wait for transaction to be executed (same as transfer page)
+      await aptos.waitForTransaction({
         transactionHash: pending.hash,
+        options: { checkSuccess: true },
       });
 
-      console.log("Transaction executed:", executed.hash);
-      setTxHash(executed.hash);
+      setTxHash(pending.hash);
       onTransferInitiate?.();
     } catch (err: unknown) {
       console.error("Transfer error:", err);
