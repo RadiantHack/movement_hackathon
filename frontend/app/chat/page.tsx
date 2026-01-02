@@ -194,8 +194,8 @@ export default function ChatPage() {
             <ThemeToggle />
           </div>
         </div>
-        <div className="flex flex-1 flex-col min-h-0 overflow-y-auto overflow-x-hidden sm:overflow-hidden rounded-b-lg border-b border-zinc-200 dark:border-zinc-800">
-          <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden sm:overflow-hidden">
+        <div className="flex flex-1 flex-col min-h-0 overflow-y-auto overflow-x-hidden rounded-b-lg border-b border-zinc-200 dark:border-zinc-800">
+          <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden w-full max-w-full">
             <MovementChat walletAddress={walletAddress} />
           </div>
         </div>

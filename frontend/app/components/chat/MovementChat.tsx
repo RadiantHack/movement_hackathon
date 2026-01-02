@@ -942,7 +942,7 @@ REMEMBER: The wallet address is ${walletAddress} - use it exactly as shown.`
       </div>
 
       {/* Main Chat Area */}
-      <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden sm:overflow-visible flex flex-col">
+      <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden flex flex-col">
         {lendingRecommendation && (
           <PlatformSelectionCard
             action={lendingRecommendation.action}
@@ -977,9 +977,9 @@ REMEMBER: The wallet address is ${walletAddress} - use it exactly as shown.`
           </>
         )}
 
-        <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden sm:overflow-visible relative">
+        <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden relative w-full">
           <CopilotChat
-            className="h-full w-full min-h-0"
+            className="h-full w-full min-h-0 max-w-full"
             instructions={instructions}
             labels={{
               title: "Movement Assistant",

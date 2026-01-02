@@ -34,12 +34,12 @@ export const MessageFromA2A: React.FC<MessageActionRenderProps> = ({
   const agentStyle = getAgentStyle(args.agentName);
 
   return (
-    <div className="my-2 sm:my-3">
-      <div className="bg-gradient-to-br from-blue-50 to-cyan-50 dark:from-blue-950/20 dark:to-cyan-950/20 border border-blue-200 dark:border-blue-800 rounded-lg sm:rounded-xl px-2.5 py-2 sm:px-4 sm:py-4 md:px-5 md:py-4 shadow-sm hover:shadow-md transition-shadow max-w-full overflow-hidden">
+    <div className="my-2 sm:my-3 w-full max-w-full">
+      <div className="bg-gradient-to-br from-blue-50 to-cyan-50 dark:from-blue-950/20 dark:to-cyan-950/20 border border-blue-200 dark:border-blue-800 rounded-lg sm:rounded-xl px-2.5 py-2 sm:px-3 sm:py-3 md:px-4 md:py-4 shadow-sm hover:shadow-md transition-shadow w-full max-w-full overflow-hidden">
         {/* Agent badges and response */}
         <div className="space-y-1.5 sm:space-y-3">
           {/* Agent badges row */}
-          <div className="flex items-center justify-center gap-1.5 sm:gap-3 flex-wrap">
+          <div className="flex items-center justify-center gap-1 sm:gap-2 md:gap-3 flex-wrap">
             <div className="flex flex-col items-center">
               <span
                 className={`px-1.5 py-0.5 sm:px-3 sm:py-1.5 rounded-full text-[9px] sm:text-xs font-semibold border-2 ${agentStyle.bgColor} ${agentStyle.textColor} ${agentStyle.borderColor} flex items-center gap-0.5 sm:gap-1.5 shadow-sm`}

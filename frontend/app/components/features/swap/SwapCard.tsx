@@ -635,8 +635,8 @@ export const SwapCard: React.FC<SwapCardProps> = ({
   ]);
 
   return (
-    <div className="w-full max-w-full sm:max-w-[440px] mx-auto px-2 sm:px-0">
-      <div className="relative rounded-2xl p-4 sm:p-5 md:p-6 bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-700/50 shadow-xl shadow-zinc-200/50 dark:shadow-zinc-950/50 overflow-hidden">
+    <div className="w-full max-w-full sm:max-w-[440px] mx-auto px-2 sm:px-3 md:px-4">
+      <div className="relative rounded-2xl p-3 sm:p-4 md:p-5 lg:p-6 bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-700/50 shadow-xl shadow-zinc-200/50 dark:shadow-zinc-950/50 overflow-hidden">
         {/* Background decoration */}
         <div className="absolute -top-24 -right-24 w-48 h-48 bg-gradient-to-br from-purple-500/10 to-violet-500/10 rounded-full blur-3xl" />
         <div className="absolute -bottom-24 -left-24 w-48 h-48 bg-gradient-to-tr from-purple-500/10 to-violet-500/10 rounded-full blur-3xl" />
@@ -674,20 +674,20 @@ export const SwapCard: React.FC<SwapCardProps> = ({
             You Pay
           </label>
           <div className="rounded-lg sm:rounded-xl border border-zinc-200 dark:border-zinc-700/50 bg-zinc-50/50 dark:bg-zinc-800/50 p-2 sm:p-3">
-            <div className="flex items-center gap-1.5 sm:gap-2">
+            <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
               <input
                 type="text"
                 inputMode="decimal"
                 value={fromAmount}
                 onChange={(e) => handleFromAmountChange(e.target.value)}
                 placeholder="0.0"
-                className="flex-1 min-w-0 bg-transparent text-lg sm:text-xl font-semibold text-zinc-900 dark:text-zinc-50 placeholder-zinc-400 focus:outline-none"
+                className="flex-1 min-w-0 bg-transparent text-base sm:text-lg md:text-xl font-semibold text-zinc-900 dark:text-zinc-50 placeholder-zinc-400 focus:outline-none overflow-hidden"
                 disabled={swapping}
               />
               <select
                 value={fromToken}
                 onChange={(e) => setFromToken(e.target.value)}
-                className="flex-shrink-0 w-[90px] sm:w-[100px] px-1.5 sm:px-2 py-2 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-50 font-semibold focus:outline-none focus:ring-2 focus:ring-purple-500/50 cursor-pointer text-xs"
+                className="flex-shrink-0 w-[85px] sm:w-[95px] md:w-[100px] px-1.5 sm:px-2 py-2 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-50 font-semibold focus:outline-none focus:ring-2 focus:ring-purple-500/50 cursor-pointer text-[10px] sm:text-xs truncate"
                 disabled={swapping}
               >
                 {availableTokens.map((token) => (
@@ -756,7 +756,7 @@ export const SwapCard: React.FC<SwapCardProps> = ({
             You Receive
           </label>
           <div className="rounded-lg sm:rounded-xl border border-zinc-200 dark:border-zinc-700/50 bg-zinc-50/50 dark:bg-zinc-800/50 p-2 sm:p-3">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 min-w-0">
               <div className="flex-1 min-w-0 relative">
                 <input
                   type="text"
@@ -764,7 +764,7 @@ export const SwapCard: React.FC<SwapCardProps> = ({
                   value={loadingQuote ? "" : toAmount}
                   readOnly
                   placeholder={loadingQuote ? "Getting quote..." : "0.0"}
-                  className="w-full bg-transparent text-lg sm:text-xl font-semibold text-zinc-900 dark:text-zinc-50 placeholder-zinc-400 focus:outline-none"
+                  className="w-full bg-transparent text-base sm:text-lg md:text-xl font-semibold text-zinc-900 dark:text-zinc-50 placeholder-zinc-400 focus:outline-none overflow-hidden"
                 />
                 {loadingQuote && (
                   <div className="absolute right-0 top-1/2 -translate-y-1/2">
@@ -775,7 +775,7 @@ export const SwapCard: React.FC<SwapCardProps> = ({
               <select
                 value={toToken}
                 onChange={(e) => setToToken(e.target.value)}
-                className="flex-shrink-0 w-[90px] sm:w-[100px] px-1.5 sm:px-2 py-2 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-50 font-semibold focus:outline-none focus:ring-2 focus:ring-purple-500/50 cursor-pointer text-xs"
+                className="flex-shrink-0 w-[85px] sm:w-[95px] md:w-[100px] px-1.5 sm:px-2 py-2 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-50 font-semibold focus:outline-none focus:ring-2 focus:ring-purple-500/50 cursor-pointer text-[10px] sm:text-xs truncate"
                 disabled={swapping}
               >
                 {availableTokens.map((token) => (
