@@ -17,6 +17,12 @@ interface Suggestion {
 
 const SUGGESTIONS: Suggestion[] = [
   {
+    id: "learn_defi",
+    text: "I'm new to crypto",
+    icon: "🎓",
+    category: "learn",
+  },
+  {
     id: "check_balance",
     text: "Check my balance",
     icon: "💰",
@@ -51,12 +57,6 @@ const SUGGESTIONS: Suggestion[] = [
     text: "Bridge tokens to Movement",
     icon: "🌉",
     category: "transfer",
-  },
-  {
-    id: "learn_defi",
-    text: "I'm new to crypto",
-    icon: "🎓",
-    category: "learn",
   },
 ];
 
@@ -218,11 +218,11 @@ export const Suggestions: React.FC<SuggestionsProps> = ({
       );
 
   return (
-    <div className="px-1.5 sm:px-3 md:px-4 py-1 sm:py-1.5 md:py-2.5">
+    <div className="px-1.5 sm:px-3 md:px-4 pt-0 pb-0.5 sm:pt-1 sm:pb-1.5 md:pt-2 md:pb-2.5">
       <div className="max-w-7xl mx-auto w-full">
         {/* Header */}
-        <div className="mb-0.5 sm:mb-1.5 md:mb-2 text-center">
-          <p className="text-[8px] sm:text-[10px] md:text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide inline-block">
+        <div className="mb-0.5 sm:mb-1 md:mb-1.5 text-center">
+          <p className="text-[7px] sm:text-[9px] md:text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide inline-block">
             💡 Quick Actions
           </p>
         </div>
@@ -238,14 +238,14 @@ export const Suggestions: React.FC<SuggestionsProps> = ({
                 disabled={isClicked}
                 className={`
                   group relative
-                  px-2 py-1.5 sm:px-2.5 sm:py-1.5 md:px-3 md:py-2
+                  px-1.5 py-1 sm:px-2 sm:py-1.5 md:px-3 md:py-2
                   rounded-md sm:rounded-lg
-                  text-[10px] sm:text-xs md:text-sm font-medium
+                  text-[9px] sm:text-[11px] md:text-sm font-medium
                   transition-all duration-200
                   border
                   sm:flex-shrink-0
                   touch-manipulation
-                  min-h-[36px] sm:min-h-[32px] md:min-h-[36px]
+                  min-h-[32px] sm:min-h-[30px] md:min-h-[36px]
                   w-full sm:w-auto
                   ${
                     isClicked
@@ -255,12 +255,12 @@ export const Suggestions: React.FC<SuggestionsProps> = ({
                   flex items-center justify-center sm:justify-start gap-1 sm:gap-1.5 md:gap-2
                 `}
               >
-                <span className="text-[10px] sm:text-sm md:text-base flex-shrink-0">
+                <span className="text-[9px] sm:text-xs md:text-base flex-shrink-0">
                   {suggestion.icon}
                 </span>
                 <span className="whitespace-nowrap">{suggestion.text}</span>
                 {isClicked && (
-                  <span className="ml-0.5 sm:ml-1 md:ml-1.5 text-[9px] sm:text-xs flex-shrink-0">
+                  <span className="ml-0.5 sm:ml-1 md:ml-1.5 text-[8px] sm:text-[10px] md:text-xs flex-shrink-0">
                     ✓
                   </span>
                 )}

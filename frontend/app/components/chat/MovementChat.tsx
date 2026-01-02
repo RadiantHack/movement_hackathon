@@ -993,7 +993,7 @@ REMEMBER: The wallet address is ${walletAddress} - use it exactly as shown.`
           !hasScrolled &&
           !suggestionSubmitted &&
           !inputFocused && (
-            <div className="flex-shrink-0 relative z-20 px-2 sm:px-4 py-2 sm:py-3">
+            <div className="flex-shrink-0 relative z-20 px-2 sm:px-4 pt-0 pb-1.5 sm:pt-1.5 sm:pb-3 -mt-2 sm:mt-0">
               <Suggestions
                 walletAddress={walletAddress}
                 appendMessage={handleAppendMessage}
