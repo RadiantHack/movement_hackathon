@@ -315,12 +315,21 @@ orchestrator_agent = LlmAgent(
 
     **For Swap Queries** (CRITICAL - Use Frontend Action):
 
-    **⚠️ CRITICAL - ONLY CALL THIS IF USER EXPLICITLY ASKS FOR SWAP**:
-    - DO NOT call initiate_swap after balance checks, even if the user has tokens
-    - DO NOT call initiate_swap proactively or suggestively
-    - ONLY call initiate_swap when the user EXPLICITLY says they want to swap (e.g., "swap", "exchange", "I want to swap")
-    - If user just checked balance, STOP and wait - do NOT call swap
-    - If user is on a quest, wait for them to explicitly request swap - do NOT anticipate
+    **🚨 ABSOLUTELY CRITICAL - NEVER CALL THIS AFTER BALANCE CHECKS**:
+    - **NEVER** call initiate_swap after checking balance - this is STRICTLY FORBIDDEN
+    - **NEVER** call initiate_swap after balance queries, even if the user has tokens
+    - **NEVER** call initiate_swap proactively, suggestively, or automatically
+    - **ONLY** call initiate_swap when the user EXPLICITLY and DIRECTLY says they want to swap
+    - **REQUIRED USER PHRASES**: User must say "swap", "exchange", "I want to swap", "swap tokens", or similar explicit swap request
+    - **FORBIDDEN SCENARIOS**:
+      - User says "check my balance" → DO NOT call initiate_swap
+      - User says "get my balance" → DO NOT call initiate_swap
+      - User says "show my tokens" → DO NOT call initiate_swap
+      - Balance check completes → DO NOT call initiate_swap
+      - User is on a quest step → DO NOT call initiate_swap unless user explicitly requests swap
+    - **RULE**: If the user's message does NOT contain words like "swap", "exchange", "trade", or explicit swap intent, DO NOT call initiate_swap
+    - **AFTER BALANCE CHECK**: Present balance results and STOP - wait for user's next message
+    - **VERIFICATION**: Before calling initiate_swap, ask yourself: "Did the user explicitly ask to swap?" If NO, DO NOT call it
 
     When a user wants to swap tokens (e.g., "swap MOVE for USDC", "exchange USDT to MOVE", "swap tokens", "I want to swap X with Y"):
 
@@ -562,27 +571,27 @@ orchestrator_agent = LlmAgent(
 
     - "get balance on movement" → Balance Agent: "Get balance for [account] on movement"
 
-      → After presenting balance: STOP - do NOT call any other actions
+      → After presenting balance: **STOP - NEVER call initiate_swap or any other action**
 
     - "check USDT on movement" → Balance Agent: "Get USDT balance on movement for [account]"
 
-      → After presenting balance: STOP - do NOT call any other actions
+      → After presenting balance: **STOP - NEVER call initiate_swap or any other action**
 
     - "get USDT balance" → Balance Agent: "Get USDT balance on movement"
 
-      → After presenting balance: STOP - do NOT call any other actions
+      → After presenting balance: **STOP - NEVER call initiate_swap or any other action**
 
     - "get popular tokens" → Balance Agent: "get popular tokens" (pass AS-IS)
 
-      → After presenting balance: STOP - do NOT call any other actions
+      → After presenting balance: **STOP - NEVER call initiate_swap or any other action**
 
     - "show popular tokens" → Balance Agent: "show popular tokens" (pass AS-IS)
 
-      → After presenting balance: STOP - do NOT call any other actions
+      → After presenting balance: **STOP - NEVER call initiate_swap or any other action**
 
     - "what's my MOVE balance?" → Balance Agent: "Get MOVE balance on movement for [account]"
 
-      → After presenting balance: STOP - do NOT call any other actions
+      → After presenting balance: **STOP - NEVER call initiate_swap or any other action**
 
     **CRITICAL FOR POPULAR TOKENS**:
 
