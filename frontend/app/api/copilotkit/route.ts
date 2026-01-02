@@ -186,19 +186,31 @@ export async function POST(request: NextRequest) {
          - Extract token symbol if querying specific token (USDC, USDT, DAI, etc.) - optional
          - Wait for balance response
          - Present results in a clear, user-friendly format
-         - **CRITICAL - AFTER BALANCE CHECK**: After presenting balance results, STOP and wait for the user's next request
-         - **DO NOT** automatically call initiate_swap or any other action after showing balance
-         - **DO NOT** suggest or trigger swap actions unless the user explicitly asks for it
-         - **DO NOT** anticipate what the user wants to do next - wait for explicit instructions
-         - If the user is on a quest, the quest card will guide them - you should NOT take initiative
+         - **🚨 CRITICAL - AFTER BALANCE CHECK (MANDATORY)**:
+           * After presenting balance results, you MUST STOP and wait for the user's next request
+           * **ABSOLUTELY FORBIDDEN**: DO NOT call initiate_swap after showing balance - this is NEVER allowed
+           * **ABSOLUTELY FORBIDDEN**: DO NOT suggest swap actions after balance checks
+           * **ABSOLUTELY FORBIDDEN**: DO NOT anticipate what the user wants - wait for explicit instructions
+           * **ABSOLUTELY FORBIDDEN**: DO NOT automatically trigger any actions after balance checks
+           * If the user is on a quest, the quest card will guide them - you should NOT take initiative
+           * **REMEMBER**: Balance check = STOP. Wait for user's next message. Do NOT call swap.
 
       2. **Swap Tokens** - Use Frontend Action (initiate_swap)
-         - **⚠️ CRITICAL - ONLY CALL THIS IF USER EXPLICITLY ASKS FOR SWAP**:
-           * DO NOT call initiate_swap after balance checks, even if the user has tokens
-           * DO NOT call initiate_swap proactively or suggestively
-           * ONLY call initiate_swap when the user EXPLICITLY says they want to swap (e.g., "swap", "exchange", "I want to swap")
-           * If user just checked balance, STOP and wait - do NOT call swap
-           * If user is on a quest, wait for them to explicitly request swap - do NOT anticipate
+         - **🚨 ABSOLUTELY CRITICAL - NEVER CALL THIS AFTER BALANCE CHECKS**:
+           * **NEVER** call initiate_swap after checking balance - this is STRICTLY FORBIDDEN
+           * **NEVER** call initiate_swap after balance queries, even if the user has tokens
+           * **NEVER** call initiate_swap proactively, suggestively, or automatically
+           * **ONLY** call initiate_swap when the user EXPLICITLY and DIRECTLY says they want to swap
+           * **REQUIRED USER PHRASES**: User must say "swap", "exchange", "I want to swap", "swap tokens", or similar explicit swap request
+           * **FORBIDDEN SCENARIOS**:
+             - User says "check my balance" → DO NOT call initiate_swap
+             - User says "get my balance" → DO NOT call initiate_swap
+             - User says "show my tokens" → DO NOT call initiate_swap
+             - Balance check completes → DO NOT call initiate_swap
+             - User is on a quest step → DO NOT call initiate_swap unless user explicitly requests swap
+           * **RULE**: If the user's message does NOT contain words like "swap", "exchange", "trade", or explicit swap intent, DO NOT call initiate_swap
+           * **AFTER BALANCE CHECK**: Present balance results and STOP - wait for user's next message
+           * **VERIFICATION**: Before calling initiate_swap, ask yourself: "Did the user explicitly ask to swap?" If NO, DO NOT call it
          - When user wants to swap tokens (e.g., "swap MOVE for USDC", "exchange USDT to MOVE", "swap tokens"):
            * Extract the "from" token symbol (e.g., "MOVE", "USDC", "USDT", "USDC.e", "USDT.e", "WBTC.e", "WETH.e")
            * Extract the "to" token symbol (e.g., "USDC", "MOVE", "USDT", "USDC.e", "USDT.e", "WBTC.e", "WETH.e")
@@ -249,10 +261,13 @@ export async function POST(request: NextRequest) {
       - DO NOT ask for address or network - use them immediately
       - DO NOT use example addresses or placeholder addresses - extract the REAL address from the system message
       - Present: Native MOVE balance and token balances
-      - **CRITICAL - AFTER PRESENTING BALANCE**: STOP HERE - do NOT call any other actions
-      - **DO NOT** call initiate_swap or any other action after showing balance
-      - **DO NOT** suggest swap actions unless the user explicitly asks
-      - Wait for the user's next explicit request before taking any further action
+      - **🚨 ABSOLUTELY CRITICAL - AFTER PRESENTING BALANCE (MANDATORY STOP)**:
+        * STOP HERE - do NOT call any other actions
+        * **NEVER** call initiate_swap after showing balance - this is STRICTLY FORBIDDEN
+        * **NEVER** suggest swap actions unless the user explicitly asks
+        * **NEVER** anticipate what the user wants to do next
+        * Wait for the user's next explicit request before taking any further action
+        * If user wants to swap, they will explicitly say "swap" in their next message
 
       Example 2: Token balance
       - User: "Check my USDC balance" or "Get my USDC balance"

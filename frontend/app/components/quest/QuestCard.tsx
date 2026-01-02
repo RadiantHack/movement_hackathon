@@ -6,7 +6,7 @@
  * Innovative, compact quest card with modern design and smooth animations
  */
 
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { QuestStep, QuestProgress } from "./types";
 
 interface QuestCardProps {
@@ -14,6 +14,8 @@ interface QuestCardProps {
   progress: QuestProgress;
   onComplete?: () => void;
   onSkip?: () => void;
+  onJumpToStep?: (stepIndex: number) => void;
+  allSteps?: QuestStep[];
   actionDetected?: boolean;
 }
 
@@ -22,9 +24,33 @@ export const QuestCard: React.FC<QuestCardProps> = ({
   progress,
   onComplete,
   onSkip,
+  onJumpToStep,
+  allSteps,
   actionDetected = false,
 }) => {
   const [isMinimized, setIsMinimized] = useState(false);
+  const [showStepSelector, setShowStepSelector] = useState(false);
+  const stepSelectorRef = useRef<HTMLDivElement>(null);
+
+  // Close step selector when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (
+        stepSelectorRef.current &&
+        !stepSelectorRef.current.contains(event.target as Node)
+      ) {
+        setShowStepSelector(false);
+      }
+    };
+
+    if (showStepSelector) {
+      document.addEventListener("mousedown", handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [showStepSelector]);
 
   if (isMinimized) {
     return (
@@ -102,6 +128,48 @@ export const QuestCard: React.FC<QuestCardProps> = ({
           </div>
         </div>
         <div className="flex items-center gap-1 flex-shrink-0">
+          {onJumpToStep && allSteps && allSteps.length > 1 && (
+            <div className="relative" ref={stepSelectorRef}>
+              <button
+                onClick={() => setShowStepSelector(!showStepSelector)}
+                className="text-[10px] text-gray-400 hover:text-purple-600 dark:hover:text-purple-400 px-1.5 py-1 rounded transition-colors"
+                title="Jump to step"
+              >
+                ⚡
+              </button>
+              {showStepSelector && (
+                <div className="absolute right-0 top-full mt-1 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50 min-w-[200px] max-h-[300px] overflow-y-auto">
+                  <div className="p-2">
+                    <p className="text-[10px] font-semibold text-gray-700 dark:text-gray-300 mb-2 px-2">
+                      Jump to Step:
+                    </p>
+                    {allSteps.map((s, index) => (
+                      <button
+                        key={s.id}
+                        onClick={() => {
+                          onJumpToStep(index);
+                          setShowStepSelector(false);
+                        }}
+                        className={`w-full text-left px-2 py-1.5 rounded text-[10px] transition-colors mb-1 ${
+                          index === progress.currentStep - 1
+                            ? "bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300 font-semibold"
+                            : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+                        }`}
+                      >
+                        <div className="flex items-center gap-2">
+                          <span>{s.icon || "•"}</span>
+                          <span className="flex-1 truncate">{s.title}</span>
+                          {index < progress.currentStep - 1 && (
+                            <span className="text-green-500">✓</span>
+                          )}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
           <button
             onClick={() => setIsMinimized(true)}
             className="text-[10px] text-gray-400 hover:text-purple-600 dark:hover:text-purple-400 px-1.5 py-1 rounded transition-colors"
@@ -162,29 +230,38 @@ export const QuestCard: React.FC<QuestCardProps> = ({
         </div>
       )}
 
-      {/* Action Button */}
+      {/* Action Buttons */}
       {onComplete && (
-        <button
-          onClick={onComplete}
-          disabled={!actionDetected}
-          className={`relative w-full text-xs font-bold py-2 px-4 rounded-lg transition-all duration-200 shadow-md transform hover:scale-[1.02] active:scale-[0.98] overflow-hidden group ${
-            actionDetected
-              ? "bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white hover:shadow-lg cursor-pointer"
-              : "bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-400 cursor-not-allowed opacity-60"
-          }`}
-        >
-          <span className="relative z-10 flex items-center justify-center gap-1.5">
-            <span>✓</span>
-            <span>
-              {actionDetected
-                ? "I've Done This - Continue"
-                : "Complete the action above first"}
-            </span>
-          </span>
-          {actionDetected && (
-            <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/20 to-white/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700" />
+        <div className="flex flex-col gap-2">
+          {actionDetected ? (
+            <button
+              onClick={onComplete}
+              className="relative w-full text-xs font-bold py-2 px-4 rounded-lg transition-all duration-200 shadow-md transform hover:scale-[1.02] active:scale-[0.98] overflow-hidden group bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white hover:shadow-lg cursor-pointer"
+            >
+              <span className="relative z-10 flex items-center justify-center gap-1.5">
+                <span>✓</span>
+                <span>I've Done This - Continue</span>
+              </span>
+              <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/20 to-white/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700" />
+            </button>
+          ) : (
+            <div className="flex flex-col gap-2">
+              <button
+                onClick={onComplete}
+                className="relative w-full text-xs font-bold py-2 px-4 rounded-lg transition-all duration-200 shadow-md transform hover:scale-[1.02] active:scale-[0.98] overflow-hidden group bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600 text-white hover:shadow-lg cursor-pointer border border-blue-400/50"
+              >
+                <span className="relative z-10 flex items-center justify-center gap-1.5">
+                  <span>✓</span>
+                  <span>I've Already Done This - Mark as Complete</span>
+                </span>
+                <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/20 to-white/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700" />
+              </button>
+              <p className="text-[10px] text-gray-500 dark:text-gray-400 text-center">
+                Or complete the action above to automatically detect completion
+              </p>
+            </div>
           )}
-        </button>
+        </div>
       )}
     </div>
   );

@@ -334,6 +334,16 @@ export const QuestManager: React.FC<QuestManagerProps> = ({
     completeCurrentStep();
   }, [completeCurrentStep]);
 
+  const jumpToStep = useCallback((stepIndex: number) => {
+    if (stepIndex >= 0 && stepIndex < quest.steps.length) {
+      setQuest((prev) => ({
+        ...prev,
+        currentStepIndex: stepIndex,
+      }));
+      setStepActionDetected(false);
+    }
+  }, [quest.steps.length]);
+
   if (
     !isVisible ||
     quest.status === "completed" ||
@@ -360,6 +370,8 @@ export const QuestManager: React.FC<QuestManagerProps> = ({
       progress={progress}
       onComplete={completeCurrentStep}
       onSkip={skipCurrentStep}
+      onJumpToStep={jumpToStep}
+      allSteps={quest.steps}
       actionDetected={stepActionDetected}
     />
   );
