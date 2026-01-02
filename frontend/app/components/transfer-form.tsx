@@ -16,7 +16,8 @@ import {
 import { toHex } from "viem";
 import { useSignRawHash } from "@privy-io/react-auth/extended-chains";
 import { useMovementConfig } from "../hooks/useMovementConfig";
-import { Html5Qrcode } from "html5-qrcode";
+// @ts-ignore - react-qr-scanner doesn't have types
+import { QrScanner } from "react-qr-scanner";
 
 interface TokenBalance {
   assetType: string;
@@ -647,69 +648,36 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
   onScanSuccess,
   onClose,
 }) => {
-  const [isScanning, setIsScanning] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const scannerRef = useRef<Html5Qrcode | null>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
+  const [scanned, setScanned] = useState(false);
 
-  useEffect(() => {
-    const startScanning = async () => {
-      try {
-        const html5QrCode = new Html5Qrcode("qr-reader");
-        scannerRef.current = html5QrCode;
-
-        await html5QrCode.start(
-          { facingMode: "environment" }, // Use back camera on mobile
-          {
-            fps: 10,
-            qrbox: { width: 250, height: 250 },
-            aspectRatio: 1.0,
-          },
-          (decodedText) => {
-            // Validate the scanned address
-            if (decodedText.startsWith("0x") && decodedText.length === 66) {
-              html5QrCode.stop().catch(console.error);
-              onScanSuccess(decodedText);
-            } else {
-              setError("Invalid address format. Please scan a valid Movement Network address.");
-            }
-          },
-          (errorMessage) => {
-            // Ignore scanning errors (they're frequent during scanning)
-          }
-        );
-        setIsScanning(true);
-        setError(null);
-      } catch (err) {
-        console.error("QR Scanner error:", err);
-        setError(
-          err instanceof Error
-            ? err.message
-            : "Failed to start camera. Please ensure camera permissions are granted."
-        );
+  const handleScan = (result: any) => {
+    if (scanned) return; // Prevent multiple scans
+    
+    if (result?.text) {
+      const address = result.text.trim();
+      // Validate the scanned address
+      if (address.startsWith("0x") && address.length === 66) {
+        setScanned(true);
+        onScanSuccess(address);
+      } else {
+        setError("Invalid address format. Please scan a valid Movement Network address (66 characters starting with 0x).");
       }
-    };
+    }
+  };
 
-    startScanning();
-
-    return () => {
-      if (scannerRef.current) {
-        scannerRef.current
-          .stop()
-          .then(() => {
-            scannerRef.current = null;
-          })
-          .catch((err) => {
-            console.error("Error stopping scanner:", err);
-            scannerRef.current = null;
-          });
-      }
-    };
-  }, [onScanSuccess]);
+  const handleError = (err: any) => {
+    console.error("QR Scanner error:", err);
+    if (err?.message) {
+      setError(err.message);
+    } else if (!error) {
+      setError("Camera access denied or not available. Please check your permissions.");
+    }
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
-      <div className="relative w-full max-w-md rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900 shadow-2xl animate-scale-in">
+      <div className="relative w-full max-w-md rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900 shadow-2xl animate-scale-in overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-zinc-200 dark:border-zinc-700">
           <h3 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
@@ -737,12 +705,30 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
 
         {/* Scanner Container */}
         <div className="p-4">
-          <div
-            id="qr-reader"
-            ref={containerRef}
-            className="w-full rounded-lg overflow-hidden bg-zinc-100 dark:bg-zinc-800"
-            style={{ minHeight: "300px" }}
-          />
+          <div className="w-full rounded-lg overflow-hidden bg-zinc-100 dark:bg-zinc-800" style={{ minHeight: "300px", position: "relative" }}>
+            <QrScanner
+              onScan={handleScan}
+              onError={handleError}
+              constraints={{
+                video: {
+                  facingMode: "environment", // Use back camera on mobile
+                },
+              }}
+              containerStyle={{
+                width: "100%",
+                height: "100%",
+              }}
+              videoStyle={{
+                width: "100%",
+                height: "100%",
+                objectFit: "cover",
+              }}
+            />
+            {/* Scanning overlay */}
+            <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
+              <div className="w-64 h-64 border-2 border-purple-500 rounded-lg shadow-lg" />
+            </div>
+          </div>
           {error && (
             <div className="mt-4 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 text-sm">
               {error}
