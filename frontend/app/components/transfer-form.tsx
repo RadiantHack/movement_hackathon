@@ -663,38 +663,41 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
           return;
         }
 
-        // Try to get camera permissions first
-        try {
-          const stream = await navigator.mediaDevices.getUserMedia({ 
-            video: { facingMode: "environment" } 
-          });
-          // Stop the test stream
-          stream.getTracks().forEach(track => track.stop());
-        } catch (permErr) {
-          console.error("Camera permission error:", permErr);
-          setError("Camera permission denied. Please allow camera access in your browser settings and try again.");
-          setIsInitializing(false);
-          return;
-        }
-
         const html5QrCode = new Html5Qrcode(containerId.current);
         scannerRef.current = html5QrCode;
 
-        // Try back camera first, fallback to any camera
+        // For iOS PWA, we need to enumerate cameras first
         let cameraId: string | null = null;
+        let cameras: any[] = [];
+        
         try {
-          const devices = await Html5Qrcode.getCameras();
-          if (devices && devices.length > 0) {
-            // Prefer back camera on mobile
-            const backCamera = devices.find(device => 
-              device.label.toLowerCase().includes("back") || 
-              device.label.toLowerCase().includes("rear") ||
-              device.label.toLowerCase().includes("environment")
-            );
-            cameraId = backCamera?.id || devices[0].id;
+          cameras = await Html5Qrcode.getCameras();
+          console.log("Available cameras:", cameras);
+          
+          if (cameras && cameras.length > 0) {
+            // On iOS, cameras might not have descriptive labels
+            // Try to find back camera - on iOS it's usually the second camera or has specific characteristics
+            // iOS typically has: front camera (index 0) and back camera (index 1)
+            const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+            
+            if (isIOS && cameras.length > 1) {
+              // On iOS, back camera is usually the second one
+              cameraId = cameras[1].id;
+              console.log("Using iOS back camera:", cameraId);
+            } else {
+              // Try to find by label
+              const backCamera = cameras.find(device => {
+                const label = device.label.toLowerCase();
+                return label.includes("back") || 
+                       label.includes("rear") ||
+                       label.includes("environment") ||
+                       label.includes("facing: back");
+              });
+              cameraId = backCamera?.id || cameras[cameras.length - 1].id; // Use last camera as fallback (often back camera)
+            }
           }
         } catch (err) {
-          console.log("Could not enumerate cameras, using default:", err);
+          console.log("Could not enumerate cameras, will use facingMode:", err);
         }
 
         const config = {
@@ -704,38 +707,69 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
           disableFlip: false,
         };
 
-        await html5QrCode.start(
-          cameraId || { facingMode: "environment" },
-          config,
-          (decodedText) => {
-            // Validate the scanned address
-            const address = decodedText.trim();
-            if (address.startsWith("0x") && address.length === 66) {
-              html5QrCode.stop().catch(console.error);
-              onScanSuccess(address);
-            } else {
-              setError("Invalid address format. Please scan a valid Movement Network address (66 characters starting with 0x).");
-            }
-          },
-          (errorMessage) => {
-            // Ignore scanning errors (they're frequent during scanning)
-            // Only show error if it's a critical error
-            if (errorMessage && (
-              errorMessage.includes("No MultiFormat Readers") || 
-              errorMessage.includes("NotFoundError") ||
-              errorMessage.includes("NotAllowedError") ||
-              errorMessage.includes("NotReadableError")
-            )) {
-              if (errorMessage.includes("NotAllowedError")) {
-                setError("Camera permission denied. Please allow camera access in your browser settings.");
-              } else if (errorMessage.includes("NotReadableError")) {
-                setError("Camera is being used by another application. Please close other apps using the camera.");
+        // Try with cameraId first, then fallback to facingMode
+        let started = false;
+        
+        if (cameraId) {
+          try {
+            await html5QrCode.start(
+              cameraId,
+              config,
+              (decodedText) => {
+                // Validate the scanned address
+                const address = decodedText.trim();
+                if (address.startsWith("0x") && address.length === 66) {
+                  html5QrCode.stop().catch(console.error);
+                  onScanSuccess(address);
+                } else {
+                  setError("Invalid address format. Please scan a valid Movement Network address (66 characters starting with 0x).");
+                }
+              },
+              (errorMessage) => {
+                // Ignore scanning errors during normal operation
+                if (errorMessage && (
+                  errorMessage.includes("NotAllowedError") ||
+                  errorMessage.includes("NotReadableError") ||
+                  errorMessage.includes("NotFoundError")
+                )) {
+                  console.error("Camera error:", errorMessage);
+                }
+              }
+            );
+            started = true;
+          } catch (err) {
+            console.log("Failed to start with cameraId, trying facingMode:", err);
+          }
+        }
+
+        // Fallback to facingMode if cameraId didn't work
+        if (!started) {
+          await html5QrCode.start(
+            { facingMode: "environment" },
+            config,
+            (decodedText) => {
+              // Validate the scanned address
+              const address = decodedText.trim();
+              if (address.startsWith("0x") && address.length === 66) {
+                html5QrCode.stop().catch(console.error);
+                onScanSuccess(address);
               } else {
-                setError("Camera not accessible. Please ensure your device has a camera and permissions are granted.");
+                setError("Invalid address format. Please scan a valid Movement Network address (66 characters starting with 0x).");
+              }
+            },
+            (errorMessage) => {
+              // Ignore scanning errors during normal operation
+              if (errorMessage && (
+                errorMessage.includes("NotAllowedError") ||
+                errorMessage.includes("NotReadableError") ||
+                errorMessage.includes("NotFoundError")
+              )) {
+                console.error("Camera error:", errorMessage);
               }
             }
-          }
-        );
+          );
+        }
+
         setIsScanning(true);
         setIsInitializing(false);
         setError(null);
@@ -745,13 +779,39 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
         const errorMessage = err instanceof Error ? err.message : String(err);
         
         if (errorMessage.includes("NotAllowedError") || errorMessage.includes("Permission denied")) {
-          setError("Camera permission denied. Please allow camera access in your browser settings and refresh the page.");
+          setError("Camera permission denied. Please allow camera access in Safari settings: Settings → Safari → Camera → Allow.");
         } else if (errorMessage.includes("NotReadableError")) {
           setError("Camera is being used by another application. Please close other apps using the camera.");
         } else if (errorMessage.includes("NotFoundError") || errorMessage.includes("no camera")) {
           setError("No camera found on this device.");
+        } else if (errorMessage.includes("OverconstrainedError")) {
+          setError("Camera constraints not supported. Trying alternative camera...");
+          // Try front camera as last resort
+          try {
+            const html5QrCode = scannerRef.current;
+            if (html5QrCode) {
+              await html5QrCode.start(
+                { facingMode: "user" },
+                { fps: 10, qrbox: { width: 250, height: 250 } },
+                (decodedText) => {
+                  const address = decodedText.trim();
+                  if (address.startsWith("0x") && address.length === 66) {
+                    html5QrCode.stop().catch(console.error);
+                    onScanSuccess(address);
+                  }
+                },
+                () => {}
+              );
+              setIsScanning(true);
+              setIsInitializing(false);
+              setError(null);
+              return;
+            }
+          } catch (fallbackErr) {
+            setError("Failed to access camera. Please check permissions and try again.");
+          }
         } else {
-          setError(`Failed to start camera: ${errorMessage}. Please ensure camera permissions are granted and try again.`);
+          setError(`Failed to start camera: ${errorMessage}. Please ensure camera permissions are granted.`);
         }
       }
     };
