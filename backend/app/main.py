@@ -7,6 +7,7 @@ agent applications, and sets up middleware and health check endpoints.
 
 import os
 import logging
+from contextlib import asynccontextmanager
 
 from dotenv import load_dotenv
 from fastapi import FastAPI
@@ -129,6 +130,29 @@ def register_agents(app: FastAPI) -> None:
     app.mount("/sentiment", sentiment_agent_app.build())
 
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Lifespan context manager for FastAPI app startup and shutdown.
+    
+    This ensures proper cleanup of HTTP connections and resources.
+    """
+    # Startup
+    logger = logging.getLogger(__name__)
+    logger.info("Starting up FastAPI application...")
+    
+    yield
+    
+    # Shutdown - cleanup HTTP connections
+    logger.info("Shutting down FastAPI application, cleaning up connections...")
+    try:
+        # Force cleanup of any lingering HTTP connections
+        import gc
+        gc.collect()
+        logger.info("Cleanup completed")
+    except Exception as e:
+        logger.error(f"Error during cleanup: {e}")
+
+
 def create_app() -> FastAPI:
     """Create and configure the main FastAPI application.
 
@@ -139,6 +163,7 @@ def create_app() -> FastAPI:
         title="Backend API",
         description="Backend server with FastAPI",
         version=API_VERSION,
+        lifespan=lifespan,
     )
 
     # Add CORS middleware

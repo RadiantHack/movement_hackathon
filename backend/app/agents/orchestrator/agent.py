@@ -792,6 +792,17 @@ def create_orchestrator_agent_app() -> FastAPI:
     Returns:
         FastAPI application instance configured for the orchestrator agent
     """
+    from contextlib import asynccontextmanager
+    
+    @asynccontextmanager
+    async def lifespan(app: FastAPI):
+        """Lifespan handler to ensure proper cleanup of HTTP connections."""
+        # Startup
+        yield
+        # Shutdown - force cleanup of HTTP connections
+        import gc
+        gc.collect()
+    
     # Expose the agent via AG-UI Protocol
     adk_orchestrator_agent = ADKAgent(
         adk_agent=orchestrator_agent,
@@ -801,6 +812,6 @@ def create_orchestrator_agent_app() -> FastAPI:
         use_in_memory_services=True,
     )
 
-    app = FastAPI(title="Web3 Orchestrator Agent (ADK)")
+    app = FastAPI(title="Web3 Orchestrator Agent (ADK)", lifespan=lifespan)
     add_adk_fastapi_endpoint(app, adk_orchestrator_agent, path="/")
     return app
