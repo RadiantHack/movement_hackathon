@@ -16,7 +16,7 @@ import {
 import { toHex } from "viem";
 import { useSignRawHash } from "@privy-io/react-auth/extended-chains";
 import { useMovementConfig } from "../hooks/useMovementConfig";
-import { Html5Qrcode } from "html5-qrcode";
+import { Html5Qrcode, Html5QrcodeScanType } from "html5-qrcode";
 
 interface TokenBalance {
   assetType: string;
@@ -705,6 +705,11 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
           qrbox: { width: 250, height: 250 },
           aspectRatio: 1.0,
           disableFlip: false,
+          // Scan only mode - no recording
+          rememberLastUsedCamera: false,
+          supportedScanTypes: [Html5QrcodeScanType.SCAN_TYPE_CAMERA],
+          showTorchButtonIfSupported: false,
+          showZoomSliderIfSupported: false,
         };
 
         // Try with cameraId first, then fallback to facingMode
@@ -877,11 +882,17 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
               className="w-full"
               style={{ minHeight: "300px", display: isInitializing ? "none" : "block" }}
             />
-            {/* Scanning overlay */}
+            {/* Scanning overlay with indicator */}
             {isScanning && (
-              <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
-                <div className="w-64 h-64 border-2 border-purple-500 rounded-lg shadow-lg" />
-              </div>
+              <>
+                <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
+                  <div className="w-64 h-64 border-2 border-purple-500 rounded-lg shadow-lg" />
+                </div>
+                {/* Scan-only indicator */}
+                <div className="absolute top-2 left-2 bg-green-500/90 text-white text-[10px] font-semibold px-2 py-1 rounded">
+                  SCANNING
+                </div>
+              </>
             )}
           </div>
           {error && (
@@ -890,6 +901,9 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
             </div>
           )}
           <p className="mt-4 text-xs text-center text-zinc-500 dark:text-zinc-400">
+            📷 Camera is active for scanning only (not recording)
+          </p>
+          <p className="mt-2 text-xs text-center text-zinc-500 dark:text-zinc-400">
             Point your camera at a QR code containing a Movement Network address
           </p>
         </div>
