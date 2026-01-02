@@ -16,6 +16,7 @@ import {
 import { toHex } from "viem";
 import { useSignRawHash } from "@privy-io/react-auth/extended-chains";
 import { useMovementConfig } from "../hooks/useMovementConfig";
+import { Html5Qrcode } from "html5-qrcode";
 
 interface TokenBalance {
   assetType: string;
@@ -53,6 +54,7 @@ export const TransferForm: React.FC<TransferFormProps> = ({
   const [transferring, setTransferring] = useState(false);
   const [transferError, setTransferError] = useState<string | null>(null);
   const [txHash, setTxHash] = useState<string | null>(null);
+  const [showQRScanner, setShowQRScanner] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const hasManuallySelectedToken = useRef(false);
 
@@ -530,18 +532,53 @@ export const TransferForm: React.FC<TransferFormProps> = ({
         <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400 mb-2">
           Recipient Address
         </label>
-        <input
-          type="text"
-          value={toAddress}
-          onChange={(e) => setToAddress(e.target.value)}
-          placeholder="0x..."
-          className="w-full px-4 py-3 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-50 placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500 transition-all font-mono text-sm"
-          disabled={transferring || !!txHash}
-        />
+        <div className="relative">
+          <input
+            type="text"
+            value={toAddress}
+            onChange={(e) => setToAddress(e.target.value)}
+            placeholder="0x..."
+            className="w-full px-4 py-3 pr-12 sm:pr-4 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-50 placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500 transition-all font-mono text-sm"
+            disabled={transferring || !!txHash}
+          />
+          {/* QR Scanner Button - Only visible on mobile */}
+          <button
+            type="button"
+            onClick={() => setShowQRScanner(true)}
+            className="absolute right-2 top-1/2 -translate-y-1/2 sm:hidden p-2 rounded-lg bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 hover:bg-purple-200 dark:hover:bg-purple-900/50 transition-colors"
+            disabled={transferring || !!txHash}
+            title="Scan QR Code"
+          >
+            <svg
+              className="w-5 h-5"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"
+              />
+            </svg>
+          </button>
+        </div>
         <div className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">
           Movement Network address (66 characters)
         </div>
       </div>
+
+      {/* QR Scanner Modal */}
+      {showQRScanner && (
+        <QRScannerModal
+          onScanSuccess={(address) => {
+            setToAddress(address);
+            setShowQRScanner(false);
+          }}
+          onClose={() => setShowQRScanner(false)}
+        />
+      )}
 
       {/* Error Message */}
       {transferError && (
@@ -596,6 +633,126 @@ export const TransferForm: React.FC<TransferFormProps> = ({
             ? "Transfer Complete"
             : "Transfer"}
       </button>
+    </div>
+  );
+};
+
+// QR Scanner Modal Component
+interface QRScannerModalProps {
+  onScanSuccess: (address: string) => void;
+  onClose: () => void;
+}
+
+const QRScannerModal: React.FC<QRScannerModalProps> = ({
+  onScanSuccess,
+  onClose,
+}) => {
+  const [isScanning, setIsScanning] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const scannerRef = useRef<Html5Qrcode | null>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const startScanning = async () => {
+      try {
+        const html5QrCode = new Html5Qrcode("qr-reader");
+        scannerRef.current = html5QrCode;
+
+        await html5QrCode.start(
+          { facingMode: "environment" }, // Use back camera on mobile
+          {
+            fps: 10,
+            qrbox: { width: 250, height: 250 },
+            aspectRatio: 1.0,
+          },
+          (decodedText) => {
+            // Validate the scanned address
+            if (decodedText.startsWith("0x") && decodedText.length === 66) {
+              html5QrCode.stop().catch(console.error);
+              onScanSuccess(decodedText);
+            } else {
+              setError("Invalid address format. Please scan a valid Movement Network address.");
+            }
+          },
+          (errorMessage) => {
+            // Ignore scanning errors (they're frequent during scanning)
+          }
+        );
+        setIsScanning(true);
+        setError(null);
+      } catch (err) {
+        console.error("QR Scanner error:", err);
+        setError(
+          err instanceof Error
+            ? err.message
+            : "Failed to start camera. Please ensure camera permissions are granted."
+        );
+      }
+    };
+
+    startScanning();
+
+    return () => {
+      if (scannerRef.current) {
+        scannerRef.current
+          .stop()
+          .then(() => {
+            scannerRef.current = null;
+          })
+          .catch((err) => {
+            console.error("Error stopping scanner:", err);
+            scannerRef.current = null;
+          });
+      }
+    };
+  }, [onScanSuccess]);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
+      <div className="relative w-full max-w-md rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900 shadow-2xl animate-scale-in">
+        {/* Header */}
+        <div className="flex items-center justify-between p-4 border-b border-zinc-200 dark:border-zinc-700">
+          <h3 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">
+            Scan QR Code
+          </h3>
+          <button
+            onClick={onClose}
+            className="p-2 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-600 dark:text-zinc-400 transition-colors"
+          >
+            <svg
+              className="w-5 h-5"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M6 18L18 6M6 6l12 12"
+              />
+            </svg>
+          </button>
+        </div>
+
+        {/* Scanner Container */}
+        <div className="p-4">
+          <div
+            id="qr-reader"
+            ref={containerRef}
+            className="w-full rounded-lg overflow-hidden bg-zinc-100 dark:bg-zinc-800"
+            style={{ minHeight: "300px" }}
+          />
+          {error && (
+            <div className="mt-4 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 text-sm">
+              {error}
+            </div>
+          )}
+          <p className="mt-4 text-xs text-center text-zinc-500 dark:text-zinc-400">
+            Point your camera at a QR code containing a Movement Network address
+          </p>
+        </div>
+      </div>
     </div>
   );
 };
