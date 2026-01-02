@@ -16,7 +16,7 @@ import {
 import { toHex } from "viem";
 import { useSignRawHash } from "@privy-io/react-auth/extended-chains";
 import { useMovementConfig } from "../hooks/useMovementConfig";
-import { Html5Qrcode, Html5QrcodeScanType } from "html5-qrcode";
+import { Scanner } from "@yudiel/react-qr-scanner";
 
 interface TokenBalance {
   assetType: string;
@@ -648,195 +648,35 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
   onClose,
 }) => {
   const [error, setError] = useState<string | null>(null);
-  const [isScanning, setIsScanning] = useState(false);
-  const [isInitializing, setIsInitializing] = useState(true);
-  const scannerRef = useRef<Html5Qrcode | null>(null);
-  const containerId = useRef(`qr-reader-${Math.random().toString(36).substr(2, 9)}`);
 
-  useEffect(() => {
-    const startScanning = async () => {
-      try {
-        // Check if camera is available
-        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-          setError("Camera API not available. Please use HTTPS or a modern browser.");
-          setIsInitializing(false);
-          return;
-        }
-
-        const html5QrCode = new Html5Qrcode(containerId.current);
-        scannerRef.current = html5QrCode;
-
-        // For iOS PWA, we need to enumerate cameras first
-        let cameraId: string | null = null;
-        let cameras: any[] = [];
-        
-        try {
-          cameras = await Html5Qrcode.getCameras();
-          console.log("Available cameras:", cameras);
-          
-          if (cameras && cameras.length > 0) {
-            // On iOS, cameras might not have descriptive labels
-            // Try to find back camera - on iOS it's usually the second camera or has specific characteristics
-            // iOS typically has: front camera (index 0) and back camera (index 1)
-            const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-            
-            if (isIOS && cameras.length > 1) {
-              // On iOS, back camera is usually the second one
-              cameraId = cameras[1].id;
-              console.log("Using iOS back camera:", cameraId);
-            } else {
-              // Try to find by label
-              const backCamera = cameras.find(device => {
-                const label = device.label.toLowerCase();
-                return label.includes("back") || 
-                       label.includes("rear") ||
-                       label.includes("environment") ||
-                       label.includes("facing: back");
-              });
-              cameraId = backCamera?.id || cameras[cameras.length - 1].id; // Use last camera as fallback (often back camera)
-            }
-          }
-        } catch (err) {
-          console.log("Could not enumerate cameras, will use facingMode:", err);
-        }
-
-        const config = {
-          fps: 10,
-          qrbox: { width: 250, height: 250 },
-          aspectRatio: 1.0,
-          disableFlip: false,
-          // Scan only mode - no recording
-          rememberLastUsedCamera: false,
-          supportedScanTypes: [Html5QrcodeScanType.SCAN_TYPE_CAMERA],
-          showTorchButtonIfSupported: false,
-          showZoomSliderIfSupported: false,
-        };
-
-        // Try with cameraId first, then fallback to facingMode
-        let started = false;
-        
-        if (cameraId) {
-          try {
-            await html5QrCode.start(
-              cameraId,
-              config,
-              (decodedText) => {
-                // Validate the scanned address
-                const address = decodedText.trim();
-                if (address.startsWith("0x") && address.length === 66) {
-                  html5QrCode.stop().catch(console.error);
-                  onScanSuccess(address);
-                } else {
-                  setError("Invalid address format. Please scan a valid Movement Network address (66 characters starting with 0x).");
-                }
-              },
-              (errorMessage) => {
-                // Ignore scanning errors during normal operation
-                if (errorMessage && (
-                  errorMessage.includes("NotAllowedError") ||
-                  errorMessage.includes("NotReadableError") ||
-                  errorMessage.includes("NotFoundError")
-                )) {
-                  console.error("Camera error:", errorMessage);
-                }
-              }
-            );
-            started = true;
-          } catch (err) {
-            console.log("Failed to start with cameraId, trying facingMode:", err);
-          }
-        }
-
-        // Fallback to facingMode if cameraId didn't work
-        if (!started) {
-          await html5QrCode.start(
-            { facingMode: "environment" },
-            config,
-            (decodedText) => {
-              // Validate the scanned address
-              const address = decodedText.trim();
-              if (address.startsWith("0x") && address.length === 66) {
-                html5QrCode.stop().catch(console.error);
-                onScanSuccess(address);
-              } else {
-                setError("Invalid address format. Please scan a valid Movement Network address (66 characters starting with 0x).");
-              }
-            },
-            (errorMessage) => {
-              // Ignore scanning errors during normal operation
-              if (errorMessage && (
-                errorMessage.includes("NotAllowedError") ||
-                errorMessage.includes("NotReadableError") ||
-                errorMessage.includes("NotFoundError")
-              )) {
-                console.error("Camera error:", errorMessage);
-              }
-            }
-          );
-        }
-
-        setIsScanning(true);
-        setIsInitializing(false);
-        setError(null);
-      } catch (err) {
-        console.error("QR Scanner error:", err);
-        setIsInitializing(false);
-        const errorMessage = err instanceof Error ? err.message : String(err);
-        
-        if (errorMessage.includes("NotAllowedError") || errorMessage.includes("Permission denied")) {
-          setError("Camera permission denied. Please allow camera access in Safari settings: Settings → Safari → Camera → Allow.");
-        } else if (errorMessage.includes("NotReadableError")) {
-          setError("Camera is being used by another application. Please close other apps using the camera.");
-        } else if (errorMessage.includes("NotFoundError") || errorMessage.includes("no camera")) {
-          setError("No camera found on this device.");
-        } else if (errorMessage.includes("OverconstrainedError")) {
-          setError("Camera constraints not supported. Trying alternative camera...");
-          // Try front camera as last resort
-          try {
-            const html5QrCode = scannerRef.current;
-            if (html5QrCode) {
-              await html5QrCode.start(
-                { facingMode: "user" },
-                { fps: 10, qrbox: { width: 250, height: 250 } },
-                (decodedText) => {
-                  const address = decodedText.trim();
-                  if (address.startsWith("0x") && address.length === 66) {
-                    html5QrCode.stop().catch(console.error);
-                    onScanSuccess(address);
-                  }
-                },
-                () => {}
-              );
-              setIsScanning(true);
-              setIsInitializing(false);
-              setError(null);
-              return;
-            }
-          } catch (fallbackErr) {
-            setError("Failed to access camera. Please check permissions and try again.");
-          }
-        } else {
-          setError(`Failed to start camera: ${errorMessage}. Please ensure camera permissions are granted.`);
-        }
+  const handleScan = (detectedCodes: any[]) => {
+    if (detectedCodes && detectedCodes.length > 0) {
+      const result = detectedCodes[0].rawValue || detectedCodes[0].text || "";
+      // Validate the scanned address
+      const address = result.trim();
+      if (address.startsWith("0x") && address.length === 66) {
+        onScanSuccess(address);
+        onClose(); // Close modal after successful scan
+      } else {
+        setError("Invalid address format. Please scan a valid Movement Network address (66 characters starting with 0x).");
       }
-    };
+    }
+  };
 
-    startScanning();
-
-    return () => {
-      if (scannerRef.current) {
-        scannerRef.current
-          .stop()
-          .then(() => {
-            scannerRef.current = null;
-          })
-          .catch((err) => {
-            console.error("Error stopping scanner:", err);
-            scannerRef.current = null;
-          });
-      }
-    };
-  }, [onScanSuccess]);
+  const handleError = (error: unknown) => {
+    console.error("QR Scanner error:", error);
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    
+    if (errorMessage.includes("NotAllowedError") || errorMessage.includes("Permission denied")) {
+      setError("Camera permission denied. Please allow camera access in Safari settings: Settings → Safari → Camera → Allow.");
+    } else if (errorMessage.includes("NotReadableError")) {
+      setError("Camera is being used by another application. Please close other apps using the camera.");
+    } else if (errorMessage.includes("NotFoundError") || errorMessage.includes("no camera")) {
+      setError("No camera found on this device.");
+    } else {
+      setError(`Camera error: ${errorMessage}. Please ensure camera permissions are granted.`);
+    }
+  };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in">
@@ -869,31 +709,35 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
         {/* Scanner Container */}
         <div className="p-4">
           <div className="w-full rounded-lg overflow-hidden bg-zinc-100 dark:bg-zinc-800" style={{ minHeight: "300px", position: "relative" }}>
-            {isInitializing && !error && (
-              <div className="flex items-center justify-center h-[300px]">
-                <div className="text-center">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600 mx-auto mb-2"></div>
-                  <p className="text-sm text-zinc-600 dark:text-zinc-400">Initializing camera...</p>
-                </div>
+            <div className="relative w-full" style={{ minHeight: "300px" }}>
+              <Scanner
+                onScan={handleScan}
+                onError={handleError}
+                constraints={{
+                  facingMode: "environment", // Use back camera
+                }}
+                formats={["qr_code"]}
+                styles={{
+                  container: {
+                    width: "100%",
+                    height: "100%",
+                  },
+                  video: {
+                    width: "100%",
+                    height: "100%",
+                    objectFit: "cover",
+                  },
+                }}
+              />
+              {/* Scanning overlay with indicator */}
+              <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
+                <div className="w-64 h-64 border-2 border-purple-500 rounded-lg shadow-lg" />
               </div>
-            )}
-            <div
-              id={containerId.current}
-              className="w-full"
-              style={{ minHeight: "300px", display: isInitializing ? "none" : "block" }}
-            />
-            {/* Scanning overlay with indicator */}
-            {isScanning && (
-              <>
-                <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
-                  <div className="w-64 h-64 border-2 border-purple-500 rounded-lg shadow-lg" />
-                </div>
-                {/* Scan-only indicator */}
-                <div className="absolute top-2 left-2 bg-green-500/90 text-white text-[10px] font-semibold px-2 py-1 rounded">
-                  SCANNING
-                </div>
-              </>
-            )}
+              {/* Scan-only indicator */}
+              <div className="absolute top-2 left-2 bg-green-500/90 text-white text-[10px] font-semibold px-2 py-1 rounded">
+                SCANNING
+              </div>
+            </div>
           </div>
           {error && (
             <div className="mt-4 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 text-sm">
