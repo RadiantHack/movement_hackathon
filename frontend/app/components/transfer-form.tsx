@@ -649,23 +649,64 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
 }) => {
   const [error, setError] = useState<string | null>(null);
   const [isScanning, setIsScanning] = useState(false);
+  const [isInitializing, setIsInitializing] = useState(true);
   const scannerRef = useRef<Html5Qrcode | null>(null);
   const containerId = useRef(`qr-reader-${Math.random().toString(36).substr(2, 9)}`);
 
   useEffect(() => {
     const startScanning = async () => {
       try {
+        // Check if camera is available
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+          setError("Camera API not available. Please use HTTPS or a modern browser.");
+          setIsInitializing(false);
+          return;
+        }
+
+        // Try to get camera permissions first
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ 
+            video: { facingMode: "environment" } 
+          });
+          // Stop the test stream
+          stream.getTracks().forEach(track => track.stop());
+        } catch (permErr) {
+          console.error("Camera permission error:", permErr);
+          setError("Camera permission denied. Please allow camera access in your browser settings and try again.");
+          setIsInitializing(false);
+          return;
+        }
+
         const html5QrCode = new Html5Qrcode(containerId.current);
         scannerRef.current = html5QrCode;
 
+        // Try back camera first, fallback to any camera
+        let cameraId: string | null = null;
+        try {
+          const devices = await Html5Qrcode.getCameras();
+          if (devices && devices.length > 0) {
+            // Prefer back camera on mobile
+            const backCamera = devices.find(device => 
+              device.label.toLowerCase().includes("back") || 
+              device.label.toLowerCase().includes("rear") ||
+              device.label.toLowerCase().includes("environment")
+            );
+            cameraId = backCamera?.id || devices[0].id;
+          }
+        } catch (err) {
+          console.log("Could not enumerate cameras, using default:", err);
+        }
+
+        const config = {
+          fps: 10,
+          qrbox: { width: 250, height: 250 },
+          aspectRatio: 1.0,
+          disableFlip: false,
+        };
+
         await html5QrCode.start(
-          { facingMode: "environment" }, // Use back camera on mobile
-          {
-            fps: 10,
-            qrbox: { width: 250, height: 250 },
-            aspectRatio: 1.0,
-            disableFlip: false,
-          },
+          cameraId || { facingMode: "environment" },
+          config,
           (decodedText) => {
             // Validate the scanned address
             const address = decodedText.trim();
@@ -679,20 +720,39 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
           (errorMessage) => {
             // Ignore scanning errors (they're frequent during scanning)
             // Only show error if it's a critical error
-            if (errorMessage.includes("No MultiFormat Readers") || errorMessage.includes("NotFoundError")) {
-              setError("Camera not found. Please ensure your device has a camera and permissions are granted.");
+            if (errorMessage && (
+              errorMessage.includes("No MultiFormat Readers") || 
+              errorMessage.includes("NotFoundError") ||
+              errorMessage.includes("NotAllowedError") ||
+              errorMessage.includes("NotReadableError")
+            )) {
+              if (errorMessage.includes("NotAllowedError")) {
+                setError("Camera permission denied. Please allow camera access in your browser settings.");
+              } else if (errorMessage.includes("NotReadableError")) {
+                setError("Camera is being used by another application. Please close other apps using the camera.");
+              } else {
+                setError("Camera not accessible. Please ensure your device has a camera and permissions are granted.");
+              }
             }
           }
         );
         setIsScanning(true);
+        setIsInitializing(false);
         setError(null);
       } catch (err) {
         console.error("QR Scanner error:", err);
-        setError(
-          err instanceof Error
-            ? err.message
-            : "Failed to start camera. Please ensure camera permissions are granted."
-        );
+        setIsInitializing(false);
+        const errorMessage = err instanceof Error ? err.message : String(err);
+        
+        if (errorMessage.includes("NotAllowedError") || errorMessage.includes("Permission denied")) {
+          setError("Camera permission denied. Please allow camera access in your browser settings and refresh the page.");
+        } else if (errorMessage.includes("NotReadableError")) {
+          setError("Camera is being used by another application. Please close other apps using the camera.");
+        } else if (errorMessage.includes("NotFoundError") || errorMessage.includes("no camera")) {
+          setError("No camera found on this device.");
+        } else {
+          setError(`Failed to start camera: ${errorMessage}. Please ensure camera permissions are granted and try again.`);
+        }
       }
     };
 
@@ -744,10 +804,18 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
         {/* Scanner Container */}
         <div className="p-4">
           <div className="w-full rounded-lg overflow-hidden bg-zinc-100 dark:bg-zinc-800" style={{ minHeight: "300px", position: "relative" }}>
+            {isInitializing && !error && (
+              <div className="flex items-center justify-center h-[300px]">
+                <div className="text-center">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600 mx-auto mb-2"></div>
+                  <p className="text-sm text-zinc-600 dark:text-zinc-400">Initializing camera...</p>
+                </div>
+              </div>
+            )}
             <div
               id={containerId.current}
               className="w-full"
-              style={{ minHeight: "300px" }}
+              style={{ minHeight: "300px", display: isInitializing ? "none" : "block" }}
             />
             {/* Scanning overlay */}
             {isScanning && (
