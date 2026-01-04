@@ -392,6 +392,109 @@ Both services will be available:
 
 ## Architecture
 
+### System Architecture Diagram
+
+> **🎨 [View Animated Interactive Diagram →](architecture-diagram.html)** *(Opens in new tab with full animations and hover effects)*
+
+<div align="center">
+
+<div style="max-width: 1000px; margin: 30px auto; padding: 30px; background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%); border-radius: 20px; box-shadow: 0 10px 40px rgba(0,0,0,0.1);">
+
+<!-- Frontend Layer -->
+<div style="text-align: center; margin: 20px 0;">
+  <div style="display: inline-block; padding: 25px 40px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border-radius: 15px; box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4); font-weight: bold; font-size: 18px;">
+    🎨 Frontend<br/>
+    <span style="font-size: 14px; font-weight: normal; opacity: 0.9;">Next.js 15 + CopilotKit + Privy</span>
+  </div>
+</div>
+
+<!-- Arrow -->
+<div style="text-align: center; margin: 15px 0; color: #667eea; font-weight: bold; font-size: 12px;">
+  ⬇️ AG-UI Protocol ⬇️
+</div>
+
+<!-- Middleware Layer -->
+<div style="text-align: center; margin: 20px 0;">
+  <div style="display: inline-block; padding: 20px 35px; background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); color: white; border-radius: 15px; box-shadow: 0 6px 15px rgba(245, 87, 108, 0.3); font-weight: bold; font-size: 16px;">
+    🔧 A2A Middleware<br/>
+    <span style="font-size: 12px; font-weight: normal; opacity: 0.9;">Tool Injection • Wallet Extraction</span>
+  </div>
+</div>
+
+<!-- Arrow -->
+<div style="text-align: center; margin: 15px 0; color: #667eea; font-weight: bold; font-size: 12px;">
+  ⬇️ AG-UI Protocol ⬇️
+</div>
+
+<!-- Orchestrator Layer -->
+<div style="text-align: center; margin: 20px 0;">
+  <div style="display: inline-block; padding: 30px 50px; background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); color: white; border-radius: 15px; box-shadow: 0 10px 30px rgba(79, 172, 254, 0.4); font-weight: bold; font-size: 20px;">
+    🧠 Orchestrator Agent<br/>
+    <span style="font-size: 15px; font-weight: normal; opacity: 0.95;">Gemini 2.5 Pro • Intelligent Routing</span><br/>
+    <span style="font-size: 13px; font-weight: normal; opacity: 0.9;">Sequential Agent Execution</span>
+  </div>
+</div>
+
+<!-- Arrow -->
+<div style="text-align: center; margin: 15px 0; color: #667eea; font-weight: bold; font-size: 12px;">
+  ⬇️ A2A Protocol ⬇️
+</div>
+
+<!-- Specialized Agents Grid -->
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 15px; margin: 30px 0; max-width: 900px; margin-left: auto; margin-right: auto;">
+  <div style="padding: 20px; background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%); border-radius: 12px; box-shadow: 0 4px 12px rgba(67, 233, 123, 0.3); text-align: center;">
+    <div style="font-weight: bold; font-size: 16px; color: #1a1a1a; margin-bottom: 8px;">💰 Balance</div>
+    <div style="font-size: 11px; color: #1a1a1a; opacity: 0.8;">GPT-4 + LangGraph</div>
+  </div>
+  <div style="padding: 20px; background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%); border-radius: 12px; box-shadow: 0 4px 12px rgba(67, 233, 123, 0.3); text-align: center;">
+    <div style="font-weight: bold; font-size: 16px; color: #1a1a1a; margin-bottom: 8px;">🌉 Bridge</div>
+    <div style="font-size: 11px; color: #1a1a1a; opacity: 0.8;">GPT-4 + LangGraph</div>
+  </div>
+  <div style="padding: 20px; background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%); border-radius: 12px; box-shadow: 0 4px 12px rgba(67, 233, 123, 0.3); text-align: center;">
+    <div style="font-weight: bold; font-size: 16px; color: #1a1a1a; margin-bottom: 8px;">💸 Lending</div>
+    <div style="font-size: 11px; color: #1a1a1a; opacity: 0.8;">GPT-4 + LangGraph</div>
+  </div>
+  <div style="padding: 20px; background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%); border-radius: 12px; box-shadow: 0 4px 12px rgba(67, 233, 123, 0.3); text-align: center;">
+    <div style="font-weight: bold; font-size: 16px; color: #1a1a1a; margin-bottom: 8px;">🔄 Swap</div>
+    <div style="font-size: 11px; color: #1a1a1a; opacity: 0.8;">GPT-4 + LangGraph</div>
+  </div>
+  <div style="padding: 20px; background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%); border-radius: 12px; box-shadow: 0 4px 12px rgba(67, 233, 123, 0.3); text-align: center;">
+    <div style="font-weight: bold; font-size: 16px; color: #1a1a1a; margin-bottom: 8px;">📤 Transfer</div>
+    <div style="font-size: 11px; color: #1a1a1a; opacity: 0.8;">GPT-4 + LangGraph</div>
+  </div>
+  <div style="padding: 20px; background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%); border-radius: 12px; box-shadow: 0 4px 12px rgba(67, 233, 123, 0.3); text-align: center;">
+    <div style="font-weight: bold; font-size: 16px; color: #1a1a1a; margin-bottom: 8px;">⭐ Premium</div>
+    <div style="font-size: 11px; color: #1a1a1a; opacity: 0.8;">GPT-4 + LangGraph</div>
+  </div>
+  <div style="padding: 20px; background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%); border-radius: 12px; box-shadow: 0 4px 12px rgba(67, 233, 123, 0.3); text-align: center;">
+    <div style="font-weight: bold; font-size: 16px; color: #1a1a1a; margin-bottom: 8px;">📊 Sentiment</div>
+    <div style="font-size: 11px; color: #1a1a1a; opacity: 0.8;">ADK SequentialAgent</div>
+  </div>
+</div>
+
+<!-- Arrow -->
+<div style="text-align: center; margin: 15px 0; color: #667eea; font-weight: bold; font-size: 12px;">
+  ⬇️ Tools & APIs ⬇️
+</div>
+
+<!-- External Services Layer -->
+<div style="display: flex; justify-content: center; gap: 20px; margin: 30px 0; flex-wrap: wrap;">
+  <div style="padding: 25px 35px; background: linear-gradient(135deg, #fa709a 0%, #fee140 100%); border-radius: 15px; box-shadow: 0 6px 20px rgba(250, 112, 154, 0.3); text-align: center; min-width: 200px;">
+    <div style="font-weight: bold; font-size: 18px; color: #1a1a1a; margin-bottom: 8px;">🌐 Movement Network</div>
+    <div style="font-size: 13px; color: #1a1a1a; opacity: 0.9;">Blockchain Operations</div>
+    <div style="font-size: 12px; color: #1a1a1a; opacity: 0.8;">MovePosition • Echelon</div>
+  </div>
+  <div style="padding: 25px 35px; background: linear-gradient(135deg, #fa709a 0%, #fee140 100%); border-radius: 15px; box-shadow: 0 6px 20px rgba(250, 112, 154, 0.3); text-align: center; min-width: 200px;">
+    <div style="font-weight: bold; font-size: 18px; color: #1a1a1a; margin-bottom: 8px;">🔌 External APIs</div>
+    <div style="font-size: 13px; color: #1a1a1a; opacity: 0.9;">Mosaic • Santiment</div>
+    <div style="font-size: 12px; color: #1a1a1a; opacity: 0.8;">Indexer • Price Feeds</div>
+  </div>
+</div>
+
+</div>
+
+</div>
+
 ### Communication Flow
 
 ```
