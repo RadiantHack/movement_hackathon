@@ -18,13 +18,13 @@ Multi-agent AI platform orchestrating 9 specialized agents for seamless DeFi ope
 
 ---
 
-### Chat & Premium Chat Demo
+### Chat & Premium Chat Demo - A2A Protocol in Action
 
-[![Chat and Premium Chat Demo - YouTube Shorts](https://img.youtube.com/vi/OXEZvMcYMyo/maxresdefault.jpg)](https://www.youtube.com/shorts/OXEZvMcYMyo)
+[![Chat and Premium Chat Demo - A2A Protocol - YouTube Shorts](https://img.youtube.com/vi/OXEZvMcYMyo/maxresdefault.jpg)](https://youtube.com/shorts/OXEZvMcYMyo?si=aiJVtZklOXblajIE)
 
-**👉 [Watch Chat & Premium Chat Demo](https://www.youtube.com/shorts/OXEZvMcYMyo)**
+**👉 [Watch Chat & Premium Chat Demo](https://youtube.com/shorts/OXEZvMcYMyo?si=aiJVtZklOXblajIE)**
 
-*Demonstrates the `/chat` route and `/premiumchat` features*
+*Demonstrates the `/chat` route and `/premiumchat` features showcasing **A2A (Agent-to-Agent) Protocol** - seamless communication between orchestrator and specialized agents*
 
 </div>
 
