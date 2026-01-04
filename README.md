@@ -4,13 +4,19 @@
 
 Multi-agent AI platform orchestrating 9 specialized agents for seamless DeFi operations on Movement Network. Built for the Movement M1 Hackathon.
 
-## Demo
+---
 
-Watch our demo video to see Movement Nexus in action:
+## 🎬 Demo Video
 
-[![Movement Nexus Demo](https://img.youtube.com/vi/AmqAZ7rLez8/maxresdefault.jpg)](https://www.youtube.com/shorts/AmqAZ7rLez8)
+<div align="center">
 
-**Demo Video:** [https://www.youtube.com/shorts/AmqAZ7rLez8](https://www.youtube.com/shorts/AmqAZ7rLez8)
+### Watch Movement Nexus in Action
+
+[![Movement Nexus Demo - YouTube Shorts](https://img.youtube.com/vi/AmqAZ7rLez8/maxresdefault.jpg)](https://www.youtube.com/shorts/AmqAZ7rLez8)
+
+**👉 [Click here to watch the demo on YouTube Shorts](https://www.youtube.com/shorts/AmqAZ7rLez8)**
+
+</div>
 
 ## Overview
 
