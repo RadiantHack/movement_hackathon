@@ -66,6 +66,73 @@ const ChatInner = ({ walletAddress }: MovementChatProps) => {
   const [availableBalances, setAvailableBalances] = useState<
     Record<string, number>
   >({});
+  const [echelonAssets, setEchelonAssets] = useState<
+    Record<
+      string,
+      {
+        symbol: string;
+        name: string;
+        icon: string;
+        price: number;
+        supplyApr: number;
+        faAddress?: string;
+        decimals?: number;
+      }
+    >
+  >({});
+
+  // Fetch Echelon asset data
+  const fetchEchelonAssets = async () => {
+    try {
+      const response = await fetch("/api/echelon");
+      if (!response.ok) {
+        throw new Error("Failed to fetch Echelon assets");
+      }
+      const json = await response.json();
+      const data = json.data;
+
+      if (data?.assets) {
+        const assetsMap: Record<
+          string,
+          {
+            symbol: string;
+            name: string;
+            icon: string;
+            price: number;
+            supplyApr: number;
+            faAddress?: string;
+            decimals?: number;
+          }
+        > = {};
+
+        data.assets.forEach(
+          (asset: {
+            symbol: string;
+            name: string;
+            icon: string;
+            price: number;
+            supplyApr: number;
+            faAddress: string;
+            decimals: number;
+          }) => {
+            assetsMap[asset.symbol.toUpperCase()] = {
+              symbol: asset.symbol,
+              name: asset.name,
+              icon: asset.icon,
+              price: asset.price,
+              supplyApr: asset.supplyApr * 100,
+              faAddress: asset.faAddress,
+              decimals: asset.decimals,
+            };
+          }
+        );
+
+        setEchelonAssets(assetsMap);
+      }
+    } catch (error) {
+      console.error("Error fetching Echelon assets:", error);
+    }
+  };
 
   // Fetch available balances for tokens
   const fetchAvailableBalances = async () => {
@@ -105,6 +172,10 @@ const ChatInner = ({ walletAddress }: MovementChatProps) => {
       console.error("Error fetching available balances:", error);
     }
   };
+
+  useEffect(() => {
+    fetchEchelonAssets();
+  }, []);
 
   useEffect(() => {
     fetchAvailableBalances();
@@ -836,21 +907,40 @@ const ChatInner = ({ walletAddress }: MovementChatProps) => {
           </div>
         );
       } else if (isEchelon) {
+        // Get asset data from Echelon assets map, or use defaults
+        const assetSymbol = asset?.toUpperCase() || "UNKNOWN";
+        const echelonAsset = echelonAssets[assetSymbol];
+
+        console.log("[MovementChat] Rendering EchelonSupplyModal:", {
+          assetSymbol,
+          hasEchelonAsset: !!echelonAsset,
+          echelonAsset: echelonAsset ? {
+            symbol: echelonAsset.symbol,
+            faAddress: echelonAsset.faAddress,
+            decimals: echelonAsset.decimals,
+          } : null,
+          allEchelonAssets: Object.keys(echelonAssets),
+        });
+
         return (
           <EchelonSupplyModal
             isOpen={true}
             onClose={() => setSupplyConfirmation(null)}
             inline={true}
-            asset={{
-              symbol: asset || "UNKNOWN",
-              name: asset || "Unknown Asset",
-              icon: "",
-              price: 1,
-              supplyApr: 0,
-            }}
+            asset={
+              echelonAsset || {
+                symbol: assetSymbol,
+                name: asset || "Unknown Asset",
+                icon: "",
+                price: 1,
+                supplyApr: 0,
+                faAddress: undefined,
+                decimals: 8, // Default to 8 decimals if not found
+              }
+            }
             availableBalance={
               asset
-                ? availableBalances[asset.toUpperCase()] || 0
+                ? availableBalances[assetSymbol] || 0
                 : 0
             }
             onSuccess={async () => {
@@ -1018,25 +1108,48 @@ REMEMBER: The wallet address is ${walletAddress} - use it exactly as shown.`
                 <LendCard walletAddress={walletAddress} asset={supplyConfirmation.asset} />
               </div>
             ) : (
-              <EchelonSupplyModal
-                isOpen={true}
-                onClose={() => setSupplyConfirmation(null)}
-                inline={true}
-                asset={{
-                  symbol: supplyConfirmation.asset,
-                  name: supplyConfirmation.asset,
-                  icon: "",
-                  price: 1,
-                  supplyApr: 0,
-                }}
-                availableBalance={
-                  availableBalances[supplyConfirmation.asset.toUpperCase()] || 0
-                }
-                onSuccess={async () => {
-                  // Refresh balances after successful supply
-                  await fetchAvailableBalances();
-                }}
-              />
+              (() => {
+                // Get asset data from Echelon assets map, or use defaults
+                const assetSymbol = supplyConfirmation.asset.toUpperCase();
+                const echelonAsset = echelonAssets[assetSymbol];
+
+                console.log("[MovementChat] Rendering EchelonSupplyModal (supplyConfirmation):", {
+                  assetSymbol,
+                  hasEchelonAsset: !!echelonAsset,
+                  echelonAsset: echelonAsset ? {
+                    symbol: echelonAsset.symbol,
+                    faAddress: echelonAsset.faAddress,
+                    decimals: echelonAsset.decimals,
+                  } : null,
+                  allEchelonAssets: Object.keys(echelonAssets),
+                });
+
+                return (
+                  <EchelonSupplyModal
+                    isOpen={true}
+                    onClose={() => setSupplyConfirmation(null)}
+                    inline={true}
+                    asset={
+                      echelonAsset || {
+                        symbol: assetSymbol,
+                        name: supplyConfirmation.asset,
+                        icon: "",
+                        price: 1,
+                        supplyApr: 0,
+                        faAddress: undefined,
+                        decimals: 8, // Default to 8 decimals if not found
+                      }
+                    }
+                    availableBalance={
+                      availableBalances[assetSymbol] || 0
+                    }
+                    onSuccess={async () => {
+                      // Refresh balances after successful supply
+                      await fetchAvailableBalances();
+                    }}
+                  />
+                );
+              })()
             )}
           </>
         )}
