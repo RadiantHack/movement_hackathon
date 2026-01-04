@@ -6,15 +6,25 @@ Multi-agent AI platform orchestrating 9 specialized agents for seamless DeFi ope
 
 ---
 
-## 🎬 Demo Video
+## 🎬 Demo Videos
 
 <div align="center">
 
-### Watch Movement Nexus in Action
+### General Demo - Movement Nexus Overview
 
 [![Movement Nexus Demo - YouTube Shorts](https://img.youtube.com/vi/AmqAZ7rLez8/maxresdefault.jpg)](https://www.youtube.com/shorts/AmqAZ7rLez8)
 
-**👉 [Click here to watch the demo on YouTube Shorts](https://www.youtube.com/shorts/AmqAZ7rLez8)**
+**👉 [Watch General Demo](https://www.youtube.com/shorts/AmqAZ7rLez8)**
+
+---
+
+### Chat & Premium Chat Demo
+
+[![Chat and Premium Chat Demo - YouTube Shorts](https://img.youtube.com/vi/OXEZvMcYMyo/maxresdefault.jpg)](https://www.youtube.com/shorts/OXEZvMcYMyo)
+
+**👉 [Watch Chat & Premium Chat Demo](https://www.youtube.com/shorts/OXEZvMcYMyo)**
+
+*Demonstrates the `/chat` route and `/premiumchat` features*
 
 </div>
 
