@@ -32,6 +32,18 @@ Multi-agent AI platform orchestrating 9 specialized agents for seamless DeFi ope
 
 *Demonstrates the `/chat` route and `/premiumchat` features showcasing **A2A (Agent-to-Agent) Protocol** - seamless communication between orchestrator and specialized agents*
 
+---
+
+### Lending & Borrowing Demo - MovePosition & Echelon
+
+<a href="https://youtube.com/shorts/prig5KbGr9U?si=lFImYgJ61YKgAu3q" target="_blank" rel="noopener noreferrer">
+  <img src="https://img.youtube.com/vi/prig5KbGr9U/maxresdefault.jpg" alt="Lending and Borrowing Demo - MovePosition & Echelon - YouTube Shorts" style="width:100%;max-width:640px;border-radius:8px;cursor:pointer;">
+</a>
+
+**👉 [Watch Lending & Borrowing Demo →](https://youtube.com/shorts/prig5KbGr9U?si=lFImYgJ61YKgAu3q)** *(Opens in new tab)*
+
+*Demonstrates lending and borrowing features on **MovePosition** and **Echelon** protocols - supply collateral, borrow assets, compare rates, and manage positions across both platforms*
+
 </div>
 
 ## Overview
