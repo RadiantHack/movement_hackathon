@@ -495,17 +495,135 @@ Both services will be available:
 
 </div>
 
-### Communication Flow
+### Request Flow Diagram
 
-```
-Frontend (CopilotKit)
-    ↓ AG-UI Protocol
-Orchestrator Agent (Gemini 2.5 Pro)
-    ↓ A2A Protocol
-Specialized Agents (LangGraph + GPT-4)
-    ↓ Tools & APIs
-Movement Network / External APIs
-```
+> **🔄 [View Animated Flow Diagram →](flow-diagram.html)** *(Opens in new tab with full animations showing request flow)*
+
+<div align="center">
+
+<div style="max-width: 1100px; margin: 40px auto; padding: 40px; background: linear-gradient(135deg, rgba(79, 172, 254, 0.1) 0%, rgba(0, 242, 254, 0.1) 100%); border-radius: 25px; box-shadow: 0 15px 50px rgba(0,0,0,0.1);">
+
+<div style="text-align: center; margin-bottom: 40px;">
+  <h3 style="color: #4facfe; font-size: 24px; font-weight: bold; margin-bottom: 10px;">🔄 Request Flow - How It Works</h3>
+  <p style="color: #666; font-size: 14px;">Follow a user request through the entire system</p>
+</div>
+
+<!-- Step 1: User Input -->
+<div style="display: flex; align-items: center; justify-content: center; margin: 30px 0;">
+  <div style="flex: 1; max-width: 300px; padding: 25px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border-radius: 15px; box-shadow: 0 8px 25px rgba(102, 126, 234, 0.4); text-align: center; margin-right: 20px;">
+    <div style="font-size: 32px; margin-bottom: 10px;">👤</div>
+    <div style="font-weight: bold; font-size: 18px; margin-bottom: 8px;">Step 1: User Query</div>
+    <div style="font-size: 13px; opacity: 0.95;">"Check my USDC balance"</div>
+    <div style="font-size: 13px; opacity: 0.95;">"Swap MOVE for USDC"</div>
+  </div>
+  <div style="font-size: 30px; color: #4facfe; margin: 0 15px;">→</div>
+  <div style="flex: 1; max-width: 300px; padding: 25px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border-radius: 15px; box-shadow: 0 8px 25px rgba(102, 126, 234, 0.4); text-align: center;">
+    <div style="font-size: 32px; margin-bottom: 10px;">🎨</div>
+    <div style="font-weight: bold; font-size: 18px; margin-bottom: 8px;">Step 2: Frontend</div>
+    <div style="font-size: 13px; opacity: 0.95;">CopilotKit receives query</div>
+    <div style="font-size: 13px; opacity: 0.95;">Extracts wallet address</div>
+  </div>
+</div>
+
+<div style="text-align: center; margin: 20px 0; color: #4facfe; font-weight: bold; font-size: 14px;">
+  ⬇️ AG-UI Protocol ⬇️
+</div>
+
+<!-- Step 3: Middleware -->
+<div style="display: flex; align-items: center; justify-content: center; margin: 30px 0;">
+  <div style="flex: 1; max-width: 350px; padding: 25px; background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%); color: white; border-radius: 15px; box-shadow: 0 8px 25px rgba(245, 87, 108, 0.4); text-align: center; margin: 0 auto;">
+    <div style="font-size: 32px; margin-bottom: 10px;">🔧</div>
+    <div style="font-weight: bold; font-size: 18px; margin-bottom: 8px;">Step 3: A2A Middleware</div>
+    <div style="font-size: 13px; opacity: 0.95;">Injects send_message_to_a2a_agent tool</div>
+    <div style="font-size: 13px; opacity: 0.95;">Wraps orchestrator agent</div>
+  </div>
+</div>
+
+<div style="text-align: center; margin: 20px 0; color: #4facfe; font-weight: bold; font-size: 14px;">
+  ⬇️ AG-UI Protocol ⬇️
+</div>
+
+<!-- Step 4: Orchestrator -->
+<div style="display: flex; align-items: center; justify-content: center; margin: 30px 0;">
+  <div style="flex: 1; max-width: 400px; padding: 30px; background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); color: white; border-radius: 15px; box-shadow: 0 10px 35px rgba(79, 172, 254, 0.5); text-align: center; margin: 0 auto;">
+    <div style="font-size: 36px; margin-bottom: 10px;">🧠</div>
+    <div style="font-weight: bold; font-size: 20px; margin-bottom: 10px;">Step 4: Orchestrator Agent</div>
+    <div style="font-size: 14px; opacity: 0.95; margin-bottom: 5px;">Gemini 2.5 Pro analyzes query</div>
+    <div style="font-size: 14px; opacity: 0.95; margin-bottom: 5px;">Determines required agent</div>
+    <div style="font-size: 14px; opacity: 0.95;">Routes to Balance Agent</div>
+  </div>
+</div>
+
+<div style="text-align: center; margin: 20px 0; color: #4facfe; font-weight: bold; font-size: 14px;">
+  ⬇️ A2A Protocol ⬇️
+</div>
+
+<!-- Step 5: Specialized Agent -->
+<div style="display: flex; align-items: center; justify-content: center; margin: 30px 0;">
+  <div style="flex: 1; max-width: 350px; padding: 25px; background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%); color: #1a1a1a; border-radius: 15px; box-shadow: 0 8px 25px rgba(67, 233, 123, 0.4); text-align: center; margin: 0 auto;">
+    <div style="font-size: 32px; margin-bottom: 10px;">💰</div>
+    <div style="font-weight: bold; font-size: 18px; margin-bottom: 8px;">Step 5: Specialized Agent</div>
+    <div style="font-size: 13px; opacity: 0.9; margin-bottom: 5px;">Balance Agent (GPT-4 + LangGraph)</div>
+    <div style="font-size: 13px; opacity: 0.9;">Executes balance check tool</div>
+  </div>
+</div>
+
+<div style="text-align: center; margin: 20px 0; color: #4facfe; font-weight: bold; font-size: 14px;">
+  ⬇️ Tools & APIs ⬇️
+</div>
+
+<!-- Step 6: External Services -->
+<div style="display: flex; align-items: center; justify-content: center; margin: 30px 0;">
+  <div style="flex: 1; max-width: 300px; padding: 25px; background: linear-gradient(135deg, #fa709a 0%, #fee140 100%); color: #1a1a1a; border-radius: 15px; box-shadow: 0 8px 25px rgba(250, 112, 154, 0.4); text-align: center; margin-right: 20px;">
+    <div style="font-size: 32px; margin-bottom: 10px;">🌐</div>
+    <div style="font-weight: bold; font-size: 18px; margin-bottom: 8px;">Step 6: Movement Network</div>
+    <div style="font-size: 13px; opacity: 0.9;">Fetches balance data</div>
+    <div style="font-size: 13px; opacity: 0.9;">Returns token balances</div>
+  </div>
+  <div style="font-size: 30px; color: #4facfe; margin: 0 15px;">←</div>
+  <div style="flex: 1; max-width: 300px; padding: 25px; background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%); color: #1a1a1a; border-radius: 15px; box-shadow: 0 8px 25px rgba(67, 233, 123, 0.4); text-align: center;">
+    <div style="font-size: 32px; margin-bottom: 10px;">💰</div>
+    <div style="font-weight: bold; font-size: 18px; margin-bottom: 8px;">Step 7: Agent Response</div>
+    <div style="font-size: 13px; opacity: 0.9;">Formats result</div>
+    <div style="font-size: 13px; opacity: 0.9;">Returns to orchestrator</div>
+  </div>
+</div>
+
+<div style="text-align: center; margin: 20px 0; color: #4facfe; font-weight: bold; font-size: 14px;">
+  ⬆️ A2A Protocol ⬆️
+</div>
+
+<!-- Step 8: Response Flow Back -->
+<div style="display: flex; align-items: center; justify-content: center; margin: 30px 0;">
+  <div style="flex: 1; max-width: 300px; padding: 25px; background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); color: white; border-radius: 15px; box-shadow: 0 8px 25px rgba(79, 172, 254, 0.4); text-align: center; margin-right: 20px;">
+    <div style="font-size: 32px; margin-bottom: 10px;">🧠</div>
+    <div style="font-weight: bold; font-size: 18px; margin-bottom: 8px;">Step 8: Orchestrator</div>
+    <div style="font-size: 13px; opacity: 0.95;">Processes agent response</div>
+    <div style="font-size: 13px; opacity: 0.95;">Formats for user</div>
+  </div>
+  <div style="font-size: 30px; color: #4facfe; margin: 0 15px;">→</div>
+  <div style="flex: 1; max-width: 300px; padding: 25px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border-radius: 15px; box-shadow: 0 8px 25px rgba(102, 126, 234, 0.4); text-align: center;">
+    <div style="font-size: 32px; margin-bottom: 10px;">✅</div>
+    <div style="font-weight: bold; font-size: 18px; margin-bottom: 8px;">Step 9: User Response</div>
+    <div style="font-size: 13px; opacity: 0.95;">Displays in chat</div>
+    <div style="font-size: 13px; opacity: 0.95;">Shows balance card</div>
+  </div>
+</div>
+
+<div style="margin-top: 40px; padding: 20px; background: rgba(79, 172, 254, 0.1); border-radius: 15px; border-left: 4px solid #4facfe;">
+  <div style="font-weight: bold; color: #4facfe; margin-bottom: 10px; font-size: 16px;">💡 Key Features:</div>
+  <div style="color: #666; font-size: 14px; line-height: 1.8;">
+    • <strong>Sequential Processing:</strong> Agents execute one at a time for optimal coordination<br/>
+    • <strong>Intelligent Routing:</strong> Orchestrator selects the best agent for each query<br/>
+    • <strong>Protocol Separation:</strong> AG-UI (Frontend↔Orchestrator) and A2A (Orchestrator↔Agents)<br/>
+    • <strong>Tool Execution:</strong> Agents use specialized tools to interact with blockchain and APIs<br/>
+    • <strong>Response Formatting:</strong> Results are formatted and displayed as interactive cards
+  </div>
+</div>
+
+</div>
+
+</div>
 
 ### Key Components
 
