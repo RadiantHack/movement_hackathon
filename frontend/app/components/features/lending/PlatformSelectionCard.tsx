@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { BorrowCard } from "../borrow/BorrowCard";
 import { LendCard } from "../lend/LendCard";
 import { EchelonBorrowModal } from "../../echelon-borrow-modal";
@@ -28,6 +28,52 @@ export const PlatformSelectionCard: React.FC<PlatformSelectionCardProps> = ({
   onClose,
 }) => {
   const [selectedPlatform, setSelectedPlatform] = useState<string | null>(null);
+  const [availableBalances, setAvailableBalances] = useState<
+    Record<string, number>
+  >({});
+
+  // Fetch available balances for tokens
+  const fetchAvailableBalances = async () => {
+    if (!walletAddress) return;
+
+    try {
+      const response = await fetch(
+        `/api/balance?address=${encodeURIComponent(walletAddress)}`
+      );
+
+      if (!response.ok) {
+        throw new Error("Failed to fetch balance");
+      }
+
+      const data = await response.json();
+
+      if (data.success && data.balances && data.balances.length > 0) {
+        const balances: Record<string, number> = {};
+        data.balances.forEach(
+          (b: {
+            metadata: { symbol: string; decimals: number };
+            amount: string;
+          }) => {
+            const symbol = b.metadata.symbol.toUpperCase().replace(/\./g, "");
+            const amount =
+              parseFloat(b.amount) / Math.pow(10, b.metadata.decimals);
+            // Store both with and without .e suffix
+            balances[symbol] = amount;
+            if (symbol.endsWith("E")) {
+              balances[symbol.slice(0, -1)] = amount; // USDC.E -> USDC
+            }
+          }
+        );
+        setAvailableBalances(balances);
+      }
+    } catch (error) {
+      console.error("Error fetching available balances:", error);
+    }
+  };
+
+  useEffect(() => {
+    fetchAvailableBalances();
+  }, [walletAddress]);
 
   const handlePlatformSelect = (platform: "echelon" | "moveposition") => {
     setSelectedPlatform(platform);
@@ -45,13 +91,13 @@ export const PlatformSelectionCard: React.FC<PlatformSelectionCardProps> = ({
     if (action === "borrow") {
       return (
         <div className="my-3">
-          <BorrowCard walletAddress={walletAddress} />
+          <BorrowCard walletAddress={walletAddress} asset={asset} />
         </div>
       );
     } else {
       return (
         <div className="my-3">
-          <LendCard walletAddress={walletAddress} />
+          <LendCard walletAddress={walletAddress} asset={asset} />
         </div>
       );
     }
@@ -94,6 +140,11 @@ export const PlatformSelectionCard: React.FC<PlatformSelectionCardProps> = ({
               icon: "",
               price: 1, // Default price, will be fetched if needed
               supplyApr: parseFloat(echelonRate.replace("%", "")), // Already in percentage format
+            }}
+            availableBalance={availableBalances[asset.toUpperCase()] || 0}
+            onSuccess={async () => {
+              // Refresh balances after successful supply
+              await fetchAvailableBalances();
             }}
           />
         </div>

@@ -14,6 +14,7 @@ import * as superJsonApiClient from "../../../../lib/super-json-api-client/src";
 
 interface LendCardProps {
   walletAddress: string | null;
+  asset?: string; // Optional asset to pre-select (e.g., "USDC", "MOVE")
 }
 
 interface TokenBalance {
@@ -28,11 +29,12 @@ interface TokenBalance {
   isNative: boolean;
 }
 
-export const LendCard: React.FC<LendCardProps> = ({ walletAddress }) => {
+export const LendCard: React.FC<LendCardProps> = ({ walletAddress, asset }) => {
   const { user, ready, authenticated } = usePrivy();
   const { signRawHash } = useSignRawHash();
   const [activeTab, setActiveTab] = useState<"supply" | "withdraw">("supply");
-  const [token, setToken] = useState<string>("MOVE");
+  // Use asset prop if provided, otherwise default to MOVE
+  const [token, setToken] = useState<string>(asset?.toUpperCase() || "MOVE");
   const [amount, setAmount] = useState<string>("");
   const [lending, setLending] = useState(false);
   const [lendError, setLendError] = useState<string | null>(null);
@@ -178,6 +180,13 @@ export const LendCard: React.FC<LendCardProps> = ({ walletAddress }) => {
 
     fetchBalance();
   }, [walletAddress, token]);
+
+  // Update token when asset prop changes
+  useEffect(() => {
+    if (asset) {
+      setToken(asset.toUpperCase());
+    }
+  }, [asset]);
 
   // Fetch portfolio and broker data
   useEffect(() => {

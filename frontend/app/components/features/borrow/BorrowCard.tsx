@@ -16,6 +16,7 @@ import { getMovementApiBase } from "@/lib/super-aptos-sdk/src/globals";
 
 interface BorrowCardProps {
   walletAddress: string | null;
+  asset?: string; // Optional asset to pre-select (e.g., "USDC", "MOVE")
 }
 
 interface TokenBalance {
@@ -64,11 +65,12 @@ interface PortfolioResponse {
   };
 }
 
-export const BorrowCard: React.FC<BorrowCardProps> = ({ walletAddress }) => {
+export const BorrowCard: React.FC<BorrowCardProps> = ({ walletAddress, asset }) => {
   const { user, ready, authenticated } = usePrivy();
   const { signRawHash } = useSignRawHash();
   const [activeTab, setActiveTab] = useState<"borrow" | "repay">("borrow");
-  const [token, setToken] = useState<string>("MOVE");
+  // Use asset prop if provided, otherwise default to MOVE
+  const [token, setToken] = useState<string>(asset?.toUpperCase() || "MOVE");
   const [amount, setAmount] = useState<string>("");
   const [borrowing, setBorrowing] = useState(false);
   const [borrowError, setBorrowError] = useState<string | null>(null);
@@ -122,6 +124,13 @@ export const BorrowCard: React.FC<BorrowCardProps> = ({ walletAddress }) => {
   const borrowAPY = 8.5;
   const maxBorrow = 0;
   const walletBalance = balance ? parseFloat(balance) : 0;
+
+  // Update token when asset prop changes
+  useEffect(() => {
+    if (asset) {
+      setToken(asset.toUpperCase());
+    }
+  }, [asset]);
 
   // Fetch balance for token
   useEffect(() => {
