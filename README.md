@@ -20,6 +20,8 @@ Multi-agent AI platform orchestrating 9 specialized agents for seamless DeFi ope
 
 **👉 [Watch General Demo →](https://www.youtube.com/shorts/AmqAZ7rLez8)** *(Opens in new tab)*
 
+*Demonstrates **transfer** and **swap** functionality - seamless token transfers and cross-chain swaps on Movement Network*
+
 ---
 
 ### Chat & Premium Chat Demo - A2A Protocol in Action
