@@ -394,8 +394,6 @@ Both services will be available:
 
 ### System Architecture Diagram
 
-> **🎨 [View Animated Interactive Diagram →](architecture-diagram.html)** *(Opens in new tab with full animations and hover effects)*
-
 ```
 ┌─────────────────────────────────────────────────────────────────┐
 │                    🎨 FRONTEND LAYER                            │
@@ -443,8 +441,6 @@ Both services will be available:
 ```
 
 ### Request Flow Diagram
-
-> **🔄 [View Animated Flow Diagram →](flow-diagram.html)** *(Opens in new tab with full animations showing request flow)*
 
 **🔄 Request Flow - How It Works**
 
