@@ -10,19 +10,25 @@ Multi-agent AI platform orchestrating 9 specialized agents for seamless DeFi ope
 
 <div align="center">
 
+> **📺 Click on any video thumbnail below to watch the demo. Videos open in a new tab for easy viewing.**
+
 ### General Demo - Movement Nexus Overview
 
-[![Movement Nexus Demo - YouTube Shorts](https://img.youtube.com/vi/AmqAZ7rLez8/maxresdefault.jpg)](https://www.youtube.com/shorts/AmqAZ7rLez8)
+<a href="https://www.youtube.com/shorts/AmqAZ7rLez8" target="_blank" rel="noopener noreferrer">
+  <img src="https://img.youtube.com/vi/AmqAZ7rLez8/maxresdefault.jpg" alt="Movement Nexus Demo - YouTube Shorts" style="width:100%;max-width:640px;border-radius:8px;cursor:pointer;">
+</a>
 
-**👉 [Watch General Demo](https://www.youtube.com/shorts/AmqAZ7rLez8)**
+**👉 [Watch General Demo →](https://www.youtube.com/shorts/AmqAZ7rLez8)** *(Opens in new tab)*
 
 ---
 
 ### Chat & Premium Chat Demo - A2A Protocol in Action
 
-[![Chat and Premium Chat Demo - A2A Protocol - YouTube Shorts](https://img.youtube.com/vi/OXEZvMcYMyo/maxresdefault.jpg)](https://youtube.com/shorts/OXEZvMcYMyo?si=aiJVtZklOXblajIE)
+<a href="https://youtube.com/shorts/OXEZvMcYMyo?si=aiJVtZklOXblajIE" target="_blank" rel="noopener noreferrer">
+  <img src="https://img.youtube.com/vi/OXEZvMcYMyo/maxresdefault.jpg" alt="Chat and Premium Chat Demo - A2A Protocol - YouTube Shorts" style="width:100%;max-width:640px;border-radius:8px;cursor:pointer;">
+</a>
 
-**👉 [Watch Chat & Premium Chat Demo](https://youtube.com/shorts/OXEZvMcYMyo?si=aiJVtZklOXblajIE)**
+**👉 [Watch Chat & Premium Chat Demo →](https://youtube.com/shorts/OXEZvMcYMyo?si=aiJVtZklOXblajIE)** *(Opens in new tab)*
 
 *Demonstrates the `/chat` route and `/premiumchat` features showcasing **A2A (Agent-to-Agent) Protocol** - seamless communication between orchestrator and specialized agents*
 
