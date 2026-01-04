@@ -63,6 +63,52 @@ const ChatInner = ({ walletAddress }: MovementChatProps) => {
     asset: string;
     amount: string;
   } | null>(null);
+  const [availableBalances, setAvailableBalances] = useState<
+    Record<string, number>
+  >({});
+
+  // Fetch available balances for tokens
+  const fetchAvailableBalances = async () => {
+    if (!walletAddress) return;
+
+    try {
+      const response = await fetch(
+        `/api/balance?address=${encodeURIComponent(walletAddress)}`
+      );
+
+      if (!response.ok) {
+        throw new Error("Failed to fetch balance");
+      }
+
+      const data = await response.json();
+
+      if (data.success && data.balances && data.balances.length > 0) {
+        const balances: Record<string, number> = {};
+        data.balances.forEach(
+          (b: {
+            metadata: { symbol: string; decimals: number };
+            amount: string;
+          }) => {
+            const symbol = b.metadata.symbol.toUpperCase().replace(/\./g, "");
+            const amount =
+              parseFloat(b.amount) / Math.pow(10, b.metadata.decimals);
+            // Store both with and without .e suffix
+            balances[symbol] = amount;
+            if (symbol.endsWith("E")) {
+              balances[symbol.slice(0, -1)] = amount; // USDC.E -> USDC
+            }
+          }
+        );
+        setAvailableBalances(balances);
+      }
+    } catch (error) {
+      console.error("Error fetching available balances:", error);
+    }
+  };
+
+  useEffect(() => {
+    fetchAvailableBalances();
+  }, [walletAddress]);
 
   // Detect when chat input is focused to hide suggestions
   useEffect(() => {
@@ -786,7 +832,7 @@ const ChatInner = ({ walletAddress }: MovementChatProps) => {
       if (isMovePosition) {
         return (
           <div className="my-3">
-            <LendCard walletAddress={walletAddress} />
+            <LendCard walletAddress={walletAddress} asset={asset} />
           </div>
         );
       } else if (isEchelon) {
@@ -794,12 +840,22 @@ const ChatInner = ({ walletAddress }: MovementChatProps) => {
           <EchelonSupplyModal
             isOpen={true}
             onClose={() => setSupplyConfirmation(null)}
+            inline={true}
             asset={{
               symbol: asset || "UNKNOWN",
               name: asset || "Unknown Asset",
               icon: "",
               price: 1,
               supplyApr: 0,
+            }}
+            availableBalance={
+              asset
+                ? availableBalances[asset.toUpperCase()] || 0
+                : 0
+            }
+            onSuccess={async () => {
+              // Refresh balances after successful supply
+              await fetchAvailableBalances();
             }}
           />
         );
@@ -959,18 +1015,26 @@ REMEMBER: The wallet address is ${walletAddress} - use it exactly as shown.`
           <>
             {supplyConfirmation.protocol === "moveposition" ? (
               <div className="my-3">
-                <LendCard walletAddress={walletAddress} />
+                <LendCard walletAddress={walletAddress} asset={supplyConfirmation.asset} />
               </div>
             ) : (
               <EchelonSupplyModal
                 isOpen={true}
                 onClose={() => setSupplyConfirmation(null)}
+                inline={true}
                 asset={{
                   symbol: supplyConfirmation.asset,
                   name: supplyConfirmation.asset,
                   icon: "",
                   price: 1,
                   supplyApr: 0,
+                }}
+                availableBalance={
+                  availableBalances[supplyConfirmation.asset.toUpperCase()] || 0
+                }
+                onSuccess={async () => {
+                  // Refresh balances after successful supply
+                  await fetchAvailableBalances();
                 }}
               />
             )}
