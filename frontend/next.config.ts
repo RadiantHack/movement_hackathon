@@ -157,7 +157,8 @@ const withPWA = require("@ducanh2912/next-pwa").default({
 
 const nextConfig: NextConfig = {
   /* config options here */
-  output: "standalone",
+  // Remove standalone output for Netlify - it's only needed for Docker deployments
+  // output: "standalone", // Commented out for Netlify compatibility
   webpack: (config, { isServer }) => {
     // Handle Solana packages that may use ESM
     config.resolve.fallback = {
