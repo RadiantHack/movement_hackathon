@@ -4,6 +4,45 @@
 
 Multi-agent AI platform orchestrating 9 specialized agents for seamless DeFi operations on Movement Network. Built for the Movement M1 Hackathon.
 
+## Demo
+
+Watch our demo video to see Movement Nexus in action:
+
+[![Movement Nexus Demo](https://img.youtube.com/vi/AmqAZ7rLez8/maxresdefault.jpg)](https://www.youtube.com/shorts/AmqAZ7rLez8)
+
+**Demo Video:** [https://www.youtube.com/shorts/AmqAZ7rLez8](https://www.youtube.com/shorts/AmqAZ7rLez8)
+
+## Overview
+
+### Wallet Integration
+
+Movement Nexus provides seamless wallet integration through Privy, enabling users to:
+
+- **Secure Authentication**: Privy-powered authentication with embedded wallet support
+- **Multi-Chain Support**: Native Movement Network wallet integration
+- **Automatic Wallet Creation**: Embedded wallets created automatically for new users
+- **Transaction Signing**: Secure transaction signing directly from the app
+- **Balance Management**: Real-time balance tracking across all supported tokens
+
+The wallet system is fully integrated across all features, allowing users to:
+- Check balances across Movement Network tokens
+- Execute swaps, transfers, and bridges
+- Interact with lending protocols (MovePosition & Echelon)
+- Access premium features with authenticated sessions
+
+### Chat Features
+
+Movement Nexus includes two powerful chat interfaces:
+
+- **Standard Chat** (`/chat`): Access to all core agents for DeFi operations
+- **Premium Chat** (`/premiumchat`): Advanced features with premium agents including:
+  - Enhanced lending analytics
+  - Advanced sentiment analysis
+  - Premium trading recommendations
+  - Priority agent access
+
+Both chat interfaces are powered by our AI orchestrator, providing intelligent routing to specialized agents for optimal user experience.
+
 ## Features
 
 - 🤖 **9 Specialized AI Agents**: Balance, Bridge, Lending, Swap, Transfer, Orchestrator, Premium Lending, Sentiment & Trading
