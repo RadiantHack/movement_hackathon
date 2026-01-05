@@ -1,11 +1,11 @@
 "use client";
 
 import { usePrivy, WalletWithMetadata } from "@privy-io/react-auth";
-import { useRouter } from "next/navigation";
 import { useEffect, useState, useMemo } from "react";
 import { Sidebar } from "../components/sidebar";
 import { RightSidebar } from "../components/right-sidebar";
 import { ThemeToggle } from "../components/themeToggle";
+import { AuthGuard } from "../components/auth-guard";
 import { TransferForm } from "../components/transfer-form";
 import { SwapCard } from "../components/features/swap/SwapCard";
 import { QRCodeSVG } from "qrcode.react";
@@ -24,8 +24,7 @@ interface TokenBalance {
 }
 
 export default function OverviewPage() {
-  const { ready, authenticated, user } = usePrivy();
-  const router = useRouter();
+  const { authenticated, user } = usePrivy();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isRightSidebarOpen, setIsRightSidebarOpen] = useState(false);
   const [walletAddress, setWalletAddress] = useState<string | null>(null);
@@ -41,7 +40,7 @@ export default function OverviewPage() {
   const [tokenPrices, setTokenPrices] = useState<Record<string, number>>({});
 
   const movementWallet = useMemo(() => {
-    if (!ready || !authenticated || !user?.linkedAccounts) {
+    if (!authenticated || !user?.linkedAccounts) {
       return null;
     }
     const aptosWallet = user.linkedAccounts.find(
@@ -54,7 +53,7 @@ export default function OverviewPage() {
       }
     ) as (WalletWithMetadata & { chainType?: string }) | undefined;
     return aptosWallet || null;
-  }, [user, ready, authenticated]);
+  }, [user, authenticated]);
 
   useEffect(() => {
     if (movementWallet?.address) {
@@ -260,24 +259,8 @@ export default function OverviewPage() {
     setShowSwapModal(true);
   };
 
-  if (!ready) {
-    return (
-      <div className="flex h-screen w-full items-center justify-center bg-zinc-50 dark:bg-black font-sans">
-        <div className="text-center">
-          <div className="mb-4 h-12 w-12 animate-spin rounded-full border-4 border-zinc-300 border-t-zinc-900 dark:border-zinc-700 dark:border-t-zinc-100 mx-auto"></div>
-          <div className="text-lg text-zinc-600 dark:text-zinc-400">
-            Loading...
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  if (!authenticated) {
-    return null;
-  }
-
   return (
+    <AuthGuard>
     <div className="flex h-screen w-full overflow-hidden bg-zinc-50 dark:bg-black">
       <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
 
@@ -1176,5 +1159,6 @@ export default function OverviewPage() {
         </div>
       )}
     </div>
+    </AuthGuard>
   );
 }

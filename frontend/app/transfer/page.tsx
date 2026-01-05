@@ -1,11 +1,11 @@
 "use client";
 
 import { usePrivy, WalletWithMetadata } from "@privy-io/react-auth";
-import { useRouter } from "next/navigation";
 import { useEffect, useState, useMemo, useRef } from "react";
 import { Sidebar } from "../components/sidebar";
 import { RightSidebar } from "../components/right-sidebar";
 import { ThemeToggle } from "../components/themeToggle";
+import { AuthGuard } from "../components/auth-guard";
 import { useSignRawHash } from "@privy-io/react-auth/extended-chains";
 import {
   Aptos,
@@ -43,9 +43,8 @@ interface TokenBalance {
 }
 
 export default function TransferPage() {
-  const { ready, authenticated, user } = usePrivy();
+  const { authenticated, user } = usePrivy();
   const { signRawHash } = useSignRawHash();
-  const router = useRouter();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [rightSidebarOpen, setRightSidebarOpen] = useState(false);
   const [recipient, setRecipient] = useState("");
@@ -61,7 +60,7 @@ export default function TransferPage() {
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   const movementWallet = useMemo(() => {
-    if (!ready || !authenticated || !user?.linkedAccounts) {
+    if (!authenticated || !user?.linkedAccounts) {
       return null;
     }
     return (
@@ -70,13 +69,7 @@ export default function TransferPage() {
           account.type === "wallet" && account.chainType === "aptos"
       ) || null
     );
-  }, [user, ready, authenticated]);
-
-  useEffect(() => {
-    if (ready && !authenticated) {
-      router.push("/");
-    }
-  }, [ready, authenticated, router]);
+  }, [user, authenticated]);
 
   const fetchBalances = async () => {
     if (!movementWallet?.address) {
@@ -301,19 +294,8 @@ export default function TransferPage() {
     }
   };
 
-  if (!ready) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-zinc-50 dark:bg-zinc-950">
-        <div className="h-8 w-8 animate-spin rounded-full border-2 border-zinc-300 border-t-zinc-900 dark:border-zinc-700 dark:border-t-zinc-100" />
-      </div>
-    );
-  }
-
-  if (!authenticated) {
-    return null;
-  }
-
   return (
+    <AuthGuard>
     <div className="flex min-h-screen bg-zinc-50 dark:bg-zinc-950">
       <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
@@ -771,5 +753,6 @@ export default function TransferPage() {
         onClose={() => setRightSidebarOpen(false)}
       />
     </div>
+    </AuthGuard>
   );
 }

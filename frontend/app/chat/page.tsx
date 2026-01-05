@@ -1,23 +1,22 @@
 "use client";
 
 import { usePrivy, WalletWithMetadata } from "@privy-io/react-auth";
-import { useRouter } from "next/navigation";
-import { useEffect, useState, useMemo } from "react";
+import { useState, useMemo } from "react";
 import { Sidebar } from "../components/sidebar";
 import { RightSidebar } from "../components/right-sidebar";
 import MovementChat from "../components/chat/MovementChat";
 import { ThemeToggle } from "../components/themeToggle";
+import { AuthGuard } from "../components/auth-guard";
 
 export default function ChatPage() {
-  const { ready, authenticated, user } = usePrivy();
-  const router = useRouter();
+  const { user, authenticated } = usePrivy();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isRightSidebarOpen, setIsRightSidebarOpen] = useState(false);
 
   // Get Movement wallet address (chainType is "aptos" for Movement wallets)
   const movementWallet = useMemo(() => {
-    // Only check for wallet when Privy is ready and user is authenticated
-    if (!ready || !authenticated || !user?.linkedAccounts) {
+    // Only check for wallet when user is authenticated
+    if (!authenticated || !user?.linkedAccounts) {
       return null;
     }
 
@@ -43,8 +42,8 @@ export default function ChatPage() {
         "(should be 66 for Movement Network)"
       );
       console.log("   Chain type:", (aptosWallet as any).chainType);
-    } else if (ready && authenticated) {
-      // Only log warning if we're ready and authenticated but still no wallet found
+    } else if (authenticated) {
+      // Only log warning if authenticated but still no wallet found
       console.log(
         "⚠️ No Movement/Aptos wallet found. Available accounts:",
         user.linkedAccounts.map((acc) => ({
@@ -60,7 +59,7 @@ export default function ChatPage() {
     }
 
     return aptosWallet || null;
-  }, [user, ready, authenticated]);
+  }, [user, authenticated]);
 
   // Get the wallet address - ensure it's the full 66-character Movement/Aptos address
   const walletAddress = useMemo(() => {
@@ -74,66 +73,8 @@ export default function ChatPage() {
     return null;
   }, [movementWallet]);
 
-  // Debug: Log the selected wallet address
-  useEffect(() => {
-    // Only log when Privy is ready and user is authenticated
-    if (!ready || !authenticated) return;
-
-    if (walletAddress) {
-      console.log(
-        "💰 Using Movement wallet address for balance queries:",
-        walletAddress
-      );
-      console.log(
-        "   Address length:",
-        walletAddress.length,
-        "(should be 66 for Movement Network)"
-      );
-    } else {
-      console.warn(
-        "⚠️ No Movement wallet address available. User needs to create a Movement wallet."
-      );
-      if (user?.linkedAccounts) {
-        console.log(
-          "   Available wallets:",
-          user.linkedAccounts
-            .filter((acc) => acc.type === "wallet")
-            .map((acc) => ({
-              chainType: (acc as any).chainType || (acc as any).chain_type,
-              address: `${(acc as any).address?.substring(0, 30)}...`,
-              length: (acc as any).address?.length,
-            }))
-        );
-      }
-    }
-  }, [walletAddress, user, ready, authenticated]);
-
-  // Redirect to home if not authenticated
-  useEffect(() => {
-    if (ready && !authenticated) {
-      router.push("/");
-    }
-  }, [ready, authenticated, router]);
-
-  // Show loading while checking authentication status
-  if (!ready) {
-    return (
-      <div className="flex h-screen w-full items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-        <div className="text-center">
-          <div className="text-lg text-zinc-600 dark:text-zinc-400">
-            Loading...
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // Redirect if not authenticated (handled by useEffect, but show nothing while redirecting)
-  if (!authenticated) {
-    return null;
-  }
-
   return (
+    <AuthGuard>
     <div className="flex h-screen w-full overflow-hidden sm:overflow-hidden bg-zinc-50 dark:bg-black">
       <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
 
@@ -206,5 +147,6 @@ export default function ChatPage() {
         onClose={() => setIsRightSidebarOpen(false)}
       />
     </div>
+    </AuthGuard>
   );
 }
