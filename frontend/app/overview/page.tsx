@@ -2,6 +2,7 @@
 
 import { usePrivy, WalletWithMetadata } from "@privy-io/react-auth";
 import { useEffect, useState, useMemo } from "react";
+import { useRouter } from "next/navigation";
 import { Sidebar } from "../components/sidebar";
 import { RightSidebar } from "../components/right-sidebar";
 import { ThemeToggle } from "../components/themeToggle";
@@ -24,7 +25,8 @@ interface TokenBalance {
 }
 
 export default function OverviewPage() {
-  const { authenticated, user } = usePrivy();
+  const { ready, authenticated, user } = usePrivy();
+  const router = useRouter();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isRightSidebarOpen, setIsRightSidebarOpen] = useState(false);
   const [walletAddress, setWalletAddress] = useState<string | null>(null);

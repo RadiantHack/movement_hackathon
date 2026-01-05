@@ -115,7 +115,7 @@ interface PortfolioResponse {
 }
 
 function PositionsPageContent() {
-  const { authenticated, user } = usePrivy();
+  const { ready, authenticated, user } = usePrivy();
 
   const movementApiBase = getMovementApiBase();
 

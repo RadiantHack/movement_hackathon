@@ -70,7 +70,7 @@ const MARKET_TO_SYMBOL: Record<string, string> = {
 };
 
 export default function EchelonPage() {
-  const { authenticated, user } = usePrivy();
+  const { ready, authenticated, user } = usePrivy();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [rightSidebarOpen, setRightSidebarOpen] = useState(false);
   const [hideZeroBalance, setHideZeroBalance] = useState(false);
