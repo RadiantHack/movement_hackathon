@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { BorrowCard } from "../borrow/BorrowCard";
 import { LendCard } from "../lend/LendCard";
 import { EchelonBorrowModal } from "../../echelon-borrow-modal";
@@ -17,6 +17,37 @@ interface PlatformSelectionCardProps {
   onClose?: () => void;
 }
 
+// Market address to symbol mapping (same as echelon page)
+const MARKET_TO_SYMBOL: Record<string, string> = {
+  "0x568f96c4ed010869d810abcf348f4ff6b66d14ff09672fb7b5872e4881a25db7": "MOVE",
+  "0x789d7711b7979d47a1622692559ccd221ef7c35bb04f8762dadb5cc70222a0a0": "USDC",
+  "0x8191d4b8c0fc0af511b3c56c555528a3e74b7f3cfab3047df9ebda803f3bc3d2": "USDT",
+  "0xa24e2eaacf9603538af362f44dfcf9d411363923b9206260474abfaa8abebee4": "WBTC",
+  "0x6889932d2ff09c9d299e72b23a62a7f07af807789c98141d08475701e7b21b7c": "WETH",
+  "0x62cb5f64b5a9891c57ff12d38fbab141e18c3d63e859a595ff6525b4221eaf23": "LBTC",
+  "0x185f42070ab2ca5910ebfdea83c9f26f4015ad2c0f5c8e6ca1566d07c6c60aca":
+    "SolvBTC",
+  "0x8dd513b2bb41f0180f807ecaa1e0d2ddfacd57bf739534201247deca13f3542": "ezETH",
+  "0x481fe68db505bc15973d0014c35217726efd6ee353d91a2a9faaac201f3423d": "sUSDe",
+  "0x4cbeca747528f340ef9065c93dea0cc1ac8a46b759e31fc8b8d04bc52a86614b": "rsETH",
+};
+
+interface UserSupply {
+  marketAddress: string;
+  amount: string;
+  symbol: string;
+  price: number;
+  decimals: number;
+}
+
+interface UserBorrow {
+  marketAddress: string;
+  amount: string;
+  symbol: string;
+  price: number;
+  decimals: number;
+}
+
 export const PlatformSelectionCard: React.FC<PlatformSelectionCardProps> = ({
   action,
   asset,
@@ -30,6 +61,20 @@ export const PlatformSelectionCard: React.FC<PlatformSelectionCardProps> = ({
   const [selectedPlatform, setSelectedPlatform] = useState<string | null>(null);
   const [availableBalances, setAvailableBalances] = useState<
     Record<string, number>
+  >({});
+  const [userSupplies, setUserSupplies] = useState<UserSupply[]>([]);
+  const [userBorrows, setUserBorrows] = useState<UserBorrow[]>([]);
+  const [loadingVault, setLoadingVault] = useState(false);
+  const [echelonAssets, setEchelonAssets] = useState<
+    Record<
+      string,
+      {
+        symbol: string;
+        price: number;
+        ltv?: number;
+        decimals?: number;
+      }
+    >
   >({});
 
   // Fetch available balances for tokens
@@ -71,9 +116,203 @@ export const PlatformSelectionCard: React.FC<PlatformSelectionCardProps> = ({
     }
   };
 
+  // Fetch Echelon assets for prices and LTV
+  const fetchEchelonAssets = async () => {
+    try {
+      const response = await fetch("/api/echelon");
+      if (!response.ok) {
+        throw new Error("Failed to fetch Echelon assets");
+      }
+      const json = await response.json();
+      const data = json.data;
+
+      if (data?.assets) {
+        const assetsMap: Record<
+          string,
+          {
+            symbol: string;
+            price: number;
+            ltv?: number;
+            decimals?: number;
+          }
+        > = {};
+
+        data.assets.forEach(
+          (asset: {
+            symbol: string;
+            price: number;
+            ltv: number;
+            decimals: number;
+          }) => {
+            assetsMap[asset.symbol.toUpperCase()] = {
+              symbol: asset.symbol,
+              price: asset.price,
+              ltv: asset.ltv,
+              decimals: asset.decimals,
+            };
+          }
+        );
+
+        setEchelonAssets(assetsMap);
+      }
+    } catch (error) {
+      console.error("Error fetching Echelon assets:", error);
+    }
+  };
+
+  // Fetch vault data for borrow calculations
+  const fetchVault = async () => {
+    if (!walletAddress || action !== "borrow") return;
+
+    setLoadingVault(true);
+    try {
+      const response = await fetch(
+        `/api/echelon/vault?address=${encodeURIComponent(walletAddress)}&t=${Date.now()}`,
+        {
+          cache: "no-store",
+          headers: {
+            "Cache-Control": "no-cache",
+          },
+        }
+      );
+
+      if (!response.ok) {
+        if (response.status === 404) {
+          // No vault found
+          setUserSupplies([]);
+          setUserBorrows([]);
+          return;
+        }
+        throw new Error(`Failed to fetch vault: ${response.status}`);
+      }
+
+      const data = await response.json();
+      const collaterals = data.data?.collaterals || data.collaterals || [];
+      const liabilities = data.data?.liabilities || data.liabilities || [];
+
+      // Process collaterals
+      if (Array.isArray(collaterals) && collaterals.length > 0) {
+        const supplies: UserSupply[] = collaterals
+          .map(
+            (item: {
+              marketAddress: string;
+              coinAmount: string;
+            }) => {
+              const marketAddress = item.marketAddress;
+              const symbol = MARKET_TO_SYMBOL[marketAddress] || "Unknown";
+              const assetData = echelonAssets[symbol.toUpperCase()];
+
+              return {
+                marketAddress,
+                amount: item.coinAmount,
+                symbol: symbol || "Unknown",
+                price: assetData?.price || 0,
+                decimals: assetData?.decimals || 8,
+              };
+            }
+          )
+          .filter((supply) => {
+            const amountStr = String(supply.amount || "0");
+            const amount = parseFloat(amountStr);
+            return !isNaN(amount) && amount > 0;
+          });
+
+        setUserSupplies(supplies);
+      } else {
+        setUserSupplies([]);
+      }
+
+      // Process liabilities
+      if (Array.isArray(liabilities) && liabilities.length > 0) {
+        const borrows: UserBorrow[] = liabilities
+          .map(
+            (item: {
+              marketAddress: string;
+              totalLiability: string;
+            }) => {
+              const marketAddress = item.marketAddress;
+              const symbol = MARKET_TO_SYMBOL[marketAddress] || "Unknown";
+              const assetData = echelonAssets[symbol.toUpperCase()];
+
+              return {
+                marketAddress,
+                amount: item.totalLiability,
+                symbol: symbol || "Unknown",
+                price: assetData?.price || 0,
+                decimals: assetData?.decimals || 8,
+              };
+            }
+          )
+          .filter((borrow) => {
+            const amount = parseFloat(borrow.amount);
+            return !isNaN(amount) && amount > 0;
+          });
+
+        setUserBorrows(borrows);
+      } else {
+        setUserBorrows([]);
+      }
+    } catch (err) {
+      console.error("[PlatformSelectionCard] Failed to fetch vault:", err);
+      setUserSupplies([]);
+      setUserBorrows([]);
+    } finally {
+      setLoadingVault(false);
+    }
+  };
+
+  // Calculate totals
+  const totalSupplyBalance = useMemo(() => {
+    return userSupplies.reduce((sum, supply) => {
+      const amount = parseFloat(supply.amount) / Math.pow(10, supply.decimals);
+      return sum + amount * supply.price;
+    }, 0);
+  }, [userSupplies]);
+
+  const totalBorrowBalance = useMemo(() => {
+    return userBorrows.reduce((sum, borrow) => {
+      const amount = parseFloat(borrow.amount) / Math.pow(10, borrow.decimals);
+      return sum + amount * borrow.price;
+    }, 0);
+  }, [userBorrows]);
+
+  // Calculate available balance for the selected asset
+  const availableBalance = useMemo(() => {
+    if (action !== "borrow" || !selectedPlatform || selectedPlatform !== "echelon") {
+      return 0;
+    }
+
+    const assetSymbol = asset.toUpperCase();
+    const assetData = echelonAssets[assetSymbol];
+
+    if (!assetData || userSupplies.length === 0) {
+      return 0;
+    }
+
+    const ltv = assetData.ltv || 0.7;
+    const availableBorrowPowerUSD = Math.max(
+      0,
+      totalSupplyBalance * ltv - totalBorrowBalance
+    );
+
+    return assetData.price > 0
+      ? availableBorrowPowerUSD / assetData.price
+      : 0;
+  }, [action, selectedPlatform, asset, echelonAssets, totalSupplyBalance, totalBorrowBalance, userSupplies.length]);
+
   useEffect(() => {
     fetchAvailableBalances();
   }, [walletAddress]);
+
+  useEffect(() => {
+    fetchEchelonAssets();
+  }, []);
+
+  useEffect(() => {
+    if (echelonAssets && Object.keys(echelonAssets).length > 0) {
+      fetchVault();
+    }
+  }, [walletAddress, echelonAssets, action]);
 
   const handlePlatformSelect = (platform: "echelon" | "moveposition") => {
     setSelectedPlatform(platform);
@@ -106,6 +345,9 @@ export const PlatformSelectionCard: React.FC<PlatformSelectionCardProps> = ({
   // Show Echelon cards inline (same as MovePosition)
   if (selectedPlatform === "echelon") {
     if (action === "borrow") {
+      const assetSymbol = asset.toUpperCase();
+      const assetData = echelonAssets[assetSymbol];
+      
       return (
         <div className="my-3">
           <EchelonBorrowModal
@@ -116,14 +358,21 @@ export const PlatformSelectionCard: React.FC<PlatformSelectionCardProps> = ({
               symbol: asset,
               name: asset,
               icon: "",
-              price: 1, // Default price, will be fetched if needed
-              borrowApr: parseFloat(echelonRate.replace("%", "")), // Already in percentage format
+              price: assetData?.price || 1,
+              borrowApr: parseFloat(echelonRate.replace("%", "")),
               borrowCap: 0,
-              ltv: 0.7, // Default LTV, should be fetched from asset data if available
+              ltv: assetData?.ltv || 0.7,
+              decimals: assetData?.decimals || 8,
             }}
-            availableBalance={0} // Will be calculated by parent component
-            totalSupplyBalance={0} // Will be calculated by parent component
-            totalBorrowBalance={0} // Will be calculated by parent component
+            availableBalance={availableBalance}
+            totalSupplyBalance={totalSupplyBalance}
+            totalBorrowBalance={totalBorrowBalance}
+            hasCollateral={userSupplies.length > 0}
+            loadingVault={loadingVault}
+            onSuccess={async () => {
+              // Refresh vault data after successful borrow
+              await fetchVault();
+            }}
           />
         </div>
       );

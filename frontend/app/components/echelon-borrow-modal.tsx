@@ -35,6 +35,8 @@ interface EchelonBorrowModalProps {
   availableBalance?: number;
   totalSupplyBalance?: number; // Total collateral value in USD
   totalBorrowBalance?: number; // Total borrowed value in USD
+  hasCollateral?: boolean; // Whether user has any collateral supplied
+  loadingVault?: boolean; // Whether vault data is still loading
   inline?: boolean; // If true, renders inline without backdrop (for chat)
   onSuccess?: () => void; // Callback after successful transaction
 }
@@ -88,6 +90,8 @@ export function EchelonBorrowModal({
   availableBalance = 0,
   totalSupplyBalance = 0,
   totalBorrowBalance = 0,
+  hasCollateral = false,
+  loadingVault = false,
   inline = false,
   onSuccess,
 }: EchelonBorrowModalProps) {
@@ -173,9 +177,10 @@ export function EchelonBorrowModal({
     }
 
     // Validate that user has collateral
-    if (totalSupplyBalance <= 0) {
+    if (!hasCollateral && totalSupplyBalance <= 0) {
       const errorMsg = "You need to supply collateral before you can borrow. Please supply assets first.";
       console.log("[Borrow] No collateral", {
+        hasCollateral,
         totalSupplyBalance,
       });
       setError(errorMsg);
@@ -185,8 +190,14 @@ export function EchelonBorrowModal({
 
     // Validate borrowing power before submitting
     if (availableBalance <= 0) {
-      const errorMsg = `Insufficient borrowing power. You have ${totalBorrowBalance.toFixed(2)} USD borrowed against ${totalSupplyBalance.toFixed(2)} USD collateral. Please supply more assets or repay existing borrows.`;
+      let errorMsg;
+      if (hasCollateral) {
+        errorMsg = `Insufficient borrowing power. ${totalBorrowBalance > 0 ? `You have ${totalBorrowBalance.toFixed(2)} USD borrowed. ` : ""}${totalSupplyBalance > 0 ? `Your collateral is worth ${totalSupplyBalance.toFixed(2)} USD. ` : "Your collateral value is being calculated. "}Please supply more assets or repay existing borrows to increase your borrowing power.`;
+      } else {
+        errorMsg = `Insufficient borrowing power. You have ${totalBorrowBalance.toFixed(2)} USD borrowed against ${totalSupplyBalance.toFixed(2)} USD collateral. Please supply more assets or repay existing borrows.`;
+      }
       console.log("[Borrow] No borrowing power", {
+        hasCollateral,
         totalSupplyBalance,
         totalBorrowBalance,
         availableBalance,
@@ -572,18 +583,24 @@ export function EchelonBorrowModal({
                 MAX
               </button>
               <div className="text-zinc-400 dark:text-zinc-500 text-xs mt-2">
-                {availableBalance > 0 ? (
-                  <>
-                    Available:{" "}
-                    <span className="text-zinc-600 dark:text-zinc-300 font-medium">
-                      {availableBalance.toFixed(6)}
-                    </span>{" "}
-                    {asset.symbol}
-                  </>
-                ) : totalSupplyBalance > 0 ? (
-                  <span className="text-amber-600 dark:text-amber-400">
-                    Max borrow reached
+                {loadingVault ? (
+                  <span className="text-zinc-500 dark:text-zinc-400">
+                    Loading...
                   </span>
+                ) : hasCollateral ? (
+                  availableBalance > 0 ? (
+                    <>
+                      Available:{" "}
+                      <span className="text-zinc-600 dark:text-zinc-300 font-medium">
+                        {availableBalance.toFixed(6)}
+                      </span>{" "}
+                      {asset.symbol}
+                    </>
+                  ) : (
+                    <span className="text-amber-600 dark:text-amber-400">
+                      Max borrow reached
+                    </span>
+                  )
                 ) : (
                   <span className="text-red-600 dark:text-red-400">
                     No collateral supplied
