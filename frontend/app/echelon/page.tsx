@@ -1,11 +1,11 @@
 "use client";
 
 import { usePrivy, WalletWithMetadata } from "@privy-io/react-auth";
-import { useRouter } from "next/navigation";
 import { useEffect, useState, useMemo } from "react";
 import { Sidebar } from "../components/sidebar";
 import { RightSidebar } from "../components/right-sidebar";
 import { ThemeToggle } from "../components/themeToggle";
+import { AuthGuard } from "../components/auth-guard";
 import { EchelonSupplyModal } from "../components/echelon-supply-modal";
 import { EchelonBorrowModal } from "../components/echelon-borrow-modal";
 import { EchelonWithdrawModal } from "../components/echelon-withdraw-modal";
@@ -70,8 +70,7 @@ const MARKET_TO_SYMBOL: Record<string, string> = {
 };
 
 export default function EchelonPage() {
-  const { ready, authenticated, user } = usePrivy();
-  const router = useRouter();
+  const { authenticated, user } = usePrivy();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [rightSidebarOpen, setRightSidebarOpen] = useState(false);
   const [hideZeroBalance, setHideZeroBalance] = useState(false);
@@ -447,25 +446,8 @@ export default function EchelonPage() {
     return assets.filter((a) => a.borrowCap > 0);
   }, [assets]);
 
-  useEffect(() => {
-    if (ready && !authenticated) {
-      router.push("/");
-    }
-  }, [ready, authenticated, router]);
-
-  if (!ready) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-zinc-50 dark:bg-zinc-950">
-        <div className="h-8 w-8 animate-spin rounded-full border-2 border-zinc-300 border-t-zinc-900 dark:border-zinc-700 dark:border-t-zinc-100" />
-      </div>
-    );
-  }
-
-  if (!authenticated) {
-    return null;
-  }
-
   return (
+    <AuthGuard>
     <div className="flex min-h-screen bg-zinc-50 dark:bg-zinc-950">
       <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
@@ -1158,5 +1140,6 @@ export default function EchelonPage() {
         }}
       />
     </div>
+    </AuthGuard>
   );
 }

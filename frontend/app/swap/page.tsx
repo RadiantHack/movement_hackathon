@@ -1,22 +1,21 @@
 "use client";
 
 import { usePrivy, WalletWithMetadata } from "@privy-io/react-auth";
-import { useRouter } from "next/navigation";
-import { useEffect, useState, useMemo } from "react";
+import { useState, useMemo } from "react";
 import { Sidebar } from "../components/sidebar";
 import { RightSidebar } from "../components/right-sidebar";
 import { ThemeToggle } from "../components/themeToggle";
 import { SwapCard } from "../components/features/swap";
+import { AuthGuard } from "../components/auth-guard";
 
 export default function SwapPage() {
-  const { ready, authenticated, user } = usePrivy();
-  const router = useRouter();
+  const { authenticated, user } = usePrivy();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isRightSidebarOpen, setIsRightSidebarOpen] = useState(false);
 
   // Get Movement wallet address (chainType is "aptos" for Movement wallets)
   const movementWallet = useMemo(() => {
-    if (!ready || !authenticated || !user?.linkedAccounts) {
+    if (!authenticated || !user?.linkedAccounts) {
       return null;
     }
 
@@ -31,7 +30,7 @@ export default function SwapPage() {
     ) as (WalletWithMetadata & { chainType?: string }) | undefined;
 
     return aptosWallet || null;
-  }, [user, ready, authenticated]);
+  }, [user, authenticated]);
 
   const walletAddress = useMemo(() => {
     if (!movementWallet?.address) return null;
@@ -42,32 +41,8 @@ export default function SwapPage() {
     return null;
   }, [movementWallet]);
 
-  // Redirect to home if not authenticated
-  useEffect(() => {
-    if (ready && !authenticated) {
-      router.push("/");
-    }
-  }, [ready, authenticated, router]);
-
-  // Show loading while checking authentication status
-  if (!ready) {
-    return (
-      <div className="flex h-screen w-full items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-        <div className="text-center">
-          <div className="text-lg text-zinc-600 dark:text-zinc-400">
-            Loading...
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // Redirect if not authenticated
-  if (!authenticated) {
-    return null;
-  }
-
   return (
+    <AuthGuard>
     <div className="flex h-screen w-full overflow-hidden bg-zinc-50 dark:bg-black">
       <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
 
@@ -141,5 +116,6 @@ export default function SwapPage() {
         onClose={() => setIsRightSidebarOpen(false)}
       />
     </div>
+    </AuthGuard>
   );
 }
