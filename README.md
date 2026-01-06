@@ -2,7 +2,7 @@
 
 **Your AI-Powered Gateway to Movement Network DeFi**
 
-Multi-agent AI platform orchestrating 9 specialized agents for seamless DeFi operations on Movement Network. Built for the Movement M1 Hackathon.
+Multi-agent AI platform orchestrating 8 specialized agents for seamless DeFi operations on Movement Network. Built for the Movement M1 Hackathon.
 
 ---
 
@@ -81,7 +81,7 @@ Both chat interfaces are powered by our AI orchestrator, providing intelligent r
 
 ## Features
 
-- 🤖 **9 Specialized AI Agents**: Balance, Bridge, Lending, Swap, Transfer, Orchestrator, Premium Lending, Sentiment & Trading
+- 🤖 **8 Specialized AI Agents**: Balance, Bridge, Lending, Swap, Transfer, Orchestrator, Premium Lending, Sentiment & Trading
 - 🎯 **Intelligent Orchestration**: Gemini 2.5 Pro-powered orchestrator coordinates all agents seamlessly
 - 🔗 **Multi-Protocol Architecture**: AG-UI Protocol (frontend ↔ orchestrator) + A2A Protocol (orchestrator ↔ agents)
 - ⚡ **LangGraph-Powered**: Each agent uses LangGraph for sophisticated reasoning
