@@ -7,44 +7,17 @@ import { RightSidebar } from "../components/right-sidebar";
 import { ThemeToggle } from "../components/themeToggle";
 import { AuthGuard } from "../components/auth-guard";
 import { useSignRawHash } from "@privy-io/react-auth/extended-chains";
-import {
-  Aptos,
-  AptosConfig,
-  Network,
-  AccountAuthenticatorEd25519,
-  Ed25519PublicKey,
-  Ed25519Signature,
-  generateSigningMessageForTransaction,
-  ChainId,
-  AccountAddress,
-} from "@aptos-labs/ts-sdk";
-import { toHex } from "viem";
-
-const MOVEMENT_RPC = "https://mainnet.movementnetwork.xyz/v1";
-const MOVEMENT_CHAIN_ID = 126;
-
-const aptos = new Aptos(
-  new AptosConfig({
-    network: Network.CUSTOM,
-    fullnode: MOVEMENT_RPC,
-  })
-);
-
-interface TokenBalance {
-  assetType: string;
-  amount: string;
-  formattedAmount: string;
-  metadata: {
-    name: string;
-    symbol: string;
-    decimals: number;
-  };
-  isNative: boolean;
-}
+import { Aptos, AptosConfig, Network } from "@aptos-labs/ts-sdk";
+import { useBalance } from "../hooks/useBalanceContext";
+import { useMovementConfig } from "../hooks/useMovementConfig";
+import { TokenBalance } from "../types";
+import { executeTransfer, getTransferErrorMessage } from "../utils/transfer";
 
 export default function TransferPage() {
   const { authenticated, user } = usePrivy();
   const { signRawHash } = useSignRawHash();
+  const config = useMovementConfig();
+  const { balances, refreshBalances, loadingBalances } = useBalance();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [rightSidebarOpen, setRightSidebarOpen] = useState(false);
   const [recipient, setRecipient] = useState("");
@@ -54,10 +27,22 @@ export default function TransferPage() {
   const [error, setError] = useState<string | null>(null);
   const [txHash, setTxHash] = useState<string | null>(null);
   const [step, setStep] = useState<string>("");
-  const [balances, setBalances] = useState<TokenBalance[]>([]);
-  const [loadingBalances, setLoadingBalances] = useState(true);
   const [tokenDropdownOpen, setTokenDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  const aptos = useMemo(() => {
+    if (!config.movementFullNode) return null;
+    return new Aptos(
+      new AptosConfig({
+        network: Network.CUSTOM,
+        fullnode: config.movementFullNode,
+      })
+    );
+  }, [config.movementFullNode]);
+
+  const movementChainId = useMemo(() => {
+    return config.movementChainId || 126;
+  }, [config.movementChainId]);
 
   const movementWallet = useMemo(() => {
     if (!authenticated || !user?.linkedAccounts) {
@@ -70,32 +55,6 @@ export default function TransferPage() {
       ) || null
     );
   }, [user, authenticated]);
-
-  const fetchBalances = async () => {
-    if (!movementWallet?.address) {
-      setLoadingBalances(false);
-      return;
-    }
-    setLoadingBalances(true);
-    try {
-      const res = await fetch(
-        `/api/balance?address=${encodeURIComponent(movementWallet.address)}`
-      );
-      const data = await res.json();
-      if (data.success && data.balances) {
-        const allBalances: TokenBalance[] = data.balances;
-        setBalances(allBalances);
-      }
-    } catch (err) {
-      console.error("Failed to fetch balances:", err);
-    } finally {
-      setLoadingBalances(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchBalances();
-  }, [movementWallet?.address]);
 
   // Update selected token when balances change and no token is selected
   useEffect(() => {
@@ -136,157 +95,52 @@ export default function TransferPage() {
       return;
     }
 
+    if (!selectedToken) {
+      setError("No token selected");
+      return;
+    }
+
     setSubmitting(true);
     setError(null);
     setTxHash(null);
 
     try {
-      const senderAddress = movementWallet.address as string;
-      const publicKey = (movementWallet as any).publicKey as string;
+      setStep("Building transaction...");
 
-      if (!senderAddress || !publicKey) {
+      const senderAddress = movementWallet.address as string;
+      const senderPubKeyWithScheme = (movementWallet as any).publicKey as string;
+
+      if (!senderAddress || !senderPubKeyWithScheme) {
         throw new Error("Wallet address or public key not found");
       }
 
-      if (!selectedToken) {
-        throw new Error("No token selected");
-      }
-
-      const rawAmountValue = Math.floor(
-        parseFloat(amount) * Math.pow(10, selectedToken.metadata.decimals)
-      );
-      const rawAmount = rawAmountValue.toString();
-
-      setStep("Building transaction...");
-
-      const assetType = selectedToken.assetType.trim();
-      const isNativeMove =
-        selectedToken.isNative || assetType === "0x1::aptos_coin::AptosCoin";
-
-      let rawTxn;
-
-      // For native MOVE tokens, use aptos_account::transfer_coins which automatically registers CoinStore
-      // For fungible assets, use primary_fungible_store::transfer
-      if (isNativeMove) {
-        setStep("Building transaction...");
-        // Use aptos_account::transfer_coins which automatically registers CoinStore
-        // This is the recommended approach as it handles CoinStore registration automatically
-        // and can even create the account if needed (for normal accounts)
-        rawTxn = await aptos.transaction.build.simple({
-          sender: senderAddress,
-          data: {
-            function: "0x1::aptos_account::transfer_coins",
-            typeArguments: ["0x1::aptos_coin::AptosCoin"],
-            functionArguments: [recipient, rawAmount],
-          },
-        });
-      } else {
-        // For fungible assets, use primary_fungible_store::transfer
-        // The assetType is the fungible asset metadata address
-        // Function signature: transfer<Metadata>(metadata_address: address, to: address, amount: u64)
-        const assetType = selectedToken.assetType.trim();
-        const recipientAddress = AccountAddress.fromString(recipient);
-
-        rawTxn = await aptos.transaction.build.simple({
-          sender: senderAddress,
-          data: {
-            function: "0x1::primary_fungible_store::transfer",
-            typeArguments: ["0x1::fungible_asset::Metadata"],
-            functionArguments: [assetType, recipientAddress, rawAmount],
-          },
-        });
-      }
-
-      const txnObj = rawTxn as any;
-      if (txnObj.rawTransaction) {
-        txnObj.rawTransaction.chain_id = new ChainId(MOVEMENT_CHAIN_ID);
-      }
-
-      setStep("Waiting for signature...");
-
-      const message = generateSigningMessageForTransaction(rawTxn);
-      const hash = toHex(message);
-
-      const signatureResponse = await signRawHash({
-        address: senderAddress,
-        chainType: "aptos",
-        hash: hash as `0x${string}`,
-      });
-
-      setStep("Submitting transaction...");
-
-      let pubKeyNoScheme = publicKey.startsWith("0x")
-        ? publicKey.slice(2)
-        : publicKey;
-      if (pubKeyNoScheme.startsWith("00") && pubKeyNoScheme.length > 64) {
-        pubKeyNoScheme = pubKeyNoScheme.slice(2);
-      }
-      if (pubKeyNoScheme.length !== 64) {
-        throw new Error(
-          `Invalid public key length: expected 64 hex characters (32 bytes), got ${pubKeyNoScheme.length}`
-        );
-      }
-      const publicKeyObj = new Ed25519PublicKey(`0x${pubKeyNoScheme}`);
-      const sig = new Ed25519Signature(signatureResponse.signature.slice(2));
-      const senderAuthenticator = new AccountAuthenticatorEd25519(
-        publicKeyObj,
-        sig
-      );
-
-      const pending = await aptos.transaction.submit.simple({
-        transaction: rawTxn,
-        senderAuthenticator,
+      // Use centralized executeTransfer utility
+      const hash = await executeTransfer({
+        aptos: aptos!,
+        movementChainId,
+        senderAddress,
+        senderPubKeyWithScheme,
+        selectedToken,
+        toAddress: recipient,
+        amount,
+        signRawHash,
       });
 
       setStep("Waiting for confirmation...");
-
-      await aptos.waitForTransaction({
-        transactionHash: pending.hash,
-        options: { checkSuccess: true },
-      });
-
-      setTxHash(pending.hash);
+      setTxHash(hash);
       setStep("");
       setAmount("");
       setRecipient("");
-      // Refresh balances without showing loader
-      if (movementWallet?.address) {
-        const res = await fetch(
-          `/api/balance?address=${encodeURIComponent(movementWallet.address)}`
-        );
-        const data = await res.json();
-        if (data.success && data.balances) {
-          const allBalances: TokenBalance[] = data.balances;
-          setBalances(allBalances);
-        }
-      }
-    } catch (err: any) {
+
+      // Refresh balances from centralized context
+      await refreshBalances();
+    } catch (err: unknown) {
       console.error("Transfer error:", err);
-      let errorMessage = err.message || "Transaction failed";
-
-      // Check for CoinStore errors
-      if (
-        err.message?.includes("ECOIN_STORE_NOT_PUBLISHED") ||
-        err.message?.includes("CoinStore") ||
-        err.message?.includes("0x60005")
-      ) {
-        const isNativeMove =
-          selectedToken?.isNative ||
-          selectedToken?.assetType === "0x1::aptos_coin::AptosCoin";
-        if (isNativeMove) {
-          // For native MOVE, this shouldn't happen with aptos_account::transfer_coins
-          errorMessage =
-            `Transfer failed: The recipient address ${recipient.slice(0, 10)}...${recipient.slice(-8)} may not support automatic CoinStore registration. ` +
-            `This can happen if the recipient is not a normal account type. ` +
-            `Please verify the recipient address is correct and is a standard Aptos account.`;
-        } else {
-          // For fungible assets, different error handling
-          errorMessage =
-            `Transfer failed: The recipient may not have the required fungible asset store registered. ` +
-            `Please verify the recipient address is correct.`;
-        }
-      }
-
+      const errorMessage = getTransferErrorMessage(
+        err,
+        recipient,
+        selectedToken
+      );
       setError(errorMessage);
       setStep("");
     } finally {
