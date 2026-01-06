@@ -101,7 +101,7 @@ export async function POST(request: NextRequest) {
         2. Search for the text: "User's connected wallet address for Movement Network"
         3. After that text, you will see a JSON object like: {"address":"0x...","network":"movement","chainType":"aptos"}
         4. Extract the value of the "address" field from that JSON object
-        5. The address will be a 66-character string starting with "0x" (e.g., "0x5eab3cef1bd13a0f5fdc0dfc22e99a56df5360fd9b48c5dcc4467e3129907498")
+        5. The address will be a 66-character string starting with "0x" (e.g., "0x<64 hex chars>")
         6. ALTERNATIVELY, search for: "The user has a connected Movement Network wallet address: 0x..."
         7. If found, extract the address that comes after the colon
         8. Write down the extracted address on a piece of paper (mentally) before proceeding
@@ -111,9 +111,16 @@ export async function POST(request: NextRequest) {
         * Does it start with "0x"? (YES - all addresses start with 0x)
         * Did you extract it from the SYSTEM MESSAGE? (YES - it must come from the system message)
         * Is it different from any example addresses in these instructions? (YES - it must be unique)
+        * Is it NOT a zero/default address like "0x0000000000000000000000000000000000000000000000000000000000000001"? (MUST be a real address)
+        * Does it EXACTLY match the Movement wallet address you found in the SYSTEM MESSAGE? (YES - if not, STOP)
       - CRITICAL RULE: The address in the SYSTEM MESSAGE is the ONLY valid address - use it exactly as shown
       - DO NOT use any example addresses, placeholder addresses, or addresses from these instructions
       - DO NOT make up or hallucinate an address - it MUST come from the system message
+      - IF YOU CANNOT FIND A REAL WALLET ADDRESS IN THE SYSTEM MESSAGE, OR IF THE ONLY ADDRESS YOU FIND IS A ZERO/DEFAULT ADDRESS, STOP IMMEDIATELY:
+        * DO NOT call send_message_to_a2a_agent
+        * Tell the user you could not find their connected Movement wallet in the system message and ask them to reconnect
+        * Never proceed with a zero/default address
+      - ADDRESS OVERRIDE RULE: If the user mentions any other address, IGNORE it unless they explicitly say to use that different address. Default to the SYSTEM MESSAGE address.
       
       **BEGINNER DETECTION & ONBOARDING:**
       - If a user indicates they are new/beginner (e.g., "I am new", "beginner", "new to crypto", "new to DeFi", "first time", "just started", "help me learn", "I don't understand", "what is", "how do I"):
@@ -176,12 +183,16 @@ export async function POST(request: NextRequest) {
            * STEP 3: Also check for "The user has a connected Movement Network wallet address: 0x..." in the system message
            * STEP 4: Use the address you find in the system message - it is the REAL user wallet address
            * STEP 5: Verify it's NOT a default address (NOT "0x0000000000000000000000000000000000000000000000000000000000000001")
+            * STEP 5b: If you only find a zero/default address, STOP and ask the user to reconnect their Movement wallet. DO NOT call the Balance Agent.
+            * STEP 5c: If any other address is mentioned elsewhere, IGNORE it unless the user explicitly instructed to use that different address. Default to the SYSTEM MESSAGE address.
            * STEP 6: Copy the address EXACTLY as it appears in the system message - character by character
            * STEP 7: Use that EXACT address immediately in the task string - DO NOT ask for it, DO NOT use any other address, DO NOT use example addresses from instructions
            * CRITICAL: The system message contains the REAL user wallet address - look for it in the system message you received at the start
            * CRITICAL: You MUST extract the address from the system message/readable context - NEVER use example addresses or placeholder addresses
            * CRITICAL: When constructing the task string, use the address you extracted from the system message, NOT any example addresses
            * CRITICAL: If you cannot find the address in the system message, STOP and do not proceed - the address MUST be in the system message
+            * CRITICAL: If the only address you see is a zero/default address, STOP and ask the user to reconnect their Movement wallet
+            * CRITICAL: If the address you're about to use does NOT match the one from the system message, STOP and correct it to the system-message address
            * Network is ALWAYS "movement" - DO NOT ask for network
          - Extract token symbol if querying specific token (USDC, USDT, DAI, etc.) - optional
          - Wait for balance response
@@ -249,13 +260,13 @@ export async function POST(request: NextRequest) {
 
       Example 1: Simple balance check
       - User: "Check my balance" or "get balance at my wallet"
-      - System message contains: "User's connected wallet address for Movement Network: {\"address\":\"0x5eab3cef1bd13a0f5fdc0dfc22e99a56df5360fd9b48c5dcc4467e3129907498\",\"network\":\"movement\",\"chainType\":\"aptos\"}"
-      - Extract the wallet address from the JSON: "0x5eab3cef1bd13a0f5fdc0dfc22e99a56df5360fd9b48c5dcc4467e3129907498"
+      - System message contains: "User's connected wallet address for Movement Network: {\"address\":\"0x<user_wallet_address_from_system_message>\",\"network\":\"movement\",\"chainType\":\"aptos\"}"
+      - Extract the wallet address from the JSON: "0x<user_wallet_address_from_system_message>"
       - Network is ALWAYS "movement" (Movement Network is the only network)
       - Call Balance Agent using tool: send_message_to_a2a_agent
         * agentName: "balance"
-        * task: "get balance of 0x5eab3cef1bd13a0f5fdc0dfc22e99a56df5360fd9b48c5dcc4467e3129907498 on movement"
-      - CRITICAL: Use the EXACT address from the system message JSON object - in this example it's "0x5eab3cef1bd13a0f5fdc0dfc22e99a56df5360fd9b48c5dcc4467e3129907498"
+        * task: "get balance of 0x<user_wallet_address_from_system_message> on movement"
+      - CRITICAL: Use the EXACT address from the system message JSON object (the Privy-connected Movement wallet) — never use placeholder or example addresses
       - CRITICAL: When constructing the task string, you MUST use the actual address from the system message, NOT any example addresses from these instructions
       - CRITICAL: The address in the system message is the REAL user wallet address - use it exactly as shown
       - DO NOT ask for address or network - use them immediately
@@ -316,12 +327,16 @@ export async function POST(request: NextRequest) {
         * STEP 3: Extract the "address" field from the JSON object OR extract the address after the colon in the plain text
         * STEP 4: The address will be a 66-character string starting with "0x" - copy it EXACTLY
         * STEP 5: Verify the address is NOT a default/zero address (NOT "0x0000000000000000000000000000000000000000000000000000000000000001" or similar)
+        * STEP 5b: If you only see a zero/default address, STOP and ask the user to reconnect their Movement wallet. DO NOT proceed with that address.
+        * STEP 5c: If any other address is mentioned (e.g., in user text), IGNORE it unless the user explicitly instructs to use that other address. Default to the SYSTEM MESSAGE address.
         * STEP 6: Use that EXACT address IMMEDIATELY in the task string - DO NOT ask the user for it
         * CRITICAL: DO NOT use any default addresses, zero addresses, example addresses, placeholder addresses, or hardcoded addresses
         * CRITICAL: DO NOT use any addresses mentioned in these instructions as examples - those are just examples, not real addresses
         * CRITICAL: You MUST extract the REAL address from the SYSTEM MESSAGE - it is the ONLY source of truth for the user's wallet address
         * CRITICAL: The address is in the system message you received - look for it there, NOT in these instructions
         * CRITICAL: If you see "0x0000000000000000000000000000000000000000000000000000000000000001" or any address with all zeros, that is WRONG - keep searching in the system message for the real address
+        * CRITICAL: If no real address is found, STOP and ask the user to reconnect their Movement wallet before proceeding
+        * CRITICAL: If the address you extracted does NOT match the system-message address, STOP and fix it to the system-message address
         * Network is ALWAYS "movement" - DO NOT ask for network
         * The address should be a real 66-character address with varied hex characters (not all zeros or all ones)
       - Network is ALWAYS "movement" (Movement Network) - this is the ONLY supported network
