@@ -193,24 +193,19 @@ export const PlatformSelectionCard: React.FC<PlatformSelectionCardProps> = ({
       // Process collaterals
       if (Array.isArray(collaterals) && collaterals.length > 0) {
         const supplies: UserSupply[] = collaterals
-          .map(
-            (item: {
-              marketAddress: string;
-              coinAmount: string;
-            }) => {
-              const marketAddress = item.marketAddress;
-              const symbol = MARKET_TO_SYMBOL[marketAddress] || "Unknown";
-              const assetData = echelonAssets[symbol.toUpperCase()];
+          .map((item: { marketAddress: string; coinAmount: string }) => {
+            const marketAddress = item.marketAddress;
+            const symbol = MARKET_TO_SYMBOL[marketAddress] || "Unknown";
+            const assetData = echelonAssets[symbol.toUpperCase()];
 
-              return {
-                marketAddress,
-                amount: item.coinAmount,
-                symbol: symbol || "Unknown",
-                price: assetData?.price || 0,
-                decimals: assetData?.decimals || 8,
-              };
-            }
-          )
+            return {
+              marketAddress,
+              amount: item.coinAmount,
+              symbol: symbol || "Unknown",
+              price: assetData?.price || 0,
+              decimals: assetData?.decimals || 8,
+            };
+          })
           .filter((supply) => {
             const amountStr = String(supply.amount || "0");
             const amount = parseFloat(amountStr);
@@ -225,24 +220,19 @@ export const PlatformSelectionCard: React.FC<PlatformSelectionCardProps> = ({
       // Process liabilities
       if (Array.isArray(liabilities) && liabilities.length > 0) {
         const borrows: UserBorrow[] = liabilities
-          .map(
-            (item: {
-              marketAddress: string;
-              totalLiability: string;
-            }) => {
-              const marketAddress = item.marketAddress;
-              const symbol = MARKET_TO_SYMBOL[marketAddress] || "Unknown";
-              const assetData = echelonAssets[symbol.toUpperCase()];
+          .map((item: { marketAddress: string; totalLiability: string }) => {
+            const marketAddress = item.marketAddress;
+            const symbol = MARKET_TO_SYMBOL[marketAddress] || "Unknown";
+            const assetData = echelonAssets[symbol.toUpperCase()];
 
-              return {
-                marketAddress,
-                amount: item.totalLiability,
-                symbol: symbol || "Unknown",
-                price: assetData?.price || 0,
-                decimals: assetData?.decimals || 8,
-              };
-            }
-          )
+            return {
+              marketAddress,
+              amount: item.totalLiability,
+              symbol: symbol || "Unknown",
+              price: assetData?.price || 0,
+              decimals: assetData?.decimals || 8,
+            };
+          })
           .filter((borrow) => {
             const amount = parseFloat(borrow.amount);
             return !isNaN(amount) && amount > 0;
@@ -278,7 +268,11 @@ export const PlatformSelectionCard: React.FC<PlatformSelectionCardProps> = ({
 
   // Calculate available balance for the selected asset
   const availableBalance = useMemo(() => {
-    if (action !== "borrow" || !selectedPlatform || selectedPlatform !== "echelon") {
+    if (
+      action !== "borrow" ||
+      !selectedPlatform ||
+      selectedPlatform !== "echelon"
+    ) {
       return 0;
     }
 
@@ -295,10 +289,16 @@ export const PlatformSelectionCard: React.FC<PlatformSelectionCardProps> = ({
       totalSupplyBalance * ltv - totalBorrowBalance
     );
 
-    return assetData.price > 0
-      ? availableBorrowPowerUSD / assetData.price
-      : 0;
-  }, [action, selectedPlatform, asset, echelonAssets, totalSupplyBalance, totalBorrowBalance, userSupplies.length]);
+    return assetData.price > 0 ? availableBorrowPowerUSD / assetData.price : 0;
+  }, [
+    action,
+    selectedPlatform,
+    asset,
+    echelonAssets,
+    totalSupplyBalance,
+    totalBorrowBalance,
+    userSupplies.length,
+  ]);
 
   useEffect(() => {
     fetchAvailableBalances();
@@ -347,7 +347,7 @@ export const PlatformSelectionCard: React.FC<PlatformSelectionCardProps> = ({
     if (action === "borrow") {
       const assetSymbol = asset.toUpperCase();
       const assetData = echelonAssets[assetSymbol];
-      
+
       return (
         <div className="my-3">
           <EchelonBorrowModal

@@ -157,9 +157,23 @@ export function EchelonSupplyModal({
       const marketAddress = MARKET_ADDRESSES[asset.symbol];
       // MOVE is a coin, everything else with faAddress is a fungible asset
       // Also check if it's a known fungible asset (USDC, USDT, etc.) even if faAddress is missing
-      const knownFungibleAssets = ["USDC", "USDT", "WBTC", "WETH", "LBTC", "SolvBTC", "ezETH", "sUSDe", "rsETH"];
-      const isKnownFungible = knownFungibleAssets.includes(asset.symbol.toUpperCase());
-      const isFungibleAsset = asset.symbol.toUpperCase() !== "MOVE" && (!!asset.faAddress || isKnownFungible);
+      const knownFungibleAssets = [
+        "USDC",
+        "USDT",
+        "WBTC",
+        "WETH",
+        "LBTC",
+        "SolvBTC",
+        "ezETH",
+        "sUSDe",
+        "rsETH",
+      ];
+      const isKnownFungible = knownFungibleAssets.includes(
+        asset.symbol.toUpperCase()
+      );
+      const isFungibleAsset =
+        asset.symbol.toUpperCase() !== "MOVE" &&
+        (!!asset.faAddress || isKnownFungible);
 
       console.log("[EchelonSupply] Asset details:", {
         symbol: asset.symbol,
@@ -177,10 +191,10 @@ export function EchelonSupplyModal({
 
       // Verify balance before proceeding - we need to get the actual token decimals from the balance
       setStep("Verifying balance...");
-      
+
       let actualDecimals = asset.decimals || 8; // Default to 8, but will be updated from balance response
       let rawAmount: string;
-      
+
       if (isFungibleAsset) {
         // For fungible assets, verify the actual on-chain balance and get correct decimals
         try {
@@ -190,12 +204,16 @@ export function EchelonSupplyModal({
 
           if (balanceResponse.ok) {
             const balanceData = await balanceResponse.json();
-            if (balanceData.success && balanceData.balances && balanceData.balances.length > 0) {
+            if (
+              balanceData.success &&
+              balanceData.balances &&
+              balanceData.balances.length > 0
+            ) {
               const normalizedToken = asset.symbol
                 .toUpperCase()
                 .replace(/\./g, "")
                 .trim();
-              
+
               const tokenBalance = balanceData.balances.find((b: any) => {
                 const normalizedSymbol = (b.metadata?.symbol || "")
                   .toUpperCase()
@@ -210,29 +228,32 @@ export function EchelonSupplyModal({
 
               if (tokenBalance) {
                 // Use the actual decimals from the token balance metadata
-                actualDecimals = tokenBalance.metadata?.decimals || asset.decimals || 8;
-                
+                actualDecimals =
+                  tokenBalance.metadata?.decimals || asset.decimals || 8;
+
                 // Convert amount using the correct decimals
                 rawAmount = Math.floor(
                   numericAmount * Math.pow(10, actualDecimals)
                 ).toString();
-                
+
                 const balanceAmount = BigInt(tokenBalance.amount || "0");
                 const requestedAmount = BigInt(rawAmount);
-                
+
                 console.log("[EchelonSupply] Balance check (fungible asset):", {
                   symbol: asset.symbol,
                   assetDecimals: asset.decimals,
                   actualDecimals,
                   balanceAmount: balanceAmount.toString(),
                   requestedAmount: requestedAmount.toString(),
-                  balanceFormatted: Number(balanceAmount) / Math.pow(10, actualDecimals),
+                  balanceFormatted:
+                    Number(balanceAmount) / Math.pow(10, actualDecimals),
                   requestedFormatted: numericAmount,
                   hasEnough: balanceAmount >= requestedAmount,
                 });
 
                 if (balanceAmount < requestedAmount) {
-                  const balanceFormatted = Number(balanceAmount) / Math.pow(10, actualDecimals);
+                  const balanceFormatted =
+                    Number(balanceAmount) / Math.pow(10, actualDecimals);
                   throw new Error(
                     `Insufficient balance. You have ${balanceFormatted.toFixed(actualDecimals)} ${asset.symbol}, but trying to supply ${numericAmount} ${asset.symbol}.`
                   );
@@ -253,11 +274,18 @@ export function EchelonSupplyModal({
             rawAmount = Math.floor(
               numericAmount * Math.pow(10, actualDecimals)
             ).toString();
-            console.warn("[EchelonSupply] Balance check failed, using asset decimals:", actualDecimals);
+            console.warn(
+              "[EchelonSupply] Balance check failed, using asset decimals:",
+              actualDecimals
+            );
           }
         } catch (balanceError: any) {
           // If it's already our custom error, throw it
-          if (balanceError.message && (balanceError.message.includes("Insufficient balance") || balanceError.message.includes("No balance found"))) {
+          if (
+            balanceError.message &&
+            (balanceError.message.includes("Insufficient balance") ||
+              balanceError.message.includes("No balance found"))
+          ) {
             throw balanceError;
           }
           // Otherwise, use asset decimals as fallback
@@ -265,7 +293,11 @@ export function EchelonSupplyModal({
           rawAmount = Math.floor(
             numericAmount * Math.pow(10, actualDecimals)
           ).toString();
-          console.warn("[EchelonSupply] Balance check failed, using asset decimals:", actualDecimals, balanceError);
+          console.warn(
+            "[EchelonSupply] Balance check failed, using asset decimals:",
+            actualDecimals,
+            balanceError
+          );
         }
       } else {
         // For coins (MOVE), MOVE always has 8 decimals
@@ -273,57 +305,70 @@ export function EchelonSupplyModal({
         rawAmount = Math.floor(
           numericAmount * Math.pow(10, actualDecimals)
         ).toString();
-        
+
         try {
           // Use the same method as other parts of the codebase
           const coinStoreResource = `0x1::coin::CoinStore<${TYPE_ARGUMENTS[asset.symbol]}>`;
-          
+
           // Get all account resources and find the coin store
           const resources = await aptos.account.getAccountResources({
             accountAddress: senderAddress,
           });
-          
+
           const coinStore = resources.find((r) => r.type === coinStoreResource);
-          
+
           if (!coinStore) {
             throw new Error(
               `No balance found for ${asset.symbol}. Please ensure you have ${asset.symbol} tokens in your wallet.`
             );
           }
-          
-          const coinBalance = BigInt((coinStore.data as any)?.coin?.value || "0");
+
+          const coinBalance = BigInt(
+            (coinStore.data as any)?.coin?.value || "0"
+          );
           const requestedAmount = BigInt(rawAmount);
-          
+
           console.log("[EchelonSupply] Coin balance check:", {
             symbol: asset.symbol,
             decimals: actualDecimals,
             coinBalance: coinBalance.toString(),
             requestedAmount: requestedAmount.toString(),
-            balanceFormatted: Number(coinBalance) / Math.pow(10, actualDecimals),
+            balanceFormatted:
+              Number(coinBalance) / Math.pow(10, actualDecimals),
             requestedFormatted: numericAmount,
             hasEnough: coinBalance >= requestedAmount,
           });
 
           if (coinBalance < requestedAmount) {
-            const balanceFormatted = Number(coinBalance) / Math.pow(10, actualDecimals);
+            const balanceFormatted =
+              Number(coinBalance) / Math.pow(10, actualDecimals);
             throw new Error(
               `Insufficient balance. You have ${balanceFormatted.toFixed(actualDecimals)} ${asset.symbol}, but trying to supply ${numericAmount} ${asset.symbol}.`
             );
           }
         } catch (balanceError: any) {
           // If it's already our custom error, throw it
-          if (balanceError.message && balanceError.message.includes("Insufficient balance")) {
+          if (
+            balanceError.message &&
+            balanceError.message.includes("Insufficient balance")
+          ) {
             throw balanceError;
           }
           // If resource not found, user might not have the coin store registered
-          if (balanceError.message && balanceError.message.includes("No balance found")) {
+          if (
+            balanceError.message &&
+            balanceError.message.includes("No balance found")
+          ) {
             throw balanceError;
           }
           // Otherwise, log warning but continue (transaction might still work)
-          console.warn("[EchelonSupply] Coin balance check failed:", balanceError);
+          console.warn(
+            "[EchelonSupply] Coin balance check failed:",
+            balanceError
+          );
         }
       }
-      
+
       console.log("[EchelonSupply] Final amount conversion:", {
         symbol: asset.symbol,
         numericAmount,
@@ -342,7 +387,10 @@ export function EchelonSupplyModal({
       if (isFungibleAsset) {
         // For fungible assets, use supply_fa (no type arguments needed)
         // Based on actual payload structure: supply_fa takes Object<Market> and u64
-        console.log("[EchelonSupply] Using supply_fa for fungible asset:", asset.symbol);
+        console.log(
+          "[EchelonSupply] Using supply_fa for fungible asset:",
+          asset.symbol
+        );
         functionName =
           `${ECHELON_CONTRACT}::scripts::supply_fa` as `${string}::${string}::${string}`;
         // supply_fa params: &signer, Object<Market>, u64

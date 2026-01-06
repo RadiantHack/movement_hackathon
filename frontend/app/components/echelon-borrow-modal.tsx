@@ -178,7 +178,8 @@ export function EchelonBorrowModal({
 
     // Validate that user has collateral
     if (!hasCollateral && totalSupplyBalance <= 0) {
-      const errorMsg = "You need to supply collateral before you can borrow. Please supply assets first.";
+      const errorMsg =
+        "You need to supply collateral before you can borrow. Please supply assets first.";
       console.log("[Borrow] No collateral", {
         hasCollateral,
         totalSupplyBalance,

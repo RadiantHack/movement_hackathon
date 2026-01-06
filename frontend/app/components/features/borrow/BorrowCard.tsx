@@ -66,7 +66,10 @@ interface PortfolioResponse {
   maxBorrow?: Record<string, string>;
 }
 
-export const BorrowCard: React.FC<BorrowCardProps> = ({ walletAddress, asset }) => {
+export const BorrowCard: React.FC<BorrowCardProps> = ({
+  walletAddress,
+  asset,
+}) => {
   const { user, ready, authenticated } = usePrivy();
   const { signRawHash } = useSignRawHash();
   const [activeTab, setActiveTab] = useState<"borrow" | "repay">("borrow");
@@ -109,13 +112,16 @@ export const BorrowCard: React.FC<BorrowCardProps> = ({ walletAddress, asset }) 
     );
   }, [user, ready, authenticated]);
 
-  const [brokerData, setBrokerData] = useState<superJsonApiClient.Broker | null>(null);
+  const [brokerData, setBrokerData] =
+    useState<superJsonApiClient.Broker | null>(null);
 
   // Get broker name helper
   const getBrokerName = (symbol: string): string => {
     const symbolUpper = symbol.toUpperCase();
-    if (symbolUpper === "USDC" || symbolUpper === "USDC.E") return "movement-usdc";
-    if (symbolUpper === "USDT" || symbolUpper === "USDT.E") return "movement-usdt";
+    if (symbolUpper === "USDC" || symbolUpper === "USDC.E")
+      return "movement-usdc";
+    if (symbolUpper === "USDT" || symbolUpper === "USDT.E")
+      return "movement-usdt";
     if (symbolUpper === "MOVE") return "movement-move";
     return `movement-${symbol.toLowerCase()}`;
   };
@@ -157,7 +163,8 @@ export const BorrowCard: React.FC<BorrowCardProps> = ({ walletAddress, asset }) 
     // Convert raw note tokens to underlying tokens using exchange rate
     const loanNoteDecimals = brokerData.loanNote?.decimals ?? 8;
     const loanNoteExchangeRate = brokerData.loanNoteExchangeRate || 1;
-    const noteBalance = parseFloat(liability.amount) / Math.pow(10, loanNoteDecimals);
+    const noteBalance =
+      parseFloat(liability.amount) / Math.pow(10, loanNoteDecimals);
     const underlyingTokenBalance = noteBalance * loanNoteExchangeRate;
 
     return underlyingTokenBalance;
@@ -343,7 +350,12 @@ export const BorrowCard: React.FC<BorrowCardProps> = ({ walletAddress, asset }) 
         const simFactor = calcHealthFactor(response);
         const ltv = response.ltv || 0;
 
-        console.log("[BorrowCard RiskSimulation] Health factor:", simFactor, "LTV:", ltv);
+        console.log(
+          "[BorrowCard RiskSimulation] Health factor:",
+          simFactor,
+          "LTV:",
+          ltv
+        );
 
         // Determine zones (matching BorrowModal)
         const simYellow = isYellowZone(simFactor);
@@ -960,7 +972,9 @@ export const BorrowCard: React.FC<BorrowCardProps> = ({ walletAddress, asset }) 
                 </span>
                 <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
                   {loadingPortfolio ? (
-                    <span className="inline-block animate-pulse">Loading...</span>
+                    <span className="inline-block animate-pulse">
+                      Loading...
+                    </span>
                   ) : (
                     `${borrowed.toLocaleString(undefined, {
                       minimumFractionDigits: 2,
@@ -975,7 +989,9 @@ export const BorrowCard: React.FC<BorrowCardProps> = ({ walletAddress, asset }) 
                 </span>
                 <span className="text-sm font-medium text-blue-600 dark:text-blue-400">
                   {loadingPortfolio ? (
-                    <span className="inline-block animate-pulse">Loading...</span>
+                    <span className="inline-block animate-pulse">
+                      Loading...
+                    </span>
                   ) : (
                     `${borrowAPY.toFixed(2)}%`
                   )}
@@ -1017,8 +1033,8 @@ export const BorrowCard: React.FC<BorrowCardProps> = ({ walletAddress, asset }) 
             {simHealthYellow && !simHealthRed && !isLTVWarning && (
               <div className="mb-4 p-3 rounded-lg bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 text-sm text-yellow-700 dark:text-yellow-400">
                 ⚠️ Warning: This borrow would reduce your health factor to{" "}
-                {displayHealthFactor?.toFixed(2)}x (warning zone: 1.2x -
-                1.5x). Consider borrowing less to maintain a safer position.
+                {displayHealthFactor?.toFixed(2)}x (warning zone: 1.2x - 1.5x).
+                Consider borrowing less to maintain a safer position.
               </div>
             )}
 
@@ -1035,27 +1051,32 @@ export const BorrowCard: React.FC<BorrowCardProps> = ({ walletAddress, asset }) 
             {isLTVWarning && isSimHealthy && simLTV > 0 && (
               <div className="mb-4 p-3 rounded-lg bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 text-sm text-orange-700 dark:text-orange-400">
                 ⚠️ LTV Warning: This borrow would result in an LTV of{" "}
-                {(simLTV * 100).toFixed(1)}%, which exceeds the recommended
-                95% threshold. Consider borrowing less to maintain a safer
-                position.
+                {(simLTV * 100).toFixed(1)}%, which exceeds the recommended 95%
+                threshold. Consider borrowing less to maintain a safer position.
               </div>
             )}
 
             {/* Other Validation Errors */}
-            {validationError && !simHealthRed && !simHealthYellow && !isLTVWarning && (
-              <div className="mb-4 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-sm text-red-700 dark:text-red-400">
-                ⚠️ {validationError}
-              </div>
-            )}
+            {validationError &&
+              !simHealthRed &&
+              !simHealthYellow &&
+              !isLTVWarning && (
+                <div className="mb-4 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-sm text-red-700 dark:text-red-400">
+                  ⚠️ {validationError}
+                </div>
+              )}
           </>
         )}
 
         {/* Validation Error for Repay */}
-        {amount && parseFloat(amount) > 0 && activeTab === "repay" && validationError && (
-          <div className="mb-4 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-sm text-red-700 dark:text-red-400">
-            ⚠️ {validationError}
-          </div>
-        )}
+        {amount &&
+          parseFloat(amount) > 0 &&
+          activeTab === "repay" &&
+          validationError && (
+            <div className="mb-4 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-sm text-red-700 dark:text-red-400">
+              ⚠️ {validationError}
+            </div>
+          )}
 
         {/* Submission Step */}
         {submissionStep && (

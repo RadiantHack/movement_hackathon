@@ -106,7 +106,8 @@ export const ONBOARDING_QUEST: Quest = {
       title: "Check Your Balance",
       description:
         "Learn how to check your cryptocurrency balance. This is the first step to managing your assets on Movement Network.",
-      instruction: 'Type "check my balance" or "get my wallet balance" in the chat',
+      instruction:
+        'Type "check my balance" or "get my wallet balance" in the chat',
       agentName: "balance",
       actionType: "balance",
       reward: "Balance Explorer",

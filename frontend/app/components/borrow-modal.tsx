@@ -659,9 +659,7 @@ export function BorrowModal({
   const hasCollateral = useMemo(() => {
     if (!portfolioData) return false;
     // Check if there are any collaterals with non-zero amount
-    return portfolioData.collaterals.some(
-      (c) => BigInt(c.amount) > 0
-    );
+    return portfolioData.collaterals.some((c) => BigInt(c.amount) > 0);
   }, [portfolioData]);
 
   const handleSubmit = async () => {
@@ -691,17 +689,23 @@ export function BorrowModal({
       if (maxBorrowFromPortfolio === null) {
         // Check if it's because of no collateral or insufficient borrowing power
         if (!hasCollateral) {
-          setSubmitError("You need to supply collateral before you can borrow. Please supply assets first.");
+          setSubmitError(
+            "You need to supply collateral before you can borrow. Please supply assets first."
+          );
         } else {
           // Has collateral but no borrowing power - likely health factor issue
-          setSubmitError("Insufficient borrowing power. Your health factor may be too low or you've reached your borrowing limit. Please supply more assets or repay existing borrows.");
+          setSubmitError(
+            "Insufficient borrowing power. Your health factor may be too low or you've reached your borrowing limit. Please supply more assets or repay existing borrows."
+          );
         }
         return;
       }
-      
+
       // Additional check: if maxBorrow is 0 or very small, user can't borrow
       if (maxBorrowFromPortfolio <= 0) {
-        setSubmitError("No borrowing power available. Please supply more collateral or check your health factor.");
+        setSubmitError(
+          "No borrowing power available. Please supply more collateral or check your health factor."
+        );
         return;
       }
     }

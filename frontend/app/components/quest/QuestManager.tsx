@@ -7,7 +7,13 @@
  */
 
 import React, { useState, useEffect, useCallback } from "react";
-import { Quest, QuestStep, QuestProgress, QuestStatus, ONBOARDING_QUEST } from "./types";
+import {
+  Quest,
+  QuestStep,
+  QuestProgress,
+  QuestStatus,
+  ONBOARDING_QUEST,
+} from "./types";
 import { QuestCard } from "./QuestCard";
 import { useCopilotChat } from "@copilotkit/react-core";
 
@@ -78,7 +84,7 @@ export const QuestManager: React.FC<QuestManagerProps> = ({
   // Track if current step has been completed (user action detected)
   // But don't auto-advance - wait for user confirmation via "I've Done This" button
   const [stepActionDetected, setStepActionDetected] = useState(false);
-  
+
   // Track the message count when the current step started
   // This ensures we only detect actions that occurred AFTER the step started
   const [stepStartMessageCount, setStepStartMessageCount] = useState(0);
@@ -101,7 +107,7 @@ export const QuestManager: React.FC<QuestManagerProps> = ({
 
     const messages = visibleMessages || [];
     const currentStep = quest.steps[quest.currentStepIndex];
-    
+
     // Only check messages that occurred AFTER the step started
     // This prevents false positives from actions triggered before the quest step began
     const messagesAfterStepStart = messages.slice(stepStartMessageCount);
@@ -116,28 +122,31 @@ export const QuestManager: React.FC<QuestManagerProps> = ({
       ) {
         const args = m.args as any;
         const agentName = args?.agentName;
-        
+
         // For other agents, just check if agent name matches
         if (agentName === currentStep?.agentName) {
           return true;
         }
       }
-      
+
       // Also check for assistant messages that contain balance information
       // This is a fallback in case the ResultMessage format is different
       if (currentStep?.actionType === "balance" && m.role === "assistant") {
         const content = m.content || m.text || "";
-        const contentLower = typeof content === "string" ? content.toLowerCase() : "";
+        const contentLower =
+          typeof content === "string" ? content.toLowerCase() : "";
         // Check if the message mentions balance results (MOVE, USDT, USDC, etc.)
-        const hasBalanceInfo = 
+        const hasBalanceInfo =
           (contentLower.includes("move:") || contentLower.includes("move ")) &&
-          (contentLower.includes("balance") || contentLower.includes("usdt") || contentLower.includes("usdc"));
-        
+          (contentLower.includes("balance") ||
+            contentLower.includes("usdt") ||
+            contentLower.includes("usdc"));
+
         if (hasBalanceInfo) {
           return true;
         }
       }
-      
+
       return false;
     });
 
@@ -199,7 +208,7 @@ export const QuestManager: React.FC<QuestManagerProps> = ({
     } else {
       setStepActionDetected(false);
     }
-    
+
     // Debug logging (can be removed in production)
     if (process.env.NODE_ENV === "development") {
       console.log("[QuestManager] Detection check:", {
@@ -253,15 +262,18 @@ export const QuestManager: React.FC<QuestManagerProps> = ({
     completeCurrentStep();
   }, [completeCurrentStep]);
 
-  const jumpToStep = useCallback((stepIndex: number) => {
-    if (stepIndex >= 0 && stepIndex < quest.steps.length) {
-      setQuest((prev) => ({
-        ...prev,
-        currentStepIndex: stepIndex,
-      }));
-      setStepActionDetected(false);
-    }
-  }, [quest.steps.length]);
+  const jumpToStep = useCallback(
+    (stepIndex: number) => {
+      if (stepIndex >= 0 && stepIndex < quest.steps.length) {
+        setQuest((prev) => ({
+          ...prev,
+          currentStepIndex: stepIndex,
+        }));
+        setStepActionDetected(false);
+      }
+    },
+    [quest.steps.length]
+  );
 
   if (
     !isVisible ||
