@@ -3,17 +3,7 @@
 import { useState, useMemo } from "react";
 import { usePrivy, WalletWithMetadata } from "@privy-io/react-auth";
 import { useSignRawHash } from "@privy-io/react-auth/extended-chains";
-import {
-  Aptos,
-  AptosConfig,
-  Network,
-  AccountAuthenticatorEd25519,
-  Ed25519PublicKey,
-  Ed25519Signature,
-  generateSigningMessageForTransaction,
-  ChainId,
-} from "@aptos-labs/ts-sdk";
-import { toHex } from "viem";
+import { executeWithdrawTransaction } from "@/app/hooks/useEchelonTransactions";
 
 interface WithdrawAsset {
   symbol: string;
@@ -31,32 +21,6 @@ interface EchelonWithdrawModalProps {
   asset: WithdrawAsset | null;
   onSuccess?: () => void; // Callback after successful transaction
 }
-
-const ECHELON_CONTRACT =
-  "0x6a01d5761d43a5b5a0ccbfc42edf2d02c0611464aae99a2ea0e0d4819f0550b5";
-
-const TYPE_ARGUMENTS: Record<string, string> = {
-  MOVE: "0x1::aptos_coin::AptosCoin",
-  USDC: "0x83121c9f9b0527d1f056e21a950d6bf3b9e9e2e8353d0e95ccea726713cbea39",
-  USDT: "0x447721a30109c662dde9c73a0c2c9c9c459fb5e5a9c92f03c50fa69737f5d08d",
-  WBTC: "0xb06f29f24dde9c6daeec1f930f14a441a8d6c0fbea590725e88b340af3e1939c",
-  WETH: "0x908828f4fb0213d4034c3ded1630bbd904e8a3a6bf3c63270887f0b06653a376",
-  LBTC: "0x658f4ef6f76c8eeffdc06a30946f3f06723a7f9532e2413312b2a612183759c",
-  SolvBTC: "0x527c43638a6c389a9ad702e7085f31c48223624d5102a5207dfab861f482c46d",
-  ezETH: "0x2f6af255328fe11b88d840d1e367e946ccd16bd7ebddd6ee7e2ef9f7ae0c53ef",
-  sUSDe: "0x74f0c7504507f7357f8a218cc70ce3fc0f4b4e9eb8474e53ca778cb1e0c6dcc5",
-  rsETH: "0x51ffc9885233adf3dd411078cad57535ed1982013dc82d9d6c433a55f2e0035d",
-};
-
-const MOVEMENT_RPC = "https://mainnet.movementnetwork.xyz/v1";
-const MOVEMENT_CHAIN_ID = 126;
-
-const aptos = new Aptos(
-  new AptosConfig({
-    network: Network.CUSTOM,
-    fullnode: MOVEMENT_RPC,
-  })
-);
 
 export function EchelonWithdrawModal({
   isOpen,
@@ -125,138 +89,25 @@ export function EchelonWithdrawModal({
     setError(null);
     setTxHash(null);
 
-    try {
-      const senderAddress = movementWallet.address as string;
-      const publicKey = (movementWallet as any).publicKey as string;
+    const result = await executeWithdrawTransaction({
+      asset: {
+        symbol: asset.symbol,
+        decimals: asset.decimals,
+        marketAddress: asset.marketAddress,
+        faAddress: asset.faAddress,
+      },
+      amount: numericAmount,
+      percentage,
+      movementWallet,
+      publicKey: (movementWallet as any).publicKey,
+      signRawHash,
+      onStepChange: setStep,
+    });
 
-      if (!senderAddress || !publicKey) {
-        throw new Error("Wallet address or public key not found");
-      }
-
-      // Determine if it's a fungible asset
-      // MOVE is a coin, everything else with faAddress is a fungible asset
-      const isFungibleAsset = asset.symbol !== "MOVE" && !!asset.faAddress;
-
-      setStep("Building transaction...");
-
-      // Use withdraw_all when withdrawing 100%, otherwise use withdraw with amount
-      const isWithdrawAll = percentage >= 99.9;
-
-      // Build the transaction payload
-      // Use withdraw_fa/withdraw_all_fa for fungible assets, withdraw/withdraw_all for coins
-      let functionName: `${string}::${string}::${string}`;
-      let typeArguments: string[] | undefined = undefined;
-      let functionArguments: any[];
-
-      if (isFungibleAsset && asset.faAddress) {
-        // For fungible assets, use withdraw_fa or withdraw_all_fa (no type arguments needed)
-        functionName = isWithdrawAll
-          ? (`${ECHELON_CONTRACT}::scripts::withdraw_all_fa` as `${string}::${string}::${string}`)
-          : (`${ECHELON_CONTRACT}::scripts::withdraw_fa` as `${string}::${string}::${string}`);
-
-        // withdraw_fa params: &signer, Object<Market>, u64
-        // withdraw_all_fa params: &signer, Object<Market>
-        // Pass market address directly - SDK handles Object wrapping
-        functionArguments = isWithdrawAll
-          ? [asset.marketAddress]
-          : [
-              asset.marketAddress,
-              Math.floor(
-                numericAmount * Math.pow(10, asset.decimals)
-              ).toString(),
-            ];
-      } else {
-        // For coins (like MOVE), use withdraw or withdraw_all with type argument
-        const typeArgument = TYPE_ARGUMENTS[asset.symbol];
-        if (!typeArgument) {
-          throw new Error(
-            `Unsupported asset: ${asset.symbol}. Type argument not found.`
-          );
-        }
-        functionName = isWithdrawAll
-          ? (`${ECHELON_CONTRACT}::scripts::withdraw_all` as `${string}::${string}::${string}`)
-          : (`${ECHELON_CONTRACT}::scripts::withdraw` as `${string}::${string}::${string}`);
-
-        typeArguments = [typeArgument];
-        // withdraw params: &signer, Object<Market>, u64
-        // withdraw_all params: &signer, Object<Market>
-        functionArguments = isWithdrawAll
-          ? [asset.marketAddress]
-          : [
-              asset.marketAddress,
-              Math.floor(
-                numericAmount * Math.pow(10, asset.decimals)
-              ).toString(),
-            ];
-      }
-
-      const transactionData: any = {
-        function: functionName,
-        functionArguments,
-      };
-
-      // Only add typeArguments if they exist (for coin types, not fungible assets)
-      if (typeArguments && typeArguments.length > 0) {
-        transactionData.typeArguments = typeArguments;
-      }
-
-      const rawTxn = await aptos.transaction.build.simple({
-        sender: senderAddress,
-        data: transactionData,
-      });
-
-      const txnObj = rawTxn as any;
-      if (txnObj.rawTransaction) {
-        txnObj.rawTransaction.chain_id = new ChainId(MOVEMENT_CHAIN_ID);
-      }
-
-      setStep("Waiting for signature...");
-
-      const message = generateSigningMessageForTransaction(rawTxn);
-      const hash = toHex(message);
-
-      const signatureResponse = await signRawHash({
-        address: senderAddress,
-        chainType: "aptos",
-        hash: hash as `0x${string}`,
-      });
-
-      setStep("Submitting transaction...");
-
-      let pubKeyNoScheme = publicKey.startsWith("0x")
-        ? publicKey.slice(2)
-        : publicKey;
-      if (pubKeyNoScheme.startsWith("00") && pubKeyNoScheme.length > 64) {
-        pubKeyNoScheme = pubKeyNoScheme.slice(2);
-      }
-      if (pubKeyNoScheme.length !== 64) {
-        throw new Error(
-          `Invalid public key length: expected 64 hex characters (32 bytes), got ${pubKeyNoScheme.length}`
-        );
-      }
-      const publicKeyObj = new Ed25519PublicKey(`0x${pubKeyNoScheme}`);
-      const sig = new Ed25519Signature(signatureResponse.signature.slice(2));
-      const senderAuthenticator = new AccountAuthenticatorEd25519(
-        publicKeyObj,
-        sig
-      );
-
-      const pending = await aptos.transaction.submit.simple({
-        transaction: rawTxn,
-        senderAuthenticator,
-      });
-
-      setStep("Waiting for confirmation...");
-
-      await aptos.waitForTransaction({
-        transactionHash: pending.hash,
-        options: { checkSuccess: true },
-      });
-
-      setTxHash(pending.hash);
+    if (result.success) {
+      setTxHash(result.txHash || "");
       setStep("");
 
-      // Call onSuccess callback to refresh data
       if (onSuccess) {
         onSuccess();
       }
@@ -266,13 +117,12 @@ export function EchelonWithdrawModal({
         setAmount("");
         setTxHash(null);
       }, 2000);
-    } catch (err: any) {
-      console.error("Withdraw error:", err);
-      setError(err.message || "Transaction failed");
+    } else {
+      setError(result.error || "Transaction failed");
       setStep("");
-    } finally {
-      setSubmitting(false);
     }
+
+    setSubmitting(false);
   };
 
   return (

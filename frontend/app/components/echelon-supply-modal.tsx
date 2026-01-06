@@ -3,17 +3,7 @@
 import { useState, useMemo } from "react";
 import { usePrivy, WalletWithMetadata } from "@privy-io/react-auth";
 import { useSignRawHash } from "@privy-io/react-auth/extended-chains";
-import {
-  Aptos,
-  AptosConfig,
-  Network,
-  AccountAuthenticatorEd25519,
-  Ed25519PublicKey,
-  Ed25519Signature,
-  generateSigningMessageForTransaction,
-  ChainId,
-} from "@aptos-labs/ts-sdk";
-import { toHex } from "viem";
+import { executeSupplyTransaction } from "@/app/hooks/useEchelonTransactions";
 
 interface EchelonAsset {
   symbol: string;
@@ -23,6 +13,7 @@ interface EchelonAsset {
   supplyApr: number;
   faAddress?: string;
   decimals?: number;
+  marketAddress?: string;
 }
 
 interface EchelonSupplyModalProps {
@@ -33,10 +24,6 @@ interface EchelonSupplyModalProps {
   inline?: boolean; // If true, renders inline without backdrop (for chat)
   onSuccess?: () => void; // Callback after successful transaction
 }
-
-// Echelon contract address
-const ECHELON_CONTRACT =
-  "0x6a01d5761d43a5b5a0ccbfc42edf2d02c0611464aae99a2ea0e0d4819f0550b5";
 
 // Market addresses for each asset
 const MARKET_ADDRESSES: Record<string, string> = {
@@ -65,16 +52,6 @@ const TYPE_ARGUMENTS: Record<string, string> = {
   sUSDe: "0x74f0c7504507f7357f8a218cc70ce3fc0f4b4e9eb8474e53ca778cb1e0c6dcc5",
   rsETH: "0x51ffc9885233adf3dd411078cad57535ed1982013dc82d9d6c433a55f2e0035d",
 };
-
-const MOVEMENT_RPC = "https://mainnet.movementnetwork.xyz/v1";
-const MOVEMENT_CHAIN_ID = 126;
-
-const aptos = new Aptos(
-  new AptosConfig({
-    network: Network.CUSTOM,
-    fullnode: MOVEMENT_RPC,
-  })
-);
 
 export function EchelonSupplyModal({
   isOpen,
@@ -145,356 +122,37 @@ export function EchelonSupplyModal({
     setError(null);
     setTxHash(null);
 
-    try {
-      const senderAddress = movementWallet.address as string;
-      const publicKey = (movementWallet as any).publicKey as string;
+    const marketAddress =
+      MARKET_ADDRESSES[asset.symbol] || asset.marketAddress || "";
 
-      if (!senderAddress || !publicKey) {
-        throw new Error("Wallet address or public key not found");
-      }
+    if (!marketAddress) {
+      setError(`Market address not found for ${asset.symbol}`);
+      setSubmitting(false);
+      return;
+    }
 
-      // Get market address and determine if it's a fungible asset
-      const marketAddress = MARKET_ADDRESSES[asset.symbol];
-      // MOVE is a coin, everything else with faAddress is a fungible asset
-      // Also check if it's a known fungible asset (USDC, USDT, etc.) even if faAddress is missing
-      const knownFungibleAssets = [
-        "USDC",
-        "USDT",
-        "WBTC",
-        "WETH",
-        "LBTC",
-        "SolvBTC",
-        "ezETH",
-        "sUSDe",
-        "rsETH",
-      ];
-      const isKnownFungible = knownFungibleAssets.includes(
-        asset.symbol.toUpperCase()
-      );
-      const isFungibleAsset =
-        asset.symbol.toUpperCase() !== "MOVE" &&
-        (!!asset.faAddress || isKnownFungible);
-
-      console.log("[EchelonSupply] Asset details:", {
+    const result = await executeSupplyTransaction({
+      asset: {
         symbol: asset.symbol,
-        faAddress: asset.faAddress,
-        isKnownFungible,
-        isFungibleAsset,
+        decimals: asset.decimals || 8,
         marketAddress,
-      });
+        faAddress: asset.faAddress,
+      },
+      amount: numericAmount,
+      movementWallet,
+      publicKey: (movementWallet as any).publicKey,
+      signRawHash,
+      onStepChange: setStep,
+    });
 
-      if (!marketAddress) {
-        throw new Error(
-          `Unsupported asset: ${asset.symbol}. Market address not found.`
-        );
-      }
-
-      // Verify balance before proceeding - we need to get the actual token decimals from the balance
-      setStep("Verifying balance...");
-
-      let actualDecimals = asset.decimals || 8; // Default to 8, but will be updated from balance response
-      let rawAmount: string;
-
-      if (isFungibleAsset) {
-        // For fungible assets, verify the actual on-chain balance and get correct decimals
-        try {
-          const balanceResponse = await fetch(
-            `/api/balance?address=${encodeURIComponent(senderAddress)}&token=${encodeURIComponent(asset.symbol)}`
-          );
-
-          if (balanceResponse.ok) {
-            const balanceData = await balanceResponse.json();
-            if (
-              balanceData.success &&
-              balanceData.balances &&
-              balanceData.balances.length > 0
-            ) {
-              const normalizedToken = asset.symbol
-                .toUpperCase()
-                .replace(/\./g, "")
-                .trim();
-
-              const tokenBalance = balanceData.balances.find((b: any) => {
-                const normalizedSymbol = (b.metadata?.symbol || "")
-                  .toUpperCase()
-                  .replace(/\./g, "")
-                  .trim();
-                return (
-                  normalizedSymbol === normalizedToken ||
-                  normalizedSymbol.startsWith(normalizedToken) ||
-                  normalizedToken.startsWith(normalizedSymbol)
-                );
-              });
-
-              if (tokenBalance) {
-                // Use the actual decimals from the token balance metadata
-                actualDecimals =
-                  tokenBalance.metadata?.decimals || asset.decimals || 8;
-
-                // Convert amount using the correct decimals
-                rawAmount = Math.floor(
-                  numericAmount * Math.pow(10, actualDecimals)
-                ).toString();
-
-                const balanceAmount = BigInt(tokenBalance.amount || "0");
-                const requestedAmount = BigInt(rawAmount);
-
-                console.log("[EchelonSupply] Balance check (fungible asset):", {
-                  symbol: asset.symbol,
-                  assetDecimals: asset.decimals,
-                  actualDecimals,
-                  balanceAmount: balanceAmount.toString(),
-                  requestedAmount: requestedAmount.toString(),
-                  balanceFormatted:
-                    Number(balanceAmount) / Math.pow(10, actualDecimals),
-                  requestedFormatted: numericAmount,
-                  hasEnough: balanceAmount >= requestedAmount,
-                });
-
-                if (balanceAmount < requestedAmount) {
-                  const balanceFormatted =
-                    Number(balanceAmount) / Math.pow(10, actualDecimals);
-                  throw new Error(
-                    `Insufficient balance. You have ${balanceFormatted.toFixed(actualDecimals)} ${asset.symbol}, but trying to supply ${numericAmount} ${asset.symbol}.`
-                  );
-                }
-              } else {
-                throw new Error(
-                  `No balance found for ${asset.symbol}. Please ensure you have ${asset.symbol} tokens in your wallet.`
-                );
-              }
-            } else {
-              throw new Error(
-                `No balance found for ${asset.symbol}. Please ensure you have ${asset.symbol} tokens in your wallet.`
-              );
-            }
-          } else {
-            // If balance check fails, use asset decimals as fallback
-            actualDecimals = asset.decimals || 8;
-            rawAmount = Math.floor(
-              numericAmount * Math.pow(10, actualDecimals)
-            ).toString();
-            console.warn(
-              "[EchelonSupply] Balance check failed, using asset decimals:",
-              actualDecimals
-            );
-          }
-        } catch (balanceError: any) {
-          // If it's already our custom error, throw it
-          if (
-            balanceError.message &&
-            (balanceError.message.includes("Insufficient balance") ||
-              balanceError.message.includes("No balance found"))
-          ) {
-            throw balanceError;
-          }
-          // Otherwise, use asset decimals as fallback
-          actualDecimals = asset.decimals || 8;
-          rawAmount = Math.floor(
-            numericAmount * Math.pow(10, actualDecimals)
-          ).toString();
-          console.warn(
-            "[EchelonSupply] Balance check failed, using asset decimals:",
-            actualDecimals,
-            balanceError
-          );
-        }
-      } else {
-        // For coins (MOVE), MOVE always has 8 decimals
-        actualDecimals = 8; // MOVE always uses 8 decimals
-        rawAmount = Math.floor(
-          numericAmount * Math.pow(10, actualDecimals)
-        ).toString();
-
-        try {
-          // Use the same method as other parts of the codebase
-          const coinStoreResource = `0x1::coin::CoinStore<${TYPE_ARGUMENTS[asset.symbol]}>`;
-
-          // Get all account resources and find the coin store
-          const resources = await aptos.account.getAccountResources({
-            accountAddress: senderAddress,
-          });
-
-          const coinStore = resources.find((r) => r.type === coinStoreResource);
-
-          if (!coinStore) {
-            throw new Error(
-              `No balance found for ${asset.symbol}. Please ensure you have ${asset.symbol} tokens in your wallet.`
-            );
-          }
-
-          const coinBalance = BigInt(
-            (coinStore.data as any)?.coin?.value || "0"
-          );
-          const requestedAmount = BigInt(rawAmount);
-
-          console.log("[EchelonSupply] Coin balance check:", {
-            symbol: asset.symbol,
-            decimals: actualDecimals,
-            coinBalance: coinBalance.toString(),
-            requestedAmount: requestedAmount.toString(),
-            balanceFormatted:
-              Number(coinBalance) / Math.pow(10, actualDecimals),
-            requestedFormatted: numericAmount,
-            hasEnough: coinBalance >= requestedAmount,
-          });
-
-          if (coinBalance < requestedAmount) {
-            const balanceFormatted =
-              Number(coinBalance) / Math.pow(10, actualDecimals);
-            throw new Error(
-              `Insufficient balance. You have ${balanceFormatted.toFixed(actualDecimals)} ${asset.symbol}, but trying to supply ${numericAmount} ${asset.symbol}.`
-            );
-          }
-        } catch (balanceError: any) {
-          // If it's already our custom error, throw it
-          if (
-            balanceError.message &&
-            balanceError.message.includes("Insufficient balance")
-          ) {
-            throw balanceError;
-          }
-          // If resource not found, user might not have the coin store registered
-          if (
-            balanceError.message &&
-            balanceError.message.includes("No balance found")
-          ) {
-            throw balanceError;
-          }
-          // Otherwise, log warning but continue (transaction might still work)
-          console.warn(
-            "[EchelonSupply] Coin balance check failed:",
-            balanceError
-          );
-        }
-      }
-
-      console.log("[EchelonSupply] Final amount conversion:", {
-        symbol: asset.symbol,
-        numericAmount,
-        decimals: actualDecimals,
-        rawAmount,
-      });
-
-      setStep("Building transaction...");
-
-      // Build the transaction payload
-      // Use supply_fa for fungible assets, supply for coins
-      let functionName: `${string}::${string}::${string}`;
-      let typeArguments: string[] | undefined = undefined;
-      let functionArguments: any[];
-
-      if (isFungibleAsset) {
-        // For fungible assets, use supply_fa (no type arguments needed)
-        // Based on actual payload structure: supply_fa takes Object<Market> and u64
-        console.log(
-          "[EchelonSupply] Using supply_fa for fungible asset:",
-          asset.symbol
-        );
-        functionName =
-          `${ECHELON_CONTRACT}::scripts::supply_fa` as `${string}::${string}::${string}`;
-        // supply_fa params: &signer, Object<Market>, u64
-        // Pass market address directly - SDK handles Object wrapping
-        functionArguments = [marketAddress, rawAmount];
-      } else {
-        // For coins (like MOVE), use supply with type argument
-        console.log("[EchelonSupply] Using supply for coin:", asset.symbol);
-        // For coins (like MOVE), use supply with type argument
-        const typeArgument = TYPE_ARGUMENTS[asset.symbol];
-        if (!typeArgument) {
-          throw new Error(
-            `Unsupported asset: ${asset.symbol}. Type argument not found.`
-          );
-        }
-        functionName =
-          `${ECHELON_CONTRACT}::scripts::supply` as `${string}::${string}::${string}`;
-        typeArguments = [typeArgument];
-        // supply params: &signer, Object<Market>, u64
-        functionArguments = [marketAddress, rawAmount];
-      }
-
-      const transactionData: any = {
-        function: functionName,
-        functionArguments,
-      };
-
-      // Only add typeArguments if they exist (for coin types, not fungible assets)
-      if (typeArguments && typeArguments.length > 0) {
-        transactionData.typeArguments = typeArguments;
-      }
-
-      const rawTxn = await aptos.transaction.build.simple({
-        sender: senderAddress,
-        data: transactionData,
-      });
-
-      // Override chain ID
-      const txnObj = rawTxn as any;
-      if (txnObj.rawTransaction) {
-        txnObj.rawTransaction.chain_id = new ChainId(MOVEMENT_CHAIN_ID);
-      }
-
-      setStep("Waiting for signature...");
-
-      // Generate signing message
-      const message = generateSigningMessageForTransaction(rawTxn);
-      const hash = toHex(message);
-
-      // Sign using Privy
-      const signatureResponse = await signRawHash({
-        address: senderAddress,
-        chainType: "aptos",
-        hash: hash as `0x${string}`,
-      });
-
-      setStep("Submitting transaction...");
-
-      // Create authenticator
-      // Privy public key format: "004a4b8e35..." or "0x004a4b8e35..."
-      // We need to drop the "00" prefix to get the actual 32-byte key
-      let pubKeyNoScheme = publicKey.startsWith("0x")
-        ? publicKey.slice(2)
-        : publicKey;
-      // Remove leading "00" if present (Privy adds this prefix)
-      if (pubKeyNoScheme.startsWith("00") && pubKeyNoScheme.length > 64) {
-        pubKeyNoScheme = pubKeyNoScheme.slice(2);
-      }
-      // Ensure we have exactly 64 hex characters (32 bytes)
-      if (pubKeyNoScheme.length !== 64) {
-        throw new Error(
-          `Invalid public key length: expected 64 hex characters (32 bytes), got ${pubKeyNoScheme.length}`
-        );
-      }
-      const publicKeyObj = new Ed25519PublicKey(`0x${pubKeyNoScheme}`);
-      const sig = new Ed25519Signature(signatureResponse.signature.slice(2));
-      const senderAuthenticator = new AccountAuthenticatorEd25519(
-        publicKeyObj,
-        sig
-      );
-
-      // Submit transaction
-      const pending = await aptos.transaction.submit.simple({
-        transaction: rawTxn,
-        senderAuthenticator,
-      });
-
-      setStep("Waiting for confirmation...");
-
-      // Wait for transaction
-      await aptos.waitForTransaction({
-        transactionHash: pending.hash,
-        options: { checkSuccess: true },
-      });
-
-      setTxHash(pending.hash);
+    if (result.success) {
+      setTxHash(result.txHash || "");
       setStep("");
 
-      // Call onSuccess callback to refresh data
       if (onSuccess) {
         onSuccess();
       }
 
-      // Only close modal if not in inline mode (for chat, keep it open)
       if (!inline) {
         setTimeout(() => {
           onClose();
@@ -502,18 +160,16 @@ export function EchelonSupplyModal({
           setTxHash(null);
         }, 2000);
       } else {
-        // In inline mode, just reset the amount but keep the card visible
         setTimeout(() => {
           setAmount("");
         }, 2000);
       }
-    } catch (err: any) {
-      console.error("Supply error:", err);
-      setError(err.message || "Transaction failed");
+    } else {
+      setError(result.error || "Transaction failed");
       setStep("");
-    } finally {
-      setSubmitting(false);
     }
+
+    setSubmitting(false);
   };
 
   if (!isOpen || !asset) {

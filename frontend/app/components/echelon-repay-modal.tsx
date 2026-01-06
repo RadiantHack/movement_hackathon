@@ -3,17 +3,7 @@
 import { useState, useMemo } from "react";
 import { usePrivy, WalletWithMetadata } from "@privy-io/react-auth";
 import { useSignRawHash } from "@privy-io/react-auth/extended-chains";
-import {
-  Aptos,
-  AptosConfig,
-  Network,
-  AccountAuthenticatorEd25519,
-  Ed25519PublicKey,
-  Ed25519Signature,
-  generateSigningMessageForTransaction,
-  ChainId,
-} from "@aptos-labs/ts-sdk";
-import { toHex } from "viem";
+import { executeRepayTransaction } from "../hooks/useEchelonTransactions";
 
 interface RepayAsset {
   symbol: string;
@@ -35,29 +25,6 @@ interface EchelonRepayModalProps {
 
 const ECHELON_CONTRACT =
   "0x6a01d5761d43a5b5a0ccbfc42edf2d02c0611464aae99a2ea0e0d4819f0550b5";
-
-const TYPE_ARGUMENTS: Record<string, string> = {
-  MOVE: "0x1::aptos_coin::AptosCoin",
-  USDC: "0x83121c9f9b0527d1f056e21a950d6bf3b9e9e2e8353d0e95ccea726713cbea39",
-  USDT: "0x447721a30109c662dde9c73a0c2c9c9c459fb5e5a9c92f03c50fa69737f5d08d",
-  WBTC: "0xb06f29f24dde9c6daeec1f930f14a441a8d6c0fbea590725e88b340af3e1939c",
-  WETH: "0x908828f4fb0213d4034c3ded1630bbd904e8a3a6bf3c63270887f0b06653a376",
-  LBTC: "0x658f4ef6f76c8eeffdc06a30946f3f06723a7f9532e2413312b2a612183759c",
-  SolvBTC: "0x527c43638a6c389a9ad702e7085f31c48223624d5102a5207dfab861f482c46d",
-  ezETH: "0x2f6af255328fe11b88d840d1e367e946ccd16bd7ebddd6ee7e2ef9f7ae0c53ef",
-  sUSDe: "0x74f0c7504507f7357f8a218cc70ce3fc0f4b4e9eb8474e53ca778cb1e0c6dcc5",
-  rsETH: "0x51ffc9885233adf3dd411078cad57535ed1982013dc82d9d6c433a55f2e0035d",
-};
-
-const MOVEMENT_RPC = "https://mainnet.movementnetwork.xyz/v1";
-const MOVEMENT_CHAIN_ID = 126;
-
-const aptos = new Aptos(
-  new AptosConfig({
-    network: Network.CUSTOM,
-    fullnode: MOVEMENT_RPC,
-  })
-);
 
 export function EchelonRepayModal({
   isOpen,
@@ -172,199 +139,43 @@ export function EchelonRepayModal({
     setTxHash(null);
 
     try {
-      const senderAddress = movementWallet.address as string;
-      const publicKey = (movementWallet as any).publicKey as string;
-
-      console.log("[Repay] Wallet info", {
-        senderAddress: !!senderAddress,
-        publicKey: !!publicKey,
+      const result = await executeRepayTransaction({
+        asset: {
+          symbol: asset.symbol,
+          decimals: asset.decimals,
+          marketAddress: asset.marketAddress,
+          faAddress: asset.faAddress,
+        },
+        amount: numericAmount,
+        maxRepayable: debtAmount,
+        movementWallet: movementWallet as any,
+        publicKey: (movementWallet as any).publicKey as string,
+        signRawHash,
+        onStepChange: setStep,
       });
 
-      if (!senderAddress || !publicKey) {
-        throw new Error("Wallet address or public key not found");
-      }
+      if (result.success && result.txHash) {
+        setTxHash(result.txHash);
+        setStep("");
 
-      // Determine if it's a fungible asset
-      // MOVE is a coin, everything else with faAddress is a fungible asset
-      const isFungibleAsset = asset.symbol !== "MOVE" && !!asset.faAddress;
+        // Call onSuccess callback to refresh data
+        if (onSuccess) {
+          onSuccess();
+        }
 
-      console.log("[Repay] Asset details", {
-        symbol: asset.symbol,
-        marketAddress: asset.marketAddress,
-        faAddress: asset.faAddress,
-        isFungibleAsset,
-        debtAmount,
-        numericAmount,
-      });
-
-      // Convert amount to smallest unit
-      const rawAmount = Math.floor(
-        numericAmount * Math.pow(10, asset.decimals)
-      ).toString();
-
-      console.log("[Repay] Amount conversion", {
-        numericAmount,
-        decimals: asset.decimals,
-        rawAmount,
-      });
-
-      setStep("Building transaction...");
-
-      // Use repay_all when repaying 100%, otherwise use repay with amount
-      const isRepayAll = percentage >= 99.9;
-
-      // Build the transaction payload
-      // Use repay_fa/repay_all_fa for fungible assets, repay/repay_all for coins
-      let functionName: `${string}::${string}::${string}`;
-      let typeArguments: string[] | undefined = undefined;
-      let functionArguments: any[];
-
-      if (isFungibleAsset && asset.faAddress) {
-        // For fungible assets, use repay_fa or repay_all_fa (no type arguments needed)
-        functionName = isRepayAll
-          ? (`${ECHELON_CONTRACT}::scripts::repay_all_fa` as `${string}::${string}::${string}`)
-          : (`${ECHELON_CONTRACT}::scripts::repay_fa` as `${string}::${string}::${string}`);
-
-        // repay_fa params: &signer, Object<Market>, u64
-        // repay_all_fa params: &signer, Object<Market>
-        // Pass market address directly - SDK handles Object wrapping
-        functionArguments = isRepayAll
-          ? [asset.marketAddress]
-          : [asset.marketAddress, rawAmount];
+        // Close modal after a delay
+        setTimeout(() => {
+          onClose();
+          setAmount("");
+          setTxHash(null);
+        }, 2000);
       } else {
-        // For coins (like MOVE), use repay or repay_all with type argument
-        const typeArgument = TYPE_ARGUMENTS[asset.symbol];
-        if (!typeArgument) {
-          throw new Error(
-            `Unsupported asset: ${asset.symbol}. Type argument not found.`
-          );
-        }
-        functionName = isRepayAll
-          ? (`${ECHELON_CONTRACT}::scripts::repay_all` as `${string}::${string}::${string}`)
-          : (`${ECHELON_CONTRACT}::scripts::repay` as `${string}::${string}::${string}`);
-
-        typeArguments = [typeArgument];
-        // repay params: &signer, Object<Market>, u64
-        // repay_all params: &signer, Object<Market>
-        functionArguments = isRepayAll
-          ? [asset.marketAddress]
-          : [asset.marketAddress, rawAmount];
+        setError(result.error || "Transaction failed");
+        setStep("");
       }
-
-      console.log("[Repay] Building transaction", {
-        functionName,
-        typeArguments,
-        marketAddress: asset.marketAddress,
-        functionArguments,
-        isRepayAll,
-        isFungibleAsset,
-      });
-
-      const transactionData: any = {
-        function: functionName,
-        functionArguments,
-      };
-
-      // Only add typeArguments if they exist (for coin types, not fungible assets)
-      if (typeArguments && typeArguments.length > 0) {
-        transactionData.typeArguments = typeArguments;
-      }
-
-      const rawTxn = await aptos.transaction.build.simple({
-        sender: senderAddress,
-        data: transactionData,
-      });
-
-      const txnObj = rawTxn as any;
-      if (txnObj.rawTransaction) {
-        txnObj.rawTransaction.chain_id = new ChainId(MOVEMENT_CHAIN_ID);
-      }
-
-      console.log("[Repay] Transaction built successfully");
-
-      setStep("Waiting for signature...");
-
-      const message = generateSigningMessageForTransaction(rawTxn);
-      const hash = toHex(message);
-
-      const signatureResponse = await signRawHash({
-        address: senderAddress,
-        chainType: "aptos",
-        hash: hash as `0x${string}`,
-      });
-
-      setStep("Submitting transaction...");
-
-      // Create authenticator
-      let pubKeyNoScheme = publicKey.startsWith("0x")
-        ? publicKey.slice(2)
-        : publicKey;
-      if (pubKeyNoScheme.startsWith("00") && pubKeyNoScheme.length > 64) {
-        pubKeyNoScheme = pubKeyNoScheme.slice(2);
-      }
-      if (pubKeyNoScheme.length !== 64) {
-        throw new Error(
-          `Invalid public key length: expected 64 hex characters (32 bytes), got ${pubKeyNoScheme.length}`
-        );
-      }
-      const publicKeyObj = new Ed25519PublicKey(`0x${pubKeyNoScheme}`);
-      const sig = new Ed25519Signature(signatureResponse.signature.slice(2));
-      const senderAuthenticator = new AccountAuthenticatorEd25519(
-        publicKeyObj,
-        sig
-      );
-
-      // Submit transaction
-      const pending = await aptos.transaction.submit.simple({
-        transaction: rawTxn,
-        senderAuthenticator,
-      });
-
-      setStep("Waiting for confirmation...");
-
-      // Wait for transaction
-      await aptos.waitForTransaction({
-        transactionHash: pending.hash,
-        options: { checkSuccess: true },
-      });
-
-      setTxHash(pending.hash);
-      setStep("");
-
-      // Call onSuccess callback to refresh data
-      if (onSuccess) {
-        onSuccess();
-      }
-
-      // Close modal after a delay
-      setTimeout(() => {
-        onClose();
-        setAmount("");
-        setTxHash(null);
-      }, 2000);
     } catch (err: any) {
-      console.error("[Repay] Error occurred:", err);
-      console.error("[Repay] Error details:", {
-        message: err.message,
-        stack: err.stack,
-        name: err.name,
-        fullError: err,
-      });
-
-      // Parse Move abort errors for better user experience
-      let errorMessage = err.message || "Transaction failed";
-
-      if (errorMessage.includes("Move abort")) {
-        const abortMatch = errorMessage.match(
-          /Move abort in .*?::(\w+):\s*(\w+)\(0x([0-9a-fA-F]+)\)/
-        );
-        if (abortMatch) {
-          const [, moduleName, errorName, errorCode] = abortMatch;
-          errorMessage = `Transaction failed: ${errorName} (Error code: 0x${errorCode}). Please check your balance and try again.`;
-        }
-      }
-
-      setError(errorMessage);
+      console.error("[Repay] Unexpected error:", err);
+      setError(err.message || "An unexpected error occurred");
       setStep("");
     } finally {
       setSubmitting(false);

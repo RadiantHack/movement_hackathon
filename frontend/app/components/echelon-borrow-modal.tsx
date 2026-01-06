@@ -3,17 +3,7 @@
 import { useState, useMemo } from "react";
 import { usePrivy, WalletWithMetadata } from "@privy-io/react-auth";
 import { useSignRawHash } from "@privy-io/react-auth/extended-chains";
-import {
-  Aptos,
-  AptosConfig,
-  Network,
-  AccountAuthenticatorEd25519,
-  Ed25519PublicKey,
-  Ed25519Signature,
-  generateSigningMessageForTransaction,
-  ChainId,
-} from "@aptos-labs/ts-sdk";
-import { toHex } from "viem";
+import { executeBorrowTransaction } from "@/app/hooks/useEchelonTransactions";
 
 interface EchelonAsset {
   symbol: string;
@@ -26,6 +16,7 @@ interface EchelonAsset {
   decimals?: number;
   market?: string;
   faAddress?: string; // Fungible asset address
+  marketAddress?: string;
 }
 
 interface EchelonBorrowModalProps {
@@ -41,10 +32,6 @@ interface EchelonBorrowModalProps {
   onSuccess?: () => void; // Callback after successful transaction
 }
 
-// Echelon contract address
-const ECHELON_CONTRACT =
-  "0x6a01d5761d43a5b5a0ccbfc42edf2d02c0611464aae99a2ea0e0d4819f0550b5";
-
 // Market addresses for each asset
 const MARKET_ADDRESSES: Record<string, string> = {
   MOVE: "0x568f96c4ed010869d810abcf348f4ff6b66d14ff09672fb7b5872e4881a25db7",
@@ -58,30 +45,6 @@ const MARKET_ADDRESSES: Record<string, string> = {
   sUSDe: "0x481fe68db505bc15973d0014c35217726efd6ee353d91a2a9faaac201f3423d",
   rsETH: "0x4cbeca747528f340ef9065c93dea0cc1ac8a46b759e31fc8b8d04bc52a86614b",
 };
-
-// Type arguments for each asset
-const TYPE_ARGUMENTS: Record<string, string> = {
-  MOVE: "0x1::aptos_coin::AptosCoin",
-  USDC: "0x83121c9f9b0527d1f056e21a950d6bf3b9e9e2e8353d0e95ccea726713cbea39",
-  USDT: "0x447721a30109c662dde9c73a0c2c9c9c459fb5e5a9c92f03c50fa69737f5d08d",
-  WBTC: "0xb06f29f24dde9c6daeec1f930f14a441a8d6c0fbea590725e88b340af3e1939c",
-  WETH: "0x908828f4fb0213d4034c3ded1630bbd904e8a3a6bf3c63270887f0b06653a376",
-  LBTC: "0x658f4ef6f76c8eeffdc06a30946f3f06723a7f9532e2413312b2a612183759c",
-  SolvBTC: "0x527c43638a6c389a9ad702e7085f31c48223624d5102a5207dfab861f482c46d",
-  ezETH: "0x2f6af255328fe11b88d840d1e367e946ccd16bd7ebddd6ee7e2ef9f7ae0c53ef",
-  sUSDe: "0x74f0c7504507f7357f8a218cc70ce3fc0f4b4e9eb8474e53ca778cb1e0c6dcc5",
-  rsETH: "0x51ffc9885233adf3dd411078cad57535ed1982013dc82d9d6c433a55f2e0035d",
-};
-
-const MOVEMENT_RPC = "https://mainnet.movementnetwork.xyz/v1";
-const MOVEMENT_CHAIN_ID = 126;
-
-const aptos = new Aptos(
-  new AptosConfig({
-    network: Network.CUSTOM,
-    fullnode: MOVEMENT_RPC,
-  })
-);
 
 export function EchelonBorrowModal({
   isOpen,
@@ -155,37 +118,21 @@ export function EchelonBorrowModal({
   };
 
   const handleBorrow = async () => {
-    console.log("[Borrow] handleBorrow called", {
-      asset,
-      numericAmount,
-      availableBalance,
-    });
-
     if (!asset || numericAmount <= 0) {
-      console.log("[Borrow] Validation failed", {
-        asset: !!asset,
-        numericAmount,
-      });
       setError("Please enter a valid amount to borrow");
       return;
     }
 
     if (!movementWallet) {
-      console.log("[Borrow] No wallet connected");
       setError("Please connect a Movement wallet");
       return;
     }
 
     // Validate that user has collateral
     if (!hasCollateral && totalSupplyBalance <= 0) {
-      const errorMsg =
-        "You need to supply collateral before you can borrow. Please supply assets first.";
-      console.log("[Borrow] No collateral", {
-        hasCollateral,
-        totalSupplyBalance,
-      });
-      setError(errorMsg);
-      setSubmitting(false);
+      setError(
+        "You need to supply collateral before you can borrow. Please supply assets first."
+      );
       return;
     }
 
@@ -197,27 +144,14 @@ export function EchelonBorrowModal({
       } else {
         errorMsg = `Insufficient borrowing power. You have ${totalBorrowBalance.toFixed(2)} USD borrowed against ${totalSupplyBalance.toFixed(2)} USD collateral. Please supply more assets or repay existing borrows.`;
       }
-      console.log("[Borrow] No borrowing power", {
-        hasCollateral,
-        totalSupplyBalance,
-        totalBorrowBalance,
-        availableBalance,
-      });
       setError(errorMsg);
-      setSubmitting(false);
       return;
     }
 
     if (numericAmount > availableBalance) {
-      const errorMsg = `Insufficient borrowing power. You can borrow up to ${availableBalance.toFixed(6)} ${asset.symbol} based on your collateral.`;
-      console.log("[Borrow] Borrowing power check failed", {
-        numericAmount,
-        availableBalance,
-        totalSupplyBalance,
-        totalBorrowBalance,
-      });
-      setError(errorMsg);
-      setSubmitting(false);
+      setError(
+        `Insufficient borrowing power. You can borrow up to ${availableBalance.toFixed(6)} ${asset.symbol} based on your collateral.`
+      );
       return;
     }
 
@@ -225,213 +159,44 @@ export function EchelonBorrowModal({
     setError(null);
     setTxHash(null);
 
-    try {
-      const senderAddress = movementWallet.address as string;
-      const publicKey = (movementWallet as any).publicKey as string;
+    const marketAddress =
+      asset.market ||
+      MARKET_ADDRESSES[asset.symbol] ||
+      asset.marketAddress ||
+      "";
 
-      console.log("[Borrow] Wallet info", {
-        senderAddress: !!senderAddress,
-        publicKey: !!publicKey,
-      });
+    if (!marketAddress) {
+      setError(`Market address not found for ${asset.symbol}`);
+      setSubmitting(false);
+      return;
+    }
 
-      if (!senderAddress || !publicKey) {
-        throw new Error("Wallet address or public key not found");
-      }
-
-      // Get market address and determine if it's a fungible asset
-      const marketAddress = asset.market || MARKET_ADDRESSES[asset.symbol];
-      // MOVE is a coin, everything else with faAddress is a fungible asset
-      const isFungibleAsset = asset.symbol !== "MOVE" && !!asset.faAddress;
-
-      console.log("[Borrow] Asset details", {
+    const result = await executeBorrowTransaction({
+      asset: {
         symbol: asset.symbol,
-        market: asset.market,
+        decimals: asset.decimals || 8,
         marketAddress,
         faAddress: asset.faAddress,
-        isFungibleAsset,
-      });
+      },
+      amount: numericAmount,
+      availableBalance,
+      hasCollateral,
+      totalSupplyBalance,
+      totalBorrowBalance,
+      movementWallet,
+      publicKey: (movementWallet as any).publicKey,
+      signRawHash,
+      onStepChange: setStep,
+    });
 
-      if (!marketAddress) {
-        throw new Error(
-          `Unsupported asset: ${asset.symbol}. Market address not found.`
-        );
-      }
-
-      // Convert amount to smallest unit (8 decimals for most assets)
-      // Use the same approach as supply modal for consistency
-      const decimals = asset.decimals || 8;
-      const maxU64 = BigInt("18446744073709551615"); // Maximum u64 value
-      const maxAmount = Number(maxU64) / Math.pow(10, decimals);
-
-      // Validate input amount first - ensure it's within safe range
-      if (numericAmount > maxAmount) {
-        throw new Error(
-          `Amount too large. Maximum borrowable amount is ${maxAmount.toFixed(decimals)} ${asset.symbol}`
-        );
-      }
-
-      if (numericAmount <= 0) {
-        throw new Error("Amount must be greater than 0");
-      }
-
-      // Use Math.floor like supply modal does, but validate the result
-      // This works for amounts within JavaScript's safe integer range
-      const multiplier = Math.pow(10, decimals);
-
-      // Check if the calculation would exceed safe integer range
-      if (numericAmount * multiplier > Number.MAX_SAFE_INTEGER) {
-        throw new Error(`Amount too large. Please use a smaller amount.`);
-      }
-
-      const rawAmountNum = Math.floor(numericAmount * multiplier);
-
-      // Validate the result is within u64 range
-      const maxU64Num = Number(maxU64);
-      if (rawAmountNum > maxU64Num || !Number.isSafeInteger(rawAmountNum)) {
-        throw new Error(
-          `Amount too large. Maximum borrowable amount is ${maxAmount.toFixed(decimals)} ${asset.symbol}`
-        );
-      }
-
-      if (rawAmountNum <= 0) {
-        throw new Error("Amount must be greater than 0");
-      }
-
-      // Convert to string (Aptos SDK accepts string for u64)
-      const rawAmount = rawAmountNum.toString();
-
-      console.log("[Borrow] Amount conversion", {
-        numericAmount,
-        decimals,
-        rawAmount,
-        rawAmountNum,
-        maxU64: maxU64.toString(),
-        isValid: rawAmountNum <= Number(maxU64),
-      });
-
-      setStep("Building transaction...");
-
-      // Build the transaction payload
-      // Use borrow_fa for fungible assets, borrow for coins
-      let functionName: `${string}::${string}::${string}`;
-      let typeArguments: string[] | undefined = undefined;
-      let functionArguments: any[];
-
-      if (isFungibleAsset && asset.faAddress) {
-        // For fungible assets, use borrow_fa (no type arguments needed)
-        // Based on actual payload structure: borrow_fa takes Object<Market> and u64
-        // The SDK will automatically wrap the address in Object format
-        functionName =
-          `${ECHELON_CONTRACT}::scripts::borrow_fa` as `${string}::${string}::${string}`;
-        // borrow_fa params: &signer, Object<Market>, u64
-        // Pass market address directly - SDK handles Object wrapping
-        functionArguments = [marketAddress, rawAmount];
-      } else {
-        // For coins (like MOVE), use borrow with type argument
-        const typeArgument = TYPE_ARGUMENTS[asset.symbol];
-        if (!typeArgument) {
-          throw new Error(
-            `Unsupported asset: ${asset.symbol}. Type argument not found.`
-          );
-        }
-        functionName =
-          `${ECHELON_CONTRACT}::scripts::borrow` as `${string}::${string}::${string}`;
-        typeArguments = [typeArgument];
-        // borrow params: &signer, Object<Market>, u64
-        functionArguments = [marketAddress, rawAmount];
-      }
-
-      console.log("[Borrow] Building transaction", {
-        functionName,
-        typeArguments,
-        functionArguments,
-        isFungibleAsset,
-      });
-
-      const transactionData: any = {
-        function: functionName,
-        functionArguments,
-      };
-
-      // Only add typeArguments if they exist (for coin types, not fungible assets)
-      if (typeArguments && typeArguments.length > 0) {
-        transactionData.typeArguments = typeArguments;
-      }
-
-      const rawTxn = await aptos.transaction.build.simple({
-        sender: senderAddress,
-        data: transactionData,
-      });
-
-      console.log("[Borrow] Transaction built successfully");
-
-      // Override chain ID
-      const txnObj = rawTxn as any;
-      if (txnObj.rawTransaction) {
-        txnObj.rawTransaction.chain_id = new ChainId(MOVEMENT_CHAIN_ID);
-      }
-
-      setStep("Waiting for signature...");
-
-      // Generate signing message
-      const message = generateSigningMessageForTransaction(rawTxn);
-      const hash = toHex(message);
-
-      // Sign using Privy
-      const signatureResponse = await signRawHash({
-        address: senderAddress,
-        chainType: "aptos",
-        hash: hash as `0x${string}`,
-      });
-
-      setStep("Submitting transaction...");
-
-      // Create authenticator
-      // Privy public key format: "004a4b8e35..." or "0x004a4b8e35..."
-      // We need to drop the "00" prefix to get the actual 32-byte key
-      let pubKeyNoScheme = publicKey.startsWith("0x")
-        ? publicKey.slice(2)
-        : publicKey;
-      // Remove leading "00" if present (Privy adds this prefix)
-      if (pubKeyNoScheme.startsWith("00") && pubKeyNoScheme.length > 64) {
-        pubKeyNoScheme = pubKeyNoScheme.slice(2);
-      }
-      // Ensure we have exactly 64 hex characters (32 bytes)
-      if (pubKeyNoScheme.length !== 64) {
-        throw new Error(
-          `Invalid public key length: expected 64 hex characters (32 bytes), got ${pubKeyNoScheme.length}`
-        );
-      }
-      const publicKeyObj = new Ed25519PublicKey(`0x${pubKeyNoScheme}`);
-      const sig = new Ed25519Signature(signatureResponse.signature.slice(2));
-      const senderAuthenticator = new AccountAuthenticatorEd25519(
-        publicKeyObj,
-        sig
-      );
-
-      // Submit transaction
-      const pending = await aptos.transaction.submit.simple({
-        transaction: rawTxn,
-        senderAuthenticator,
-      });
-
-      setStep("Waiting for confirmation...");
-
-      // Wait for transaction
-      await aptos.waitForTransaction({
-        transactionHash: pending.hash,
-        options: { checkSuccess: true },
-      });
-
-      setTxHash(pending.hash);
+    if (result.success) {
+      setTxHash(result.txHash || "");
       setStep("");
 
-      // Call onSuccess callback to refresh data
       if (onSuccess) {
         onSuccess();
       }
 
-      // Only close modal if not in inline mode (for chat, keep it open)
       if (!inline) {
         setTimeout(() => {
           onClose();
@@ -439,64 +204,16 @@ export function EchelonBorrowModal({
           setTxHash(null);
         }, 2000);
       } else {
-        // In inline mode, just reset the amount but keep the card visible
         setTimeout(() => {
           setAmount("");
         }, 2000);
       }
-    } catch (err: any) {
-      console.error("[Borrow] Error occurred:", err);
-      console.error("[Borrow] Error details:", {
-        message: err.message,
-        stack: err.stack,
-        name: err.name,
-        fullError: err,
-      });
-
-      // Parse Move abort errors for better user experience
-      let errorMessage = err.message || "Transaction failed";
-
-      // Check for Move abort errors
-      if (errorMessage.includes("ERR_LENDING_INSUFFICIENT_BORROW_POWER")) {
-        errorMessage =
-          "Insufficient borrowing power. You don't have enough collateral to borrow this amount. Please supply more assets or reduce the borrow amount.";
-      } else if (errorMessage.includes("Move abort")) {
-        // Try to extract the error code and name
-        const abortMatch = errorMessage.match(
-          /Move abort in .*?::(\w+):\s*(\w+)\(0x([0-9a-fA-F]+)\)/
-        );
-        if (abortMatch) {
-          const [, moduleName, errorName, errorCode] = abortMatch;
-          if (errorName === "ERR_LENDING_INSUFFICIENT_BORROW_POWER") {
-            errorMessage =
-              "Insufficient borrowing power. You don't have enough collateral to borrow this amount. Please supply more assets or reduce the borrow amount.";
-          } else {
-            errorMessage = `Transaction failed: ${errorName} (Error code: 0x${errorCode}). Please check your collateral and try again.`;
-          }
-        }
-      }
-
-      // Check if error is from transaction wait
-      if (
-        errorMessage.includes("Transaction") &&
-        errorMessage.includes("failed")
-      ) {
-        // Try to extract more details from the error
-        const detailsMatch = errorMessage.match(/failed with an error: (.+)/);
-        if (detailsMatch) {
-          const details = detailsMatch[1];
-          if (details.includes("ERR_LENDING_INSUFFICIENT_BORROW_POWER")) {
-            errorMessage =
-              "Insufficient borrowing power. You don't have enough collateral to borrow this amount. Please supply more assets or reduce the borrow amount.";
-          }
-        }
-      }
-
-      setError(errorMessage);
+    } else {
+      setError(result.error || "Transaction failed");
       setStep("");
-    } finally {
-      setSubmitting(false);
     }
+
+    setSubmitting(false);
   };
 
   const content = (
