@@ -82,19 +82,12 @@ export async function executeTransfer({
       data: {
         function: "0x1::primary_fungible_store::transfer",
         typeArguments: ["0x1::fungible_asset::Metadata"],
-        functionArguments: [
-          assetType,
-          recipientAddress,
-          amountInSmallestUnit,
-        ],
+        functionArguments: [assetType, recipientAddress, amountInSmallestUnit],
       },
     });
   }
 
-  const txnObj = rawTxn as unknown as Record<
-    string,
-    Record<string, unknown>
-  >;
+  const txnObj = rawTxn as unknown as Record<string, Record<string, unknown>>;
   if (txnObj.rawTransaction) {
     const chainIdObj = new ChainId(movementChainId);
     (txnObj.rawTransaction as Record<string, unknown>).chain_id = chainIdObj;

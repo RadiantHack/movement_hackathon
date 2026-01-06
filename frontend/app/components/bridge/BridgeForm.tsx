@@ -157,8 +157,11 @@ export default function BridgeForm({ walletAddress }: BridgeFormProps) {
       const pubKeyNoScheme = senderPubKeyWithScheme.slice(2);
 
       const parsedAmount = parseFloat(amount);
-      if (isNaN(parsedAmount) || parsedAmount <= 0) throw new Error("Invalid amount");
-      const amountLd = BigInt(Math.floor(parsedAmount * Math.pow(10, tokenDecimals)));
+      if (isNaN(parsedAmount) || parsedAmount <= 0)
+        throw new Error("Invalid amount");
+      const amountLd = BigInt(
+        Math.floor(parsedAmount * Math.pow(10, tokenDecimals))
+      );
       const minAmountLd = amountLd;
 
       const dstEid = 30101;
@@ -167,11 +170,18 @@ export default function BridgeForm({ walletAddress }: BridgeFormProps) {
 
       const extraOptionsHex = "0x00030100110100000000000000000000000000061a80";
       const extraOptionsBytes = Buffer.from(extraOptionsHex.slice(2), "hex");
-      const extraOptionsVector = Array.from(extraOptionsBytes).map((b) => b.toString());
+      const extraOptionsVector = Array.from(extraOptionsBytes).map((b) =>
+        b.toString()
+      );
 
       const composeMessageHex = "0x00";
-      const composeMessageBytes = Buffer.from(composeMessageHex.slice(2), "hex");
-      const composeMessageVector = Array.from(composeMessageBytes).map((b) => b.toString());
+      const composeMessageBytes = Buffer.from(
+        composeMessageHex.slice(2),
+        "hex"
+      );
+      const composeMessageVector = Array.from(composeMessageBytes).map((b) =>
+        b.toString()
+      );
 
       const oftCmdHex = "0x00";
       const oftCmdBytes = Buffer.from(oftCmdHex.slice(2), "hex");
@@ -217,21 +227,29 @@ export default function BridgeForm({ walletAddress }: BridgeFormProps) {
 
       const publicKey = new Ed25519PublicKey(`0x${pubKeyNoScheme}`);
       const sig = new Ed25519Signature(signatureResponse.signature.slice(2));
-      const senderAuthenticator = new AccountAuthenticatorEd25519(publicKey, sig);
+      const senderAuthenticator = new AccountAuthenticatorEd25519(
+        publicKey,
+        sig
+      );
 
       const pending = await aptos.transaction.submit.simple({
         transaction: rawTxn,
         senderAuthenticator,
       });
 
-      const executed = await aptos.waitForTransaction({ transactionHash: pending.hash });
+      const executed = await aptos.waitForTransaction({
+        transactionHash: pending.hash,
+      });
 
       alert(`Bridge transaction successful! Hash: ${executed.hash}`);
       setAmount("");
       setRecipientAddress("");
     } catch (error) {
       console.error("Bridge error:", error);
-      const errorMessage = error instanceof Error ? error.message : "Bridge failed. Please try again.";
+      const errorMessage =
+        error instanceof Error
+          ? error.message
+          : "Bridge failed. Please try again.";
       alert(`Bridge failed: ${errorMessage}`);
     } finally {
       setBridging(false);
@@ -254,15 +272,35 @@ export default function BridgeForm({ walletAddress }: BridgeFormProps) {
         }`}
       >
         <div className="relative w-12 h-12 rounded-xl bg-white dark:bg-zinc-800 flex items-center justify-center shadow-sm ring-1 ring-zinc-200 dark:ring-zinc-700 overflow-hidden">
-          {iconUrl ? <img src={iconUrl as string} alt={t.symbol} className="w-10 h-10 object-contain p-1" /> : null}
+          {iconUrl ? (
+            <img
+              src={iconUrl as string}
+              alt={t.symbol}
+              className="w-10 h-10 object-contain p-1"
+            />
+          ) : null}
         </div>
         <div className="text-left flex-1">
-          <div className="text-sm font-bold text-zinc-900 dark:text-zinc-50">{t.symbol}</div>
-          <div className="text-xs text-zinc-500 dark:text-zinc-400">{t.name}</div>
+          <div className="text-sm font-bold text-zinc-900 dark:text-zinc-50">
+            {t.symbol}
+          </div>
+          <div className="text-xs text-zinc-500 dark:text-zinc-400">
+            {t.name}
+          </div>
         </div>
         {token === t.symbol && (
-          <svg className="w-5 h-5 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+          <svg
+            className="w-5 h-5 text-blue-500"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M5 13l4 4L19 7"
+            />
           </svg>
         )}
       </button>
@@ -274,18 +312,34 @@ export default function BridgeForm({ walletAddress }: BridgeFormProps) {
       <div className="relative rounded-2xl p-6 sm:p-8 bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-700/50 shadow-xl shadow-zinc-200/50 dark:shadow-zinc-950/50 overflow-hidden">
         <div className="relative flex items-center gap-3 mb-6">
           <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-yellow-400 via-amber-500 to-blue-500 shadow-lg shadow-yellow-500/30">
-            <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+            <svg
+              className="w-6 h-6 text-white"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M13 10V3L4 14h7v7l9-11h-7z"
+              />
             </svg>
           </div>
           <div>
-            <h2 className="text-xl font-bold text-zinc-900 dark:text-zinc-50">Bridge to Ethereum</h2>
-            <p className="text-xs text-zinc-500 dark:text-zinc-400">Transfer assets from Movement Network</p>
+            <h2 className="text-xl font-bold text-zinc-900 dark:text-zinc-50">
+              Bridge to Ethereum
+            </h2>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400">
+              Transfer assets from Movement Network
+            </p>
           </div>
         </div>
 
         <div className="relative mb-4">
-          <label className="block text-[10px] font-bold uppercase tracking-widest text-zinc-400 dark:text-zinc-500 mb-2">Select Token</label>
+          <label className="block text-[10px] font-bold uppercase tracking-widest text-zinc-400 dark:text-zinc-500 mb-2">
+            Select Token
+          </label>
           <div className="relative">
             <button
               onClick={() => setShowTokenDropdown(!showTokenDropdown)}
@@ -298,19 +352,37 @@ export default function BridgeForm({ walletAddress }: BridgeFormProps) {
                     const iconUrl = getTokenIconUrl(selectedToken.symbol);
                     if (iconUrl) {
                       return (
-                        <img src={iconUrl as string} alt={selectedToken.symbol} className="w-10 h-10 object-contain p-1" />
+                        <img
+                          src={iconUrl as string}
+                          alt={selectedToken.symbol}
+                          className="w-10 h-10 object-contain p-1"
+                        />
                       );
                     }
                     return null;
                   })()}
                 </div>
                 <div className="text-left">
-                  <div className="text-sm font-bold text-zinc-900 dark:text-zinc-50">{selectedToken.symbol}</div>
-                  <div className="text-xs text-zinc-500 dark:text-zinc-400">{selectedToken.name}</div>
+                  <div className="text-sm font-bold text-zinc-900 dark:text-zinc-50">
+                    {selectedToken.symbol}
+                  </div>
+                  <div className="text-xs text-zinc-500 dark:text-zinc-400">
+                    {selectedToken.name}
+                  </div>
                 </div>
               </div>
-              <svg className={`w-5 h-5 text-zinc-400 transition-transform ${showTokenDropdown ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+              <svg
+                className={`w-5 h-5 text-zinc-400 transition-transform ${showTokenDropdown ? "rotate-180" : ""}`}
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M19 9l-7 7-7-7"
+                />
               </svg>
             </button>
 
@@ -323,7 +395,9 @@ export default function BridgeForm({ walletAddress }: BridgeFormProps) {
         </div>
 
         <div className="relative mb-4">
-          <label className="block text-[10px] font-bold uppercase tracking-widest text-zinc-400 dark:text-zinc-500 mb-2">Amount</label>
+          <label className="block text-[10px] font-bold uppercase tracking-widest text-zinc-400 dark:text-zinc-500 mb-2">
+            Amount
+          </label>
           <div className="rounded-xl border border-zinc-200 dark:border-zinc-700/50 bg-white dark:bg-zinc-900 p-4 shadow-sm">
             <div className="flex items-center gap-3">
               <input
@@ -338,7 +412,9 @@ export default function BridgeForm({ walletAddress }: BridgeFormProps) {
                 className="flex-1 min-w-0 bg-transparent text-2xl font-bold text-zinc-900 dark:text-zinc-50 placeholder-zinc-300 dark:placeholder-zinc-600 focus:outline-none"
                 disabled={bridging}
               />
-              <div className="text-sm font-semibold text-zinc-600 dark:text-zinc-400 px-3 py-2">{selectedToken.symbol}</div>
+              <div className="text-sm font-semibold text-zinc-600 dark:text-zinc-400 px-3 py-2">
+                {selectedToken.symbol}
+              </div>
             </div>
             <div className="mt-3 pt-3 border-t border-zinc-100 dark:border-zinc-800 flex items-center justify-between">
               <span className="text-xs text-zinc-400">
@@ -353,7 +429,9 @@ export default function BridgeForm({ walletAddress }: BridgeFormProps) {
                   if (balance) setAmount(balance);
                 }}
                 className="text-xs font-bold text-blue-500 hover:text-blue-600 dark:text-blue-400 dark:hover:text-blue-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                disabled={bridging || !balance || parseFloat(balance || "0") === 0}
+                disabled={
+                  bridging || !balance || parseFloat(balance || "0") === 0
+                }
               >
                 MAX
               </button>
@@ -362,7 +440,9 @@ export default function BridgeForm({ walletAddress }: BridgeFormProps) {
         </div>
 
         <div className="mb-2">
-          <label className="block text-[10px] font-bold uppercase tracking-widest text-zinc-400 dark:text-zinc-500 mb-2">Recipient (Ethereum)</label>
+          <label className="block text-[10px] font-bold uppercase tracking-widest text-zinc-400 dark:text-zinc-500 mb-2">
+            Recipient (Ethereum)
+          </label>
           <input
             type="text"
             value={recipientAddress}
@@ -376,7 +456,15 @@ export default function BridgeForm({ walletAddress }: BridgeFormProps) {
         <div className="mt-4">
           <button
             onClick={handleBridge}
-            disabled={!(amount && parseFloat(amount) > 0 && !bridging && recipientAddress && isValidEthereumAddress(recipientAddress))}
+            disabled={
+              !(
+                amount &&
+                parseFloat(amount) > 0 &&
+                !bridging &&
+                recipientAddress &&
+                isValidEthereumAddress(recipientAddress)
+              )
+            }
             className="w-full px-4 py-3 rounded-xl bg-blue-600 text-white font-semibold hover:bg-blue-700 disabled:opacity-60"
           >
             {bridging ? "Bridging..." : "Bridge"}

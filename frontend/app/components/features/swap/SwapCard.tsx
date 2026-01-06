@@ -43,7 +43,8 @@ export const SwapCard: React.FC<SwapCardProps> = ({
   const { ready, authenticated, user } = usePrivy();
   const { signRawHash } = useSignRawHash();
   const config = useMovementConfig();
-  const { refreshBalances, setWalletAddress: setBalanceContextWalletAddress } = useBalance();
+  const { refreshBalances, setWalletAddress: setBalanceContextWalletAddress } =
+    useBalance();
 
   // Create Aptos instance with config from Redux store
   const aptos = useMemo(() => {
@@ -127,7 +128,6 @@ export const SwapCard: React.FC<SwapCardProps> = ({
     }
     return symbol;
   };
-
 
   // Get full token info from token-constants for Mosaic API
   // Normalize USDC -> USDC.e and USDT -> USDT.e before lookup

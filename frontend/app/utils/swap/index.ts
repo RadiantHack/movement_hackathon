@@ -60,10 +60,7 @@ export async function executeSwap({
   });
 
   // Override chain ID to match Movement Network
-  const txnObj = rawTxn as unknown as Record<
-    string,
-    Record<string, unknown>
-  >;
+  const txnObj = rawTxn as unknown as Record<string, Record<string, unknown>>;
   if (txnObj.rawTransaction) {
     const chainIdObj = new ChainId(movementChainId);
     (txnObj.rawTransaction as Record<string, unknown>).chain_id = chainIdObj;

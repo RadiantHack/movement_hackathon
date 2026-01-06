@@ -2,12 +2,7 @@
 
 import React, { useState, useMemo, useEffect, useRef } from "react";
 import { usePrivy, WalletWithMetadata } from "@privy-io/react-auth";
-import {
-  Aptos,
-  AptosConfig,
-  Network,
-  ChainId,
-} from "@aptos-labs/ts-sdk";
+import { Aptos, AptosConfig, Network, ChainId } from "@aptos-labs/ts-sdk";
 import { useSignRawHash } from "@privy-io/react-auth/extended-chains";
 import { useMovementConfig } from "../hooks/useMovementConfig";
 import { Scanner } from "@yudiel/react-qr-scanner";
@@ -179,7 +174,7 @@ export const TransferForm: React.FC<TransferFormProps> = ({
 
       setTxHash(hash);
       onTransferComplete?.();
-      
+
       // Refresh balances from the centralized context
       await refreshBalances();
     } catch (err: unknown) {

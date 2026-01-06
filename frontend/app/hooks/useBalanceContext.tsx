@@ -1,6 +1,13 @@
 "use client";
 
-import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from "react";
+import React, {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  useCallback,
+  ReactNode,
+} from "react";
 import { TokenBalance } from "../types";
 
 interface BalanceContextType {
@@ -76,9 +83,7 @@ export function BalanceProvider({ children }: BalanceProviderProps) {
   };
 
   return (
-    <BalanceContext.Provider value={value}>
-      {children}
-    </BalanceContext.Provider>
+    <BalanceContext.Provider value={value}>{children}</BalanceContext.Provider>
   );
 }
 

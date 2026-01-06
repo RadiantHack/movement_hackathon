@@ -189,10 +189,15 @@ div.copilotKitMessages {
     background: transparent !important;
   }
 
-  /* Ensure input container has proper spacing */
+  /* Ensure input container has proper spacing and stays at bottom */
   .copilotKitInputContainer {
+    position: sticky !important;
+    bottom: 0 !important;
+    z-index: 10 !important;
+    background: inherit !important;
     margin-top: auto !important;
     padding-bottom: 0.5rem !important;
+    flex-shrink: 0 !important;
   }
 }
 
@@ -203,6 +208,11 @@ div.copilotKitMessages {
   flex: 1 !important;
   min-height: 0 !important;
   overflow: hidden !important;
+}
+
+/* Ensure input container wrapper maintains proper flex layout */
+.copilotKitChat > div:first-child > div:last-child {
+  flex-shrink: 0 !important;
 }
 
 /* Enable scrolling on the messages area */
@@ -226,6 +236,15 @@ div.copilotKitMessages {
   overflow-wrap: break-word !important;
   max-width: 100% !important;
   box-sizing: border-box !important;
+}
+
+/* Ensure input container stays at bottom */
+.copilotKitInputContainer {
+  position: sticky !important;
+  bottom: 0 !important;
+  z-index: 10 !important;
+  background: inherit !important;
+  flex-shrink: 0 !important;
 }
 
 /* Mobile-specific fixes for message visibility */
