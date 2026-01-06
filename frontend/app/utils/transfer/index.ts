@@ -8,7 +8,7 @@ import {
   AccountAddress,
 } from "@aptos-labs/ts-sdk";
 import { toHex } from "viem";
-import { TokenBalance } from "../types";
+import { TokenBalance } from "../../types";
 
 interface ExecuteTransferParams {
   aptos: Aptos;
