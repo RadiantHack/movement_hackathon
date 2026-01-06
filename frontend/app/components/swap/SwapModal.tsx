@@ -1,6 +1,5 @@
 "use client";
 
-import React from "react";
 import { SwapCard } from "../features/swap/SwapCard";
 import ModalShell from "../modal/ModalShell";
 
