@@ -187,10 +187,10 @@ const ChatInner = ({ walletAddress }: MovementChatProps) => {
       const target = e.target as HTMLElement;
       // Check if the focused element is the CopilotKit input (textarea or input)
       if (
-        target.closest('.copilotKitInput') ||
-        target.closest('.copilotKitInputContainer') ||
-        target.tagName === 'TEXTAREA' ||
-        target.tagName === 'INPUT'
+        target.closest(".copilotKitInput") ||
+        target.closest(".copilotKitInputContainer") ||
+        target.tagName === "TEXTAREA" ||
+        target.tagName === "INPUT"
       ) {
         setInputFocused(true);
       }
@@ -200,19 +200,19 @@ const ChatInner = ({ walletAddress }: MovementChatProps) => {
       const target = e.target as HTMLElement;
       // Only reset if blurring from the input area
       if (
-        target.closest('.copilotKitInput') ||
-        target.closest('.copilotKitInputContainer') ||
-        target.tagName === 'TEXTAREA' ||
-        target.tagName === 'INPUT'
+        target.closest(".copilotKitInput") ||
+        target.closest(".copilotKitInputContainer") ||
+        target.tagName === "TEXTAREA" ||
+        target.tagName === "INPUT"
       ) {
         // Small delay to check if focus moved to another input
         setTimeout(() => {
           const activeElement = document.activeElement;
           if (
-            !activeElement?.closest('.copilotKitInput') &&
-            !activeElement?.closest('.copilotKitInputContainer') &&
-            activeElement?.tagName !== 'TEXTAREA' &&
-            activeElement?.tagName !== 'INPUT'
+            !activeElement?.closest(".copilotKitInput") &&
+            !activeElement?.closest(".copilotKitInputContainer") &&
+            activeElement?.tagName !== "TEXTAREA" &&
+            activeElement?.tagName !== "INPUT"
           ) {
             setInputFocused(false);
           }
@@ -221,12 +221,12 @@ const ChatInner = ({ walletAddress }: MovementChatProps) => {
     };
 
     // Listen for focus events on the document
-    document.addEventListener('focusin', handleFocus);
-    document.addEventListener('focusout', handleBlur);
+    document.addEventListener("focusin", handleFocus);
+    document.addEventListener("focusout", handleBlur);
 
     return () => {
-      document.removeEventListener('focusin', handleFocus);
-      document.removeEventListener('focusout', handleBlur);
+      document.removeEventListener("focusin", handleFocus);
+      document.removeEventListener("focusout", handleBlur);
     };
   }, []);
 
@@ -914,11 +914,13 @@ const ChatInner = ({ walletAddress }: MovementChatProps) => {
         console.log("[MovementChat] Rendering EchelonSupplyModal:", {
           assetSymbol,
           hasEchelonAsset: !!echelonAsset,
-          echelonAsset: echelonAsset ? {
-            symbol: echelonAsset.symbol,
-            faAddress: echelonAsset.faAddress,
-            decimals: echelonAsset.decimals,
-          } : null,
+          echelonAsset: echelonAsset
+            ? {
+                symbol: echelonAsset.symbol,
+                faAddress: echelonAsset.faAddress,
+                decimals: echelonAsset.decimals,
+              }
+            : null,
           allEchelonAssets: Object.keys(echelonAssets),
         });
 
@@ -938,11 +940,7 @@ const ChatInner = ({ walletAddress }: MovementChatProps) => {
                 decimals: 8, // Default to 8 decimals if not found
               }
             }
-            availableBalance={
-              asset
-                ? availableBalances[assetSymbol] || 0
-                : 0
-            }
+            availableBalance={asset ? availableBalances[assetSymbol] || 0 : 0}
             onSuccess={async () => {
               // Refresh balances after successful supply
               await fetchAvailableBalances();
@@ -1105,7 +1103,10 @@ REMEMBER: The wallet address is ${walletAddress} - use it exactly as shown.`
           <>
             {supplyConfirmation.protocol === "moveposition" ? (
               <div className="my-3">
-                <LendCard walletAddress={walletAddress} asset={supplyConfirmation.asset} />
+                <LendCard
+                  walletAddress={walletAddress}
+                  asset={supplyConfirmation.asset}
+                />
               </div>
             ) : (
               (() => {
@@ -1113,16 +1114,21 @@ REMEMBER: The wallet address is ${walletAddress} - use it exactly as shown.`
                 const assetSymbol = supplyConfirmation.asset.toUpperCase();
                 const echelonAsset = echelonAssets[assetSymbol];
 
-                console.log("[MovementChat] Rendering EchelonSupplyModal (supplyConfirmation):", {
-                  assetSymbol,
-                  hasEchelonAsset: !!echelonAsset,
-                  echelonAsset: echelonAsset ? {
-                    symbol: echelonAsset.symbol,
-                    faAddress: echelonAsset.faAddress,
-                    decimals: echelonAsset.decimals,
-                  } : null,
-                  allEchelonAssets: Object.keys(echelonAssets),
-                });
+                console.log(
+                  "[MovementChat] Rendering EchelonSupplyModal (supplyConfirmation):",
+                  {
+                    assetSymbol,
+                    hasEchelonAsset: !!echelonAsset,
+                    echelonAsset: echelonAsset
+                      ? {
+                          symbol: echelonAsset.symbol,
+                          faAddress: echelonAsset.faAddress,
+                          decimals: echelonAsset.decimals,
+                        }
+                      : null,
+                    allEchelonAssets: Object.keys(echelonAssets),
+                  }
+                );
 
                 return (
                   <EchelonSupplyModal
@@ -1140,9 +1146,7 @@ REMEMBER: The wallet address is ${walletAddress} - use it exactly as shown.`
                         decimals: 8, // Default to 8 decimals if not found
                       }
                     }
-                    availableBalance={
-                      availableBalances[assetSymbol] || 0
-                    }
+                    availableBalance={availableBalances[assetSymbol] || 0}
                     onSuccess={async () => {
                       // Refresh balances after successful supply
                       await fetchAvailableBalances();

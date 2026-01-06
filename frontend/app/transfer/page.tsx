@@ -296,148 +296,83 @@ export default function TransferPage() {
 
   return (
     <AuthGuard>
-    <div className="flex min-h-screen bg-zinc-50 dark:bg-zinc-950">
-      <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+      <div className="flex min-h-screen bg-zinc-50 dark:bg-zinc-950">
+        <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
-      <main className="flex-1 overflow-auto">
-        <div className="sticky top-0 z-30 flex items-center justify-between border-b border-zinc-200 bg-zinc-50/80 p-4 backdrop-blur-sm dark:border-zinc-800 dark:bg-zinc-950/80 md:hidden">
-          <button
-            onClick={() => setSidebarOpen(true)}
-            className="rounded-md p-2 text-zinc-500 hover:bg-zinc-200 dark:text-zinc-400 dark:hover:bg-zinc-800"
-          >
-            <svg
-              className="h-5 w-5"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
+        <main className="flex-1 overflow-auto">
+          <div className="sticky top-0 z-30 flex items-center justify-between border-b border-zinc-200 bg-zinc-50/80 p-4 backdrop-blur-sm dark:border-zinc-800 dark:bg-zinc-950/80 md:hidden">
+            <button
+              onClick={() => setSidebarOpen(true)}
+              className="rounded-md p-2 text-zinc-500 hover:bg-zinc-200 dark:text-zinc-400 dark:hover:bg-zinc-800"
             >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M4 6h16M4 12h16M4 18h16"
-              />
-            </svg>
-          </button>
-          <h1 className="text-lg font-semibold text-zinc-950 dark:text-zinc-50">
-            Transfer
-          </h1>
-          <button
-            onClick={() => setRightSidebarOpen(true)}
-            className="rounded-md p-2 text-zinc-500 hover:bg-zinc-200 dark:text-zinc-400 dark:hover:bg-zinc-800"
-          >
-            <svg
-              className="h-5 w-5"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
-              />
-            </svg>
-          </button>
-        </div>
-
-        <div className="hidden border-b border-zinc-200 dark:border-zinc-800 md:block">
-          <div className="flex items-center justify-between px-8 py-4">
-            <h1 className="text-xl font-semibold text-zinc-950 dark:text-zinc-50">
-              Transfer Tokens
+              <svg
+                className="h-5 w-5"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M4 6h16M4 12h16M4 18h16"
+                />
+              </svg>
+            </button>
+            <h1 className="text-lg font-semibold text-zinc-950 dark:text-zinc-50">
+              Transfer
             </h1>
-            <ThemeToggle />
+            <button
+              onClick={() => setRightSidebarOpen(true)}
+              className="rounded-md p-2 text-zinc-500 hover:bg-zinc-200 dark:text-zinc-400 dark:hover:bg-zinc-800"
+            >
+              <svg
+                className="h-5 w-5"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
+                />
+              </svg>
+            </button>
           </div>
-        </div>
 
-        <div className="p-4 md:p-8">
-          <div className="mx-auto max-w-lg">
-            {loadingBalances ? (
-              <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-6 flex items-center justify-center min-h-[300px]">
-                <div className="flex flex-col items-center gap-3">
-                  <div className="h-8 w-8 animate-spin rounded-full border-2 border-zinc-300 border-t-purple-600 dark:border-zinc-700 dark:border-t-purple-400" />
-                  <span className="text-sm text-zinc-500 dark:text-zinc-400">
-                    Loading balances...
-                  </span>
-                </div>
-              </div>
-            ) : (
-              <div className="relative rounded-3xl border border-zinc-200/80 dark:border-zinc-700/50 bg-white dark:bg-zinc-900 p-8 shadow-xl shadow-zinc-200/50 dark:shadow-zinc-950/50 overflow-hidden">
-                {/* Background decoration */}
-                <div className="absolute -top-24 -right-24 w-48 h-48 bg-gradient-to-br from-purple-500/10 to-violet-500/10 rounded-full blur-3xl" />
-                <div className="absolute -bottom-24 -left-24 w-48 h-48 bg-gradient-to-tr from-purple-500/10 to-violet-500/10 rounded-full blur-3xl" />
+          <div className="hidden border-b border-zinc-200 dark:border-zinc-800 md:block">
+            <div className="flex items-center justify-between px-8 py-4">
+              <h1 className="text-xl font-semibold text-zinc-950 dark:text-zinc-50">
+                Transfer Tokens
+              </h1>
+              <ThemeToggle />
+            </div>
+          </div>
 
-                {/* Header */}
-                <div className="relative mb-8 flex items-center gap-3">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-purple-500 to-violet-600 shadow-lg shadow-purple-500/30">
-                    <svg
-                      className="h-6 w-6 text-white"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"
-                      />
-                    </svg>
-                  </div>
-                  <div>
-                    <h2 className="text-xl font-bold text-zinc-900 dark:text-zinc-50">
-                      Send Tokens
-                    </h2>
-                    <p className="text-sm text-zinc-500 dark:text-zinc-400">
-                      Transfer to any address
-                    </p>
+          <div className="p-4 md:p-8">
+            <div className="mx-auto max-w-lg">
+              {loadingBalances ? (
+                <div className="rounded-2xl border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 p-6 flex items-center justify-center min-h-[300px]">
+                  <div className="flex flex-col items-center gap-3">
+                    <div className="h-8 w-8 animate-spin rounded-full border-2 border-zinc-300 border-t-purple-600 dark:border-zinc-700 dark:border-t-purple-400" />
+                    <span className="text-sm text-zinc-500 dark:text-zinc-400">
+                      Loading balances...
+                    </span>
                   </div>
                 </div>
+              ) : (
+                <div className="relative rounded-3xl border border-zinc-200/80 dark:border-zinc-700/50 bg-white dark:bg-zinc-900 p-8 shadow-xl shadow-zinc-200/50 dark:shadow-zinc-950/50 overflow-hidden">
+                  {/* Background decoration */}
+                  <div className="absolute -top-24 -right-24 w-48 h-48 bg-gradient-to-br from-purple-500/10 to-violet-500/10 rounded-full blur-3xl" />
+                  <div className="absolute -bottom-24 -left-24 w-48 h-48 bg-gradient-to-tr from-purple-500/10 to-violet-500/10 rounded-full blur-3xl" />
 
-                {/* Token Selection */}
-                <div className="relative mb-6">
-                  <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400 mb-3">
-                    Select Token
-                  </label>
-                  <div className="relative">
-                    <button
-                      type="button"
-                      onClick={() => setTokenDropdownOpen(!tokenDropdownOpen)}
-                      className="w-full px-5 py-4 rounded-2xl border border-zinc-200 dark:border-zinc-700/50 bg-zinc-50/50 dark:bg-zinc-800/50 text-zinc-950 dark:text-zinc-50 outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500 transition-all cursor-pointer font-medium text-left flex items-center gap-4"
-                      disabled={!selectedToken}
-                    >
-                      {selectedToken ? (
-                        <>
-                          <div
-                            className={`flex h-10 w-10 items-center justify-center rounded-full text-white font-bold text-sm shadow-lg ${
-                              selectedToken.isNative
-                                ? "bg-gradient-to-br from-purple-500 to-violet-600 shadow-purple-500/20"
-                                : "bg-gradient-to-br from-zinc-500 to-zinc-600 shadow-zinc-500/20"
-                            }`}
-                          >
-                            {selectedToken.metadata.symbol.length <= 4
-                              ? selectedToken.metadata.symbol.charAt(0)
-                              : selectedToken.metadata.symbol
-                                  .substring(0, 2)
-                                  .toUpperCase()}
-                          </div>
-                          <div className="flex-1">
-                            <div className="font-semibold">
-                              {selectedToken.metadata.symbol}
-                            </div>
-                            <div className="text-xs text-zinc-500 dark:text-zinc-400">
-                              {selectedToken.metadata.name}
-                            </div>
-                          </div>
-                        </>
-                      ) : (
-                        <span className="text-zinc-500 dark:text-zinc-400">
-                          Select a token
-                        </span>
-                      )}
+                  {/* Header */}
+                  <div className="relative mb-8 flex items-center gap-3">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-purple-500 to-violet-600 shadow-lg shadow-purple-500/30">
                       <svg
-                        className={`w-5 h-5 text-zinc-400 transition-transform duration-200 ${tokenDropdownOpen ? "rotate-180" : ""}`}
+                        className="h-6 w-6 text-white"
                         fill="none"
                         viewBox="0 0 24 24"
                         stroke="currentColor"
@@ -446,181 +381,229 @@ export default function TransferPage() {
                           strokeLinecap="round"
                           strokeLinejoin="round"
                           strokeWidth={2}
-                          d="M19 9l-7 7-7-7"
+                          d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"
                         />
                       </svg>
-                    </button>
+                    </div>
+                    <div>
+                      <h2 className="text-xl font-bold text-zinc-900 dark:text-zinc-50">
+                        Send Tokens
+                      </h2>
+                      <p className="text-sm text-zinc-500 dark:text-zinc-400">
+                        Transfer to any address
+                      </p>
+                    </div>
+                  </div>
 
-                    {tokenDropdownOpen && balances.length > 0 && (
-                      <div
-                        ref={dropdownRef}
-                        className="absolute z-20 mt-2 w-full rounded-2xl border border-zinc-200 dark:border-zinc-700/50 bg-white dark:bg-zinc-900 shadow-2xl shadow-zinc-200/50 dark:shadow-zinc-950/50 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200 max-h-80 overflow-y-auto"
+                  {/* Token Selection */}
+                  <div className="relative mb-6">
+                    <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400 mb-3">
+                      Select Token
+                    </label>
+                    <div className="relative">
+                      <button
+                        type="button"
+                        onClick={() => setTokenDropdownOpen(!tokenDropdownOpen)}
+                        className="w-full px-5 py-4 rounded-2xl border border-zinc-200 dark:border-zinc-700/50 bg-zinc-50/50 dark:bg-zinc-800/50 text-zinc-950 dark:text-zinc-50 outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500 transition-all cursor-pointer font-medium text-left flex items-center gap-4"
+                        disabled={!selectedToken}
                       >
-                        {balances.map((balance) => (
-                          <button
-                            key={balance.assetType}
-                            type="button"
-                            onClick={(e) => {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              setSelectedToken(balance);
-                              setTokenDropdownOpen(false);
-                            }}
-                            className={`w-full px-5 py-4 flex items-center gap-4 hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors ${
-                              selectedToken?.assetType === balance.assetType
-                                ? "bg-purple-50 dark:bg-purple-900/20"
-                                : ""
-                            }`}
-                          >
+                        {selectedToken ? (
+                          <>
                             <div
                               className={`flex h-10 w-10 items-center justify-center rounded-full text-white font-bold text-sm shadow-lg ${
-                                balance.isNative
+                                selectedToken.isNative
                                   ? "bg-gradient-to-br from-purple-500 to-violet-600 shadow-purple-500/20"
                                   : "bg-gradient-to-br from-zinc-500 to-zinc-600 shadow-zinc-500/20"
                               }`}
                             >
-                              {balance.metadata.symbol.length <= 4
-                                ? balance.metadata.symbol.charAt(0)
-                                : balance.metadata.symbol
+                              {selectedToken.metadata.symbol.length <= 4
+                                ? selectedToken.metadata.symbol.charAt(0)
+                                : selectedToken.metadata.symbol
                                     .substring(0, 2)
                                     .toUpperCase()}
                             </div>
-                            <div className="flex-1 text-left">
-                              <div className="font-semibold text-zinc-900 dark:text-zinc-100">
-                                {balance.metadata.symbol}
+                            <div className="flex-1">
+                              <div className="font-semibold">
+                                {selectedToken.metadata.symbol}
                               </div>
                               <div className="text-xs text-zinc-500 dark:text-zinc-400">
-                                {balance.metadata.name}
+                                {selectedToken.metadata.name}
                               </div>
                             </div>
-                            <div className="text-right">
-                              <div className="font-semibold text-zinc-900 dark:text-zinc-100">
-                                {parseFloat(
-                                  balance.formattedAmount
-                                ).toLocaleString(undefined, {
-                                  minimumFractionDigits: 2,
-                                  maximumFractionDigits: 6,
-                                })}
-                              </div>
-                              <div className="text-xs text-zinc-500 dark:text-zinc-400">
-                                Balance
-                              </div>
-                            </div>
-                            {selectedToken?.assetType === balance.assetType && (
-                              <svg
-                                className="w-5 h-5 text-purple-500"
-                                fill="none"
-                                viewBox="0 0 24 24"
-                                stroke="currentColor"
+                          </>
+                        ) : (
+                          <span className="text-zinc-500 dark:text-zinc-400">
+                            Select a token
+                          </span>
+                        )}
+                        <svg
+                          className={`w-5 h-5 text-zinc-400 transition-transform duration-200 ${tokenDropdownOpen ? "rotate-180" : ""}`}
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M19 9l-7 7-7-7"
+                          />
+                        </svg>
+                      </button>
+
+                      {tokenDropdownOpen && balances.length > 0 && (
+                        <div
+                          ref={dropdownRef}
+                          className="absolute z-20 mt-2 w-full rounded-2xl border border-zinc-200 dark:border-zinc-700/50 bg-white dark:bg-zinc-900 shadow-2xl shadow-zinc-200/50 dark:shadow-zinc-950/50 overflow-hidden animate-in fade-in slide-in-from-top-2 duration-200 max-h-80 overflow-y-auto"
+                        >
+                          {balances.map((balance) => (
+                            <button
+                              key={balance.assetType}
+                              type="button"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                setSelectedToken(balance);
+                                setTokenDropdownOpen(false);
+                              }}
+                              className={`w-full px-5 py-4 flex items-center gap-4 hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors ${
+                                selectedToken?.assetType === balance.assetType
+                                  ? "bg-purple-50 dark:bg-purple-900/20"
+                                  : ""
+                              }`}
+                            >
+                              <div
+                                className={`flex h-10 w-10 items-center justify-center rounded-full text-white font-bold text-sm shadow-lg ${
+                                  balance.isNative
+                                    ? "bg-gradient-to-br from-purple-500 to-violet-600 shadow-purple-500/20"
+                                    : "bg-gradient-to-br from-zinc-500 to-zinc-600 shadow-zinc-500/20"
+                                }`}
                               >
-                                <path
-                                  strokeLinecap="round"
-                                  strokeLinejoin="round"
-                                  strokeWidth={2}
-                                  d="M5 13l4 4L19 7"
-                                />
-                              </svg>
-                            )}
-                          </button>
-                        ))}
+                                {balance.metadata.symbol.length <= 4
+                                  ? balance.metadata.symbol.charAt(0)
+                                  : balance.metadata.symbol
+                                      .substring(0, 2)
+                                      .toUpperCase()}
+                              </div>
+                              <div className="flex-1 text-left">
+                                <div className="font-semibold text-zinc-900 dark:text-zinc-100">
+                                  {balance.metadata.symbol}
+                                </div>
+                                <div className="text-xs text-zinc-500 dark:text-zinc-400">
+                                  {balance.metadata.name}
+                                </div>
+                              </div>
+                              <div className="text-right">
+                                <div className="font-semibold text-zinc-900 dark:text-zinc-100">
+                                  {parseFloat(
+                                    balance.formattedAmount
+                                  ).toLocaleString(undefined, {
+                                    minimumFractionDigits: 2,
+                                    maximumFractionDigits: 6,
+                                  })}
+                                </div>
+                                <div className="text-xs text-zinc-500 dark:text-zinc-400">
+                                  Balance
+                                </div>
+                              </div>
+                              {selectedToken?.assetType ===
+                                balance.assetType && (
+                                <svg
+                                  className="w-5 h-5 text-purple-500"
+                                  fill="none"
+                                  viewBox="0 0 24 24"
+                                  stroke="currentColor"
+                                >
+                                  <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth={2}
+                                    d="M5 13l4 4L19 7"
+                                  />
+                                </svg>
+                              )}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    {selectedToken && (
+                      <div className="mt-3 flex items-center justify-between px-1">
+                        <span className="text-sm text-zinc-500 dark:text-zinc-400">
+                          Available Balance
+                        </span>
+                        <span className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
+                          {parseFloat(
+                            selectedToken.formattedAmount
+                          ).toLocaleString(undefined, {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 6,
+                          })}{" "}
+                          {selectedToken.metadata.symbol}
+                        </span>
                       </div>
                     )}
                   </div>
-                  {selectedToken && (
-                    <div className="mt-3 flex items-center justify-between px-1">
-                      <span className="text-sm text-zinc-500 dark:text-zinc-400">
-                        Available Balance
-                      </span>
-                      <span className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">
-                        {parseFloat(
-                          selectedToken.formattedAmount
-                        ).toLocaleString(undefined, {
-                          minimumFractionDigits: 2,
-                          maximumFractionDigits: 6,
-                        })}{" "}
-                        {selectedToken.metadata.symbol}
-                      </span>
-                    </div>
-                  )}
-                </div>
 
-                {/* Recipient */}
-                <div className="relative mb-6">
-                  <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400 mb-3">
-                    Recipient Address
-                  </label>
-                  <div className="relative">
-                    <div className="absolute left-4 top-1/2 -translate-y-1/2">
-                      <svg
-                        className="w-5 h-5 text-zinc-400"
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
-                        />
-                      </svg>
-                    </div>
-                    <input
-                      type="text"
-                      value={recipient}
-                      onChange={(e) => setRecipient(e.target.value)}
-                      placeholder="0x..."
-                      className="w-full pl-12 pr-5 py-4 rounded-2xl border border-zinc-200 dark:border-zinc-700/50 bg-zinc-50/50 dark:bg-zinc-800/50 text-zinc-950 dark:text-zinc-50 placeholder:text-zinc-400 outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500 transition-all font-mono text-sm"
-                    />
-                  </div>
-                </div>
-
-                {/* Amount */}
-                <div className="relative mb-8">
-                  <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400 mb-3">
-                    Amount
-                  </label>
-                  <div className="relative">
-                    <input
-                      type="text"
-                      value={amount}
-                      onChange={(e) => setAmount(e.target.value)}
-                      placeholder="0.00"
-                      className="w-full px-5 py-4 rounded-2xl border border-zinc-200 dark:border-zinc-700/50 bg-zinc-50/50 dark:bg-zinc-800/50 text-zinc-950 dark:text-zinc-50 placeholder:text-zinc-400 outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500 transition-all text-lg font-semibold"
-                    />
-                    {selectedToken && (
-                      <button
-                        onClick={() => setAmount(selectedToken.formattedAmount)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 px-3 py-1.5 rounded-lg bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 text-xs font-bold uppercase tracking-wider hover:bg-purple-200 dark:hover:bg-purple-900/50 transition-colors"
-                      >
-                        Max
-                      </button>
-                    )}
-                  </div>
-                </div>
-
-                {error && (
-                  <div className="mb-6 p-4 rounded-2xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/50 text-sm text-red-700 dark:text-red-400 flex items-center gap-3">
-                    <svg
-                      className="w-5 h-5 flex-shrink-0"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                  {/* Recipient */}
+                  <div className="relative mb-6">
+                    <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400 mb-3">
+                      Recipient Address
+                    </label>
+                    <div className="relative">
+                      <div className="absolute left-4 top-1/2 -translate-y-1/2">
+                        <svg
+                          className="w-5 h-5 text-zinc-400"
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
+                          />
+                        </svg>
+                      </div>
+                      <input
+                        type="text"
+                        value={recipient}
+                        onChange={(e) => setRecipient(e.target.value)}
+                        placeholder="0x..."
+                        className="w-full pl-12 pr-5 py-4 rounded-2xl border border-zinc-200 dark:border-zinc-700/50 bg-zinc-50/50 dark:bg-zinc-800/50 text-zinc-950 dark:text-zinc-50 placeholder:text-zinc-400 outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500 transition-all font-mono text-sm"
                       />
-                    </svg>
-                    {error}
+                    </div>
                   </div>
-                )}
 
-                {txHash && (
-                  <div className="mb-6 p-4 rounded-2xl bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800/50 text-sm text-green-700 dark:text-green-400">
-                    <div className="flex items-center gap-3">
+                  {/* Amount */}
+                  <div className="relative mb-8">
+                    <label className="block text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400 mb-3">
+                      Amount
+                    </label>
+                    <div className="relative">
+                      <input
+                        type="text"
+                        value={amount}
+                        onChange={(e) => setAmount(e.target.value)}
+                        placeholder="0.00"
+                        className="w-full px-5 py-4 rounded-2xl border border-zinc-200 dark:border-zinc-700/50 bg-zinc-50/50 dark:bg-zinc-800/50 text-zinc-950 dark:text-zinc-50 placeholder:text-zinc-400 outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500 transition-all text-lg font-semibold"
+                      />
+                      {selectedToken && (
+                        <button
+                          onClick={() =>
+                            setAmount(selectedToken.formattedAmount)
+                          }
+                          className="absolute right-3 top-1/2 -translate-y-1/2 px-3 py-1.5 rounded-lg bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 text-xs font-bold uppercase tracking-wider hover:bg-purple-200 dark:hover:bg-purple-900/50 transition-colors"
+                        >
+                          Max
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {error && (
+                    <div className="mb-6 p-4 rounded-2xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/50 text-sm text-red-700 dark:text-red-400 flex items-center gap-3">
                       <svg
                         className="w-5 h-5 flex-shrink-0"
                         fill="none"
@@ -631,101 +614,18 @@ export default function TransferPage() {
                           strokeLinecap="round"
                           strokeLinejoin="round"
                           strokeWidth={2}
-                          d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                          d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
                         />
                       </svg>
-                      <span className="font-medium">Transfer successful!</span>
-                      <a
-                        href={`https://explorer.movementnetwork.xyz/txn/${txHash}?network=mainnet`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="ml-auto text-green-600 dark:text-green-400 hover:underline font-semibold"
-                      >
-                        View →
-                      </a>
+                      {error}
                     </div>
-                  </div>
-                )}
+                  )}
 
-                {step && (
-                  <div className="mb-6 p-4 rounded-2xl bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800/50 text-sm text-purple-700 dark:text-purple-400 flex items-center gap-3">
-                    <svg
-                      className="w-5 h-5 animate-spin flex-shrink-0"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                    >
-                      <circle
-                        className="opacity-25"
-                        cx="12"
-                        cy="12"
-                        r="10"
-                        stroke="currentColor"
-                        strokeWidth="4"
-                      />
-                      <path
-                        className="opacity-75"
-                        fill="currentColor"
-                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                      />
-                    </svg>
-                    <span className="font-medium">{step}</span>
-                  </div>
-                )}
-
-                <button
-                  onClick={handleTransfer}
-                  disabled={
-                    !selectedToken ||
-                    !recipient ||
-                    !amount ||
-                    parseFloat(amount) <= 0 ||
-                    submitting
-                  }
-                  className={`relative w-full py-4 rounded-2xl font-bold text-lg transition-all duration-300 overflow-hidden ${
-                    selectedToken &&
-                    recipient &&
-                    amount &&
-                    parseFloat(amount) > 0 &&
-                    !submitting
-                      ? "bg-gradient-to-r from-purple-600 to-violet-600 text-white shadow-xl shadow-purple-500/30 hover:shadow-2xl hover:shadow-purple-500/40 hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
-                      : "bg-zinc-100 dark:bg-zinc-800 text-zinc-400 dark:text-zinc-500 cursor-not-allowed"
-                  }`}
-                >
-                  {selectedToken &&
-                    recipient &&
-                    amount &&
-                    parseFloat(amount) > 0 &&
-                    !submitting && (
-                      <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/20 to-white/0 translate-x-[-100%] hover:translate-x-[100%] transition-transform duration-700" />
-                    )}
-                  <span className="relative flex items-center justify-center gap-2">
-                    {submitting ? (
-                      <>
+                  {txHash && (
+                    <div className="mb-6 p-4 rounded-2xl bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800/50 text-sm text-green-700 dark:text-green-400">
+                      <div className="flex items-center gap-3">
                         <svg
-                          className="w-5 h-5 animate-spin"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                        >
-                          <circle
-                            className="opacity-25"
-                            cx="12"
-                            cy="12"
-                            r="10"
-                            stroke="currentColor"
-                            strokeWidth="4"
-                          />
-                          <path
-                            className="opacity-75"
-                            fill="currentColor"
-                            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                          />
-                        </svg>
-                        Processing...
-                      </>
-                    ) : (
-                      <>
-                        <svg
-                          className="w-5 h-5"
+                          className="w-5 h-5 flex-shrink-0"
                           fill="none"
                           viewBox="0 0 24 24"
                           stroke="currentColor"
@@ -734,25 +634,130 @@ export default function TransferPage() {
                             strokeLinecap="round"
                             strokeLinejoin="round"
                             strokeWidth={2}
-                            d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"
+                            d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
                           />
                         </svg>
-                        Send {selectedToken?.metadata.symbol || "Tokens"}
-                      </>
-                    )}
-                  </span>
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-      </main>
+                        <span className="font-medium">
+                          Transfer successful!
+                        </span>
+                        <a
+                          href={`https://explorer.movementnetwork.xyz/txn/${txHash}?network=mainnet`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="ml-auto text-green-600 dark:text-green-400 hover:underline font-semibold"
+                        >
+                          View →
+                        </a>
+                      </div>
+                    </div>
+                  )}
 
-      <RightSidebar
-        isOpen={rightSidebarOpen}
-        onClose={() => setRightSidebarOpen(false)}
-      />
-    </div>
+                  {step && (
+                    <div className="mb-6 p-4 rounded-2xl bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800/50 text-sm text-purple-700 dark:text-purple-400 flex items-center gap-3">
+                      <svg
+                        className="w-5 h-5 animate-spin flex-shrink-0"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                      >
+                        <circle
+                          className="opacity-25"
+                          cx="12"
+                          cy="12"
+                          r="10"
+                          stroke="currentColor"
+                          strokeWidth="4"
+                        />
+                        <path
+                          className="opacity-75"
+                          fill="currentColor"
+                          d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                        />
+                      </svg>
+                      <span className="font-medium">{step}</span>
+                    </div>
+                  )}
+
+                  <button
+                    onClick={handleTransfer}
+                    disabled={
+                      !selectedToken ||
+                      !recipient ||
+                      !amount ||
+                      parseFloat(amount) <= 0 ||
+                      submitting
+                    }
+                    className={`relative w-full py-4 rounded-2xl font-bold text-lg transition-all duration-300 overflow-hidden ${
+                      selectedToken &&
+                      recipient &&
+                      amount &&
+                      parseFloat(amount) > 0 &&
+                      !submitting
+                        ? "bg-gradient-to-r from-purple-600 to-violet-600 text-white shadow-xl shadow-purple-500/30 hover:shadow-2xl hover:shadow-purple-500/40 hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
+                        : "bg-zinc-100 dark:bg-zinc-800 text-zinc-400 dark:text-zinc-500 cursor-not-allowed"
+                    }`}
+                  >
+                    {selectedToken &&
+                      recipient &&
+                      amount &&
+                      parseFloat(amount) > 0 &&
+                      !submitting && (
+                        <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/20 to-white/0 translate-x-[-100%] hover:translate-x-[100%] transition-transform duration-700" />
+                      )}
+                    <span className="relative flex items-center justify-center gap-2">
+                      {submitting ? (
+                        <>
+                          <svg
+                            className="w-5 h-5 animate-spin"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                          >
+                            <circle
+                              className="opacity-25"
+                              cx="12"
+                              cy="12"
+                              r="10"
+                              stroke="currentColor"
+                              strokeWidth="4"
+                            />
+                            <path
+                              className="opacity-75"
+                              fill="currentColor"
+                              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                            />
+                          </svg>
+                          Processing...
+                        </>
+                      ) : (
+                        <>
+                          <svg
+                            className="w-5 h-5"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              strokeWidth={2}
+                              d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"
+                            />
+                          </svg>
+                          Send {selectedToken?.metadata.symbol || "Tokens"}
+                        </>
+                      )}
+                    </span>
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </main>
+
+        <RightSidebar
+          isOpen={rightSidebarOpen}
+          onClose={() => setRightSidebarOpen(false)}
+        />
+      </div>
     </AuthGuard>
   );
 }

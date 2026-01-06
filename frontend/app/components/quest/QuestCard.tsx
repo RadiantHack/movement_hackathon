@@ -225,7 +225,9 @@ export const QuestCard: React.FC<QuestCardProps> = ({
         <div className="mb-2.5 p-2 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
           <p className="text-xs text-green-700 dark:text-green-300 font-medium flex items-center gap-1.5">
             <span>✓</span>
-            <span>Great! Action completed. Click below to continue to the next step.</span>
+            <span>
+              Great! Action completed. Click below to continue to the next step.
+            </span>
           </p>
         </div>
       )}

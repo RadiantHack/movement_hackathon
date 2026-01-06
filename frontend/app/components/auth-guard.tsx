@@ -13,10 +13,7 @@ interface AuthGuardProps {
  * AuthGuard component that ensures users are authenticated before accessing protected content.
  * Redirects to the landing page (or specified route) if not authenticated.
  */
-export function AuthGuard({
-  children,
-  redirectTo = "/",
-}: AuthGuardProps) {
+export function AuthGuard({ children, redirectTo = "/" }: AuthGuardProps) {
   const { ready, authenticated } = usePrivy();
   const router = useRouter();
 
@@ -47,4 +44,3 @@ export function AuthGuard({
   // User is authenticated, render children
   return <>{children}</>;
 }
-

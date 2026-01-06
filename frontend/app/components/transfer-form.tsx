@@ -658,7 +658,9 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
         onScanSuccess(address);
         onClose(); // Close modal after successful scan
       } else {
-        setError("Invalid address format. Please scan a valid Movement Network address (66 characters starting with 0x).");
+        setError(
+          "Invalid address format. Please scan a valid Movement Network address (66 characters starting with 0x)."
+        );
       }
     }
   };
@@ -666,15 +668,27 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
   const handleError = (error: unknown) => {
     console.error("QR Scanner error:", error);
     const errorMessage = error instanceof Error ? error.message : String(error);
-    
-    if (errorMessage.includes("NotAllowedError") || errorMessage.includes("Permission denied")) {
-      setError("Camera permission denied. Please allow camera access in Safari settings: Settings → Safari → Camera → Allow.");
+
+    if (
+      errorMessage.includes("NotAllowedError") ||
+      errorMessage.includes("Permission denied")
+    ) {
+      setError(
+        "Camera permission denied. Please allow camera access in Safari settings: Settings → Safari → Camera → Allow."
+      );
     } else if (errorMessage.includes("NotReadableError")) {
-      setError("Camera is being used by another application. Please close other apps using the camera.");
-    } else if (errorMessage.includes("NotFoundError") || errorMessage.includes("no camera")) {
+      setError(
+        "Camera is being used by another application. Please close other apps using the camera."
+      );
+    } else if (
+      errorMessage.includes("NotFoundError") ||
+      errorMessage.includes("no camera")
+    ) {
       setError("No camera found on this device.");
     } else {
-      setError(`Camera error: ${errorMessage}. Please ensure camera permissions are granted.`);
+      setError(
+        `Camera error: ${errorMessage}. Please ensure camera permissions are granted.`
+      );
     }
   };
 
@@ -708,7 +722,10 @@ const QRScannerModal: React.FC<QRScannerModalProps> = ({
 
         {/* Scanner Container */}
         <div className="p-4">
-          <div className="w-full rounded-lg overflow-hidden bg-zinc-100 dark:bg-zinc-800" style={{ minHeight: "300px", position: "relative" }}>
+          <div
+            className="w-full rounded-lg overflow-hidden bg-zinc-100 dark:bg-zinc-800"
+            style={{ minHeight: "300px", position: "relative" }}
+          >
             <div className="relative w-full" style={{ minHeight: "300px" }}>
               <Scanner
                 onScan={handleScan}
