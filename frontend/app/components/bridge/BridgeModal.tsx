@@ -15,10 +15,8 @@ export default function BridgeModal({
   if (!walletAddress) return null;
 
   return (
-    <ModalShell onClose={onClose} containerClass="max-w-4xl h-[80vh]">
-      <div className="w-full h-full overflow-auto">
-        <BridgeForm walletAddress={walletAddress} />
-      </div>
+    <ModalShell onClose={onClose} containerClass="max-w-md">
+      <BridgeForm walletAddress={walletAddress} />
     </ModalShell>
   );
 }

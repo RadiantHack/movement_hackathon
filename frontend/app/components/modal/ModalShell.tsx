@@ -25,11 +25,11 @@ export default function ModalShell({
       >
         <button
           onClick={onClose}
-          className="absolute top-4 right-4 z-10 text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors p-2 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800"
+          className="absolute top-3 right-3 sm:top-4 sm:right-4 z-10 text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors p-1.5 sm:p-2 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 active:scale-95"
           aria-label="Close modal"
         >
           <svg
-            className="w-6 h-6"
+            className="w-5 h-5 sm:w-6 sm:h-6"
             fill="none"
             stroke="currentColor"
             viewBox="0 0 24 24"
@@ -43,7 +43,7 @@ export default function ModalShell({
           </svg>
         </button>
 
-        <div className="p-6">{children}</div>
+        <div className="p-4 sm:p-6">{children}</div>
       </div>
     </div>
   );
