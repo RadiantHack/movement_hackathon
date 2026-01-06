@@ -108,7 +108,8 @@ export default function TransferPage() {
       setStep("Building transaction...");
 
       const senderAddress = movementWallet.address as string;
-      const senderPubKeyWithScheme = (movementWallet as any).publicKey as string;
+      const senderPubKeyWithScheme = (movementWallet as any)
+        .publicKey as string;
 
       if (!senderAddress || !senderPubKeyWithScheme) {
         throw new Error("Wallet address or public key not found");

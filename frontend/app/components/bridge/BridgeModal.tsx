@@ -8,7 +8,10 @@ interface BridgeModalProps {
   onClose: () => void;
 }
 
-export default function BridgeModal({ walletAddress, onClose }: BridgeModalProps) {
+export default function BridgeModal({
+  walletAddress,
+  onClose,
+}: BridgeModalProps) {
   if (!walletAddress) return null;
 
   return (

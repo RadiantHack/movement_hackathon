@@ -128,8 +128,7 @@ export default function AssetsList({
           const symbol = balance.metadata.symbol.toUpperCase();
           const symbolWithoutE = symbol.replace(/\.E$/, "");
           // Try to find price with original symbol first, then without .E suffix
-          const price =
-            tokenPrices[symbol] || tokenPrices[symbolWithoutE] || 0;
+          const price = tokenPrices[symbol] || tokenPrices[symbolWithoutE] || 0;
           const usdValue = amount * price;
           const formattedUsdValue =
             usdValue > 0
@@ -190,8 +189,7 @@ export default function AssetsList({
                                   alt={balance.metadata.symbol}
                                   className="w-full h-full object-cover relative z-10"
                                   onError={(e) => {
-                                    const target =
-                                      e.target as HTMLImageElement;
+                                    const target = e.target as HTMLImageElement;
                                     target.style.display = "none";
                                     const fallback =
                                       target.nextElementSibling as HTMLElement;
@@ -313,8 +311,7 @@ export default function AssetsList({
                                 alt={balance.metadata.symbol}
                                 className="w-full h-full object-cover"
                                 onError={(e) => {
-                                  const target =
-                                    e.target as HTMLImageElement;
+                                  const target = e.target as HTMLImageElement;
                                   target.style.display = "none";
                                   const fallback =
                                     target.nextElementSibling as HTMLElement;
