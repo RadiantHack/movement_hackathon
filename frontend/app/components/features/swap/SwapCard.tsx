@@ -2,7 +2,6 @@
 
 import React, { useState, useMemo, useEffect } from "react";
 import { usePrivy, WalletWithMetadata } from "@privy-io/react-auth";
-import type { TokenInfo } from "../../../utils/tokens";
 import { getTokenBySymbol, getAllTokens } from "../../../utils/token-constants";
 import {
   getQuote,
@@ -14,6 +13,7 @@ import { useSignRawHash } from "@privy-io/react-auth/extended-chains";
 import { useMovementConfig } from "@/app/hooks/useMovementConfig";
 import { TokenBalance } from "../../../types";
 import { executeSwap } from "../../../utils/swap";
+import { useBalance } from "@/app/hooks/useBalanceContext";
 
 // Mosaic API is used for quotes and routing - no hardcoded routes needed
 
@@ -43,6 +43,7 @@ export const SwapCard: React.FC<SwapCardProps> = ({
   const { ready, authenticated, user } = usePrivy();
   const { signRawHash } = useSignRawHash();
   const config = useMovementConfig();
+  const { refreshBalances, setWalletAddress: setBalanceContextWalletAddress } = useBalance();
 
   // Create Aptos instance with config from Redux store
   const aptos = useMemo(() => {
@@ -446,60 +447,8 @@ export const SwapCard: React.FC<SwapCardProps> = ({
       console.log("Swap transaction executed:", txHash);
       setTxHash(txHash);
 
-      // Refresh balances after successful swap
-      const balanceResponse = await fetch(
-        `/api/balance?address=${encodeURIComponent(walletAddress || senderAddress)}`
-      );
-      if (balanceResponse.ok) {
-        const balanceData = await balanceResponse.json();
-        if (
-          balanceData.success &&
-          balanceData.balances &&
-          balanceData.balances.length > 0
-        ) {
-          // Update fromToken balance
-          if (fromTokenFullInfo) {
-            const normalizedFromToken = fromToken
-              .toUpperCase()
-              .replace(/\./g, "");
-            const fromTokenBalance = balanceData.balances.find(
-              (b: TokenBalance) => {
-                const normalizedSymbol = b.metadata.symbol
-                  .toUpperCase()
-                  .replace(/\./g, "");
-                return (
-                  normalizedSymbol === normalizedFromToken ||
-                  normalizedSymbol.startsWith(normalizedFromToken) ||
-                  normalizedFromToken.startsWith(normalizedSymbol)
-                );
-              }
-            );
-            if (fromTokenBalance) {
-              setFromBalance(fromTokenBalance.formattedAmount);
-            }
-          }
-
-          // Update toToken balance
-          if (toTokenFullInfo) {
-            const normalizedToToken = toToken.toUpperCase().replace(/\./g, "");
-            const toTokenBalance = balanceData.balances.find(
-              (b: TokenBalance) => {
-                const normalizedSymbol = b.metadata.symbol
-                  .toUpperCase()
-                  .replace(/\./g, "");
-                return (
-                  normalizedSymbol === normalizedToToken ||
-                  normalizedSymbol.startsWith(normalizedToToken) ||
-                  normalizedToToken.startsWith(normalizedSymbol)
-                );
-              }
-            );
-            if (toTokenBalance) {
-              setToBalance(toTokenBalance.formattedAmount);
-            }
-          }
-        }
-      }
+      // Refresh balances from the centralized context
+      await refreshBalances();
     } catch (err: unknown) {
       console.error("Swap error:", err);
       setSwapError(

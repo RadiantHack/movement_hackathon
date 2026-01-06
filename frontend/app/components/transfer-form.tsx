@@ -13,6 +13,7 @@ import { useMovementConfig } from "../hooks/useMovementConfig";
 import { Scanner } from "@yudiel/react-qr-scanner";
 import { TokenBalance } from "../types";
 import { executeTransfer, getTransferErrorMessage } from "../utils/transfer";
+import { useBalance } from "../hooks/useBalanceContext";
 
 interface TransferFormProps {
   walletAddress: string;
@@ -30,6 +31,7 @@ export const TransferForm: React.FC<TransferFormProps> = ({
   const { signRawHash } = useSignRawHash();
   const { user, ready, authenticated } = usePrivy();
   const config = useMovementConfig();
+  const { refreshBalances } = useBalance();
 
   const [selectedToken, setSelectedToken] = useState<TokenBalance | null>(null);
   const [amount, setAmount] = useState("");
@@ -177,6 +179,9 @@ export const TransferForm: React.FC<TransferFormProps> = ({
 
       setTxHash(hash);
       onTransferComplete?.();
+      
+      // Refresh balances from the centralized context
+      await refreshBalances();
     } catch (err: unknown) {
       console.error("Transfer error:", err);
       const errorMessage = getTransferErrorMessage(

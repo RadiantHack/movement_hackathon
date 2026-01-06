@@ -13,6 +13,7 @@ import {
 import { store, type RootState, type AppDispatch } from "../store";
 import { loadConfig } from "../store/configSlice";
 import { useMovementConfig } from "./hooks/useMovementConfig";
+import { BalanceProvider } from "./hooks/useBalanceContext";
 
 interface ProvidersProps {
   children: ReactNode;
@@ -128,13 +129,15 @@ export function Providers({ children }: ProvidersProps) {
 
   return (
     <ReduxProvider store={store}>
-      <PrivyProviderWithConfig
-        appId={appId}
-        clientId={clientId}
-        copilotApiKey={copilotApiKey}
-      >
-        {children}
-      </PrivyProviderWithConfig>
+      <BalanceProvider>
+        <PrivyProviderWithConfig
+          appId={appId}
+          clientId={clientId}
+          copilotApiKey={copilotApiKey}
+        >
+          {children}
+        </PrivyProviderWithConfig>
+      </BalanceProvider>
     </ReduxProvider>
   );
 }
