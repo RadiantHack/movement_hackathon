@@ -2,11 +2,7 @@
 
 import React, { useState, useMemo, useEffect } from "react";
 import { usePrivy, WalletWithMetadata } from "@privy-io/react-auth";
-import {
-  MOVEMENT_TOKENS,
-  getTokenInfo,
-  type TokenInfo,
-} from "../../../utils/tokens";
+import type { TokenInfo } from "../../../utils/tokens";
 import { getTokenBySymbol, getAllTokens } from "../../../utils/token-constants";
 import {
   getQuote,
@@ -131,21 +127,6 @@ export const SwapCard: React.FC<SwapCardProps> = ({
     return symbol;
   };
 
-  // Helper to get original symbol case from token-constants
-  const getOriginalSymbol = (upperSymbol: string): string => {
-    // Normalize first (USDC -> USDC.e)
-    const normalized = normalizeTokenForLookup(upperSymbol);
-    const token = getTokenBySymbol(normalized);
-    return token?.symbol || normalized;
-  };
-
-  const fromTokenInfo = useMemo(() => {
-    return getTokenInfo(fromToken);
-  }, [fromToken]);
-
-  const toTokenInfo = useMemo(() => {
-    return getTokenInfo(toToken);
-  }, [toToken]);
 
   // Get full token info from token-constants for Mosaic API
   // Normalize USDC -> USDC.e and USDT -> USDT.e before lookup
