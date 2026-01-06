@@ -7,7 +7,7 @@
  */
 
 import React, { useState, useEffect, useCallback } from "react";
-import { Quest, QuestStep, QuestProgress, QuestStatus } from "./types";
+import { Quest, QuestStep, QuestProgress, QuestStatus, ONBOARDING_QUEST } from "./types";
 import { QuestCard } from "./QuestCard";
 import { useCopilotChat } from "@copilotkit/react-core";
 
@@ -16,69 +16,7 @@ interface QuestManagerProps {
   onQuestComplete?: (questId: string) => void;
 }
 
-// Define the onboarding quest
-const ONBOARDING_QUEST: Quest = {
-  id: "onboarding_beginner",
-  title: "🚀 Welcome to Movement Network!",
-  description: "Complete this quest to master DeFi on Movement Network",
-  icon: "🎯",
-  status: "not_started",
-  currentStepIndex: 0,
-  totalRewards: 7,
-  steps: [
-    {
-      id: "step_1_balance",
-      title: "Check Your Balance",
-      description:
-        "Learn how to check your cryptocurrency balance. This is the first step to managing your assets on Movement Network.",
-      instruction:
-        'Type "check my balance" or "get my wallet balance" in the chat',
-      agentName: "balance",
-      actionType: "balance",
-      reward: "Balance Explorer",
-      icon: "💰",
-      estimatedTime: 30,
-    },
-    {
-      id: "step_2_swap",
-      title: "Swap Tokens",
-      description:
-        "Learn how to swap one token for another. This is like exchanging currencies - you trade one token for another at the current market rate.",
-      instruction: 'Type "swap MOVE for USDC" or "I want to swap tokens"',
-      agentName: "swap",
-      actionType: "swap",
-      reward: "Token Swapper",
-      icon: "🔄",
-      estimatedTime: 60,
-    },
-    {
-      id: "step_3_lending",
-      title: "Explore Lending",
-      description:
-        "Understand how lending works. You can supply tokens as collateral and earn interest, or borrow tokens against your collateral.",
-      instruction:
-        'Type "compare borrowing rates for MOVE" or "where should I lend USDC?"',
-      agentName: "lending",
-      actionType: "lending",
-      reward: "Lending Master",
-      icon: "🏦",
-      estimatedTime: 90,
-    },
-    {
-      id: "step_4_transfer",
-      title: "Send Tokens",
-      description:
-        "Learn how to send tokens to another address. This is how you transfer assets to other wallets.",
-      instruction:
-        'Type "transfer 1 MOVE to [address]" or "I want to send tokens" (you can use a test address)',
-      agentName: "transfer",
-      actionType: "transfer",
-      reward: "Token Sender",
-      icon: "📤",
-      estimatedTime: 45,
-    },
-  ],
-};
+// ONBOARDING_QUEST is imported from types.ts
 
 export const QuestManager: React.FC<QuestManagerProps> = ({
   walletAddress,
@@ -240,6 +178,7 @@ export const QuestManager: React.FC<QuestManagerProps> = ({
 
       // For transfer, swap, and lending - check if action exists in messages
       // This catches both when actions are rendered (cards open) and when they complete
+      // ONLY return true if the action matches EXACTLY the current step's action type
       if (stepAction === "transfer" && actionName === "initiate_transfer") {
         // TransferCard is rendered when initiate_transfer action is called
         return true;
@@ -254,6 +193,11 @@ export const QuestManager: React.FC<QuestManagerProps> = ({
       ) {
         // PlatformSelectionCard is rendered when show_lending_platform_selection action is called
         return true;
+      }
+
+      // For balance step, skip action completion check (no action card)
+      if (stepAction === "balance") {
+        return false;
       }
 
       // Also check for ResultMessage type (action completed)
