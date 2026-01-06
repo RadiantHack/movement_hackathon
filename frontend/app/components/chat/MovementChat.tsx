@@ -1172,9 +1172,9 @@ REMEMBER: The wallet address is ${walletAddress} - use it exactly as shown.`
           </>
         )}
 
-        <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden relative w-full">
+        <div className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden relative w-full flex flex-col">
           <CopilotChat
-            className="h-full w-full min-h-0 max-w-full"
+            className="h-full w-full min-h-0 max-w-full flex flex-col"
             instructions={instructions}
             labels={{
               title: "Movement Assistant",
@@ -1188,7 +1188,7 @@ REMEMBER: The wallet address is ${walletAddress} - use it exactly as shown.`
           !hasScrolled &&
           !suggestionSubmitted &&
           !inputFocused && (
-            <div className="flex-shrink-0 relative z-20 px-2 sm:px-4 pt-0 pb-1.5 sm:pt-1.5 sm:pb-3 -mt-2 sm:mt-0">
+            <div className="flex-shrink-0 relative z-10 px-2 sm:px-4 pt-0 pb-1.5 sm:pt-1.5 sm:pb-3 mt-0">
               <Suggestions
                 walletAddress={walletAddress}
                 appendMessage={handleAppendMessage}
