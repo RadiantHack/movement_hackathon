@@ -17,18 +17,7 @@ import { toHex } from "viem";
 import { useSignRawHash } from "@privy-io/react-auth/extended-chains";
 import { useMovementConfig } from "../hooks/useMovementConfig";
 import { Scanner } from "@yudiel/react-qr-scanner";
-
-interface TokenBalance {
-  assetType: string;
-  amount: string;
-  formattedAmount: string;
-  metadata: {
-    name: string;
-    symbol: string;
-    decimals: number;
-  };
-  isNative: boolean;
-}
+import { TokenBalance } from "../types";
 
 interface TransferFormProps {
   walletAddress: string;
