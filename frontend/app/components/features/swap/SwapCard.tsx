@@ -13,40 +13,19 @@ import {
   getMosaicAssetFormat,
   type MosaicQuoteResponse,
 } from "../../../utils/mosaic-api";
-import {
-  Aptos,
-  AptosConfig,
-  Network,
-  AccountAuthenticatorEd25519,
-  Ed25519PublicKey,
-  Ed25519Signature,
-  generateSigningMessageForTransaction,
-  ChainId,
-} from "@aptos-labs/ts-sdk";
-import { toHex } from "viem";
+import { Aptos, AptosConfig, Network } from "@aptos-labs/ts-sdk";
 import { useSignRawHash } from "@privy-io/react-auth/extended-chains";
-import { requireMovementChainId } from "@/lib/super-aptos-sdk/src/globals";
 import { useMovementConfig } from "@/app/hooks/useMovementConfig";
+import { TokenBalance } from "../../../types";
+import { executeSwap } from "../../../utils/swap";
+
+// Mosaic API is used for quotes and routing - no hardcoded routes needed
 
 interface SwapCardProps {
-  walletAddress: string | null;
+  walletAddress?: string | null;
   initialFromToken?: string;
   initialToToken?: string;
 }
-
-interface TokenBalance {
-  assetType: string;
-  amount: string;
-  formattedAmount: string;
-  metadata: {
-    name: string;
-    symbol: string;
-    decimals: number;
-  };
-  isNative: boolean;
-}
-
-// Mosaic API is used for quotes and routing - no hardcoded routes needed
 
 // Helper to normalize token symbol for display (USDC.e -> USDC, USDT.e -> USDT)
 const normalizeTokenForDisplay = (symbol: string): string => {
@@ -471,79 +450,20 @@ export const SwapCard: React.FC<SwapCardProps> = ({
       const senderAddress = aptosWallet.address as string;
       const senderPubKeyWithScheme = aptosWallet.publicKey as string;
 
-      if (!senderPubKeyWithScheme || senderPubKeyWithScheme.length < 2) {
-        throw new Error("Invalid public key format");
-      }
-
-      const pubKeyNoScheme = senderPubKeyWithScheme.slice(2); // drop leading "00"
-
-      // Validate token info (use full info from token-constants)
-      if (!fromTokenFullInfo || !toTokenFullInfo) {
-        throw new Error(
-          `Invalid token selection. From: ${fromToken}, To: ${toToken}`
-        );
-      }
-
-      // Use Mosaic quote transaction data
-      if (!quote || !quote.data || !quote.data.tx) {
-        throw new Error("Invalid quote. Please try again.");
-      }
-
-      const mosaicTx = quote.data.tx;
-
-      // Build the swap transaction using Mosaic's transaction data
-      const rawTxn = await aptos!.transaction.build.simple({
-        sender: senderAddress,
-        data: {
-          function: mosaicTx.function as `${string}::${string}::${string}`,
-          typeArguments: mosaicTx.typeArguments,
-          functionArguments: mosaicTx.functionArguments,
-        },
+      // Execute the swap using the utility function
+      const txHash = await executeSwap({
+        aptos: aptos!,
+        movementChainId,
+        senderAddress,
+        senderPubKeyWithScheme,
+        fromToken,
+        toToken,
+        quote,
+        signRawHash,
       });
 
-      // Override chain ID to match Movement Network mainnet
-      const txnObj = rawTxn as unknown as Record<
-        string,
-        Record<string, unknown>
-      >;
-      if (txnObj.rawTransaction) {
-        const chainIdObj = new ChainId(movementChainId);
-        (txnObj.rawTransaction as Record<string, unknown>).chain_id =
-          chainIdObj;
-      }
-
-      // Generate signing message and hash
-      const message = generateSigningMessageForTransaction(rawTxn);
-      const hash = toHex(message);
-
-      // Sign the hash using Privy's signRawHash
-      const signatureResponse = await signRawHash({
-        address: senderAddress,
-        chainType: "aptos",
-        hash: hash,
-      });
-
-      // Create authenticator from signature
-      const publicKey = new Ed25519PublicKey(`0x${pubKeyNoScheme}`);
-      const sig = new Ed25519Signature(signatureResponse.signature.slice(2)); // drop 0x from sig
-      const senderAuthenticator = new AccountAuthenticatorEd25519(
-        publicKey,
-        sig
-      );
-
-      // Submit transaction
-      const pending = await aptos!.transaction.submit.simple({
-        transaction: rawTxn,
-        senderAuthenticator,
-      });
-
-      // Wait for transaction to be executed
-      const executed = await aptos!.waitForTransaction({
-        transactionHash: pending.hash,
-      });
-
-      console.log("Swap transaction executed:", executed.hash);
-      setTxHash(executed.hash);
+      console.log("Swap transaction executed:", txHash);
+      setTxHash(txHash);
 
       // Refresh balances after successful swap
       const balanceResponse = await fetch(
