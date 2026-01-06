@@ -117,30 +117,6 @@ export const QuestManager: React.FC<QuestManagerProps> = ({
         const args = m.args as any;
         const agentName = args?.agentName;
         
-        // For bridge quest, we need to verify it's Movement -> Ethereum
-        if (currentStep?.actionType === "bridge" && agentName === "bridge") {
-          const task = args?.task || "";
-          const result = m.result || "";
-          const taskLower = task.toLowerCase();
-          const resultLower = typeof result === "string" ? result.toLowerCase() : "";
-          
-          // Check if it mentions Movement to Ethereum (or Movement -> Ethereum)
-          const isMovementToEthereum = 
-            (taskLower.includes("movement") && taskLower.includes("ethereum")) ||
-            (taskLower.includes("movement") && taskLower.includes("eth")) ||
-            (resultLower.includes("movement") && resultLower.includes("ethereum")) ||
-            (resultLower.includes("movement") && resultLower.includes("eth"));
-          
-          // Also check that it's FROM movement (not TO movement)
-          const isFromMovement = 
-            taskLower.includes("from movement") ||
-            taskLower.includes("movement to") ||
-            resultLower.includes("from movement") ||
-            resultLower.includes("movement to");
-          
-          return isMovementToEthereum && isFromMovement;
-        }
-        
         // For other agents, just check if agent name matches
         if (agentName === currentStep?.agentName) {
           return true;
@@ -211,7 +187,6 @@ export const QuestManager: React.FC<QuestManagerProps> = ({
           actionName === "show_lending_platform_selection"
         )
           return true;
-        // Bridge completion is handled in hasAgentResponse above
       }
 
       return false;
