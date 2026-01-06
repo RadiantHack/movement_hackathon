@@ -2,51 +2,26 @@
 
 import React, { useState, useMemo, useEffect } from "react";
 import { usePrivy, WalletWithMetadata } from "@privy-io/react-auth";
-import {
-  MOVEMENT_TOKENS,
-  getTokenInfo,
-  type TokenInfo,
-} from "../../../utils/tokens";
 import { getTokenBySymbol, getAllTokens } from "../../../utils/token-constants";
 import {
   getQuote,
   getMosaicAssetFormat,
   type MosaicQuoteResponse,
 } from "../../../utils/mosaic-api";
-import {
-  Aptos,
-  AptosConfig,
-  Network,
-  AccountAuthenticatorEd25519,
-  Ed25519PublicKey,
-  Ed25519Signature,
-  generateSigningMessageForTransaction,
-  ChainId,
-} from "@aptos-labs/ts-sdk";
-import { toHex } from "viem";
+import { Aptos, AptosConfig, Network } from "@aptos-labs/ts-sdk";
 import { useSignRawHash } from "@privy-io/react-auth/extended-chains";
-import { requireMovementChainId } from "@/lib/super-aptos-sdk/src/globals";
 import { useMovementConfig } from "@/app/hooks/useMovementConfig";
+import { TokenBalance } from "../../../types";
+import { executeSwap } from "../../../utils/swap";
+import { useBalance } from "@/app/hooks/useBalanceContext";
+
+// Mosaic API is used for quotes and routing - no hardcoded routes needed
 
 interface SwapCardProps {
-  walletAddress: string | null;
+  walletAddress?: string | null;
   initialFromToken?: string;
   initialToToken?: string;
 }
-
-interface TokenBalance {
-  assetType: string;
-  amount: string;
-  formattedAmount: string;
-  metadata: {
-    name: string;
-    symbol: string;
-    decimals: number;
-  };
-  isNative: boolean;
-}
-
-// Mosaic API is used for quotes and routing - no hardcoded routes needed
 
 // Helper to normalize token symbol for display (USDC.e -> USDC, USDT.e -> USDT)
 const normalizeTokenForDisplay = (symbol: string): string => {
@@ -68,6 +43,7 @@ export const SwapCard: React.FC<SwapCardProps> = ({
   const { ready, authenticated, user } = usePrivy();
   const { signRawHash } = useSignRawHash();
   const config = useMovementConfig();
+  const { refreshBalances, setWalletAddress: setBalanceContextWalletAddress } = useBalance();
 
   // Create Aptos instance with config from Redux store
   const aptos = useMemo(() => {
@@ -152,21 +128,6 @@ export const SwapCard: React.FC<SwapCardProps> = ({
     return symbol;
   };
 
-  // Helper to get original symbol case from token-constants
-  const getOriginalSymbol = (upperSymbol: string): string => {
-    // Normalize first (USDC -> USDC.e)
-    const normalized = normalizeTokenForLookup(upperSymbol);
-    const token = getTokenBySymbol(normalized);
-    return token?.symbol || normalized;
-  };
-
-  const fromTokenInfo = useMemo(() => {
-    return getTokenInfo(fromToken);
-  }, [fromToken]);
-
-  const toTokenInfo = useMemo(() => {
-    return getTokenInfo(toToken);
-  }, [toToken]);
 
   // Get full token info from token-constants for Mosaic API
   // Normalize USDC -> USDC.e and USDT -> USDT.e before lookup
@@ -471,134 +432,23 @@ export const SwapCard: React.FC<SwapCardProps> = ({
       const senderAddress = aptosWallet.address as string;
       const senderPubKeyWithScheme = aptosWallet.publicKey as string;
 
-      if (!senderPubKeyWithScheme || senderPubKeyWithScheme.length < 2) {
-        throw new Error("Invalid public key format");
-      }
-
-      const pubKeyNoScheme = senderPubKeyWithScheme.slice(2); // drop leading "00"
-
-      // Validate token info (use full info from token-constants)
-      if (!fromTokenFullInfo || !toTokenFullInfo) {
-        throw new Error(
-          `Invalid token selection. From: ${fromToken}, To: ${toToken}`
-        );
-      }
-
-      // Use Mosaic quote transaction data
-      if (!quote || !quote.data || !quote.data.tx) {
-        throw new Error("Invalid quote. Please try again.");
-      }
-
-      const mosaicTx = quote.data.tx;
-
-      // Build the swap transaction using Mosaic's transaction data
-      const rawTxn = await aptos!.transaction.build.simple({
-        sender: senderAddress,
-        data: {
-          function: mosaicTx.function as `${string}::${string}::${string}`,
-          typeArguments: mosaicTx.typeArguments,
-          functionArguments: mosaicTx.functionArguments,
-        },
+      // Execute the swap using the utility function
+      const txHash = await executeSwap({
+        aptos: aptos!,
+        movementChainId,
+        senderAddress,
+        senderPubKeyWithScheme,
+        fromToken,
+        toToken,
+        quote,
+        signRawHash,
       });
 
-      // Override chain ID to match Movement Network mainnet
-      const txnObj = rawTxn as unknown as Record<
-        string,
-        Record<string, unknown>
-      >;
-      if (txnObj.rawTransaction) {
-        const chainIdObj = new ChainId(movementChainId);
-        (txnObj.rawTransaction as Record<string, unknown>).chain_id =
-          chainIdObj;
-      }
+      console.log("Swap transaction executed:", txHash);
+      setTxHash(txHash);
 
-      // Generate signing message and hash
-      const message = generateSigningMessageForTransaction(rawTxn);
-      const hash = toHex(message);
-
-      // Sign the hash using Privy's signRawHash
-      const signatureResponse = await signRawHash({
-        address: senderAddress,
-        chainType: "aptos",
-        hash: hash,
-      });
-
-      // Create authenticator from signature
-      const publicKey = new Ed25519PublicKey(`0x${pubKeyNoScheme}`);
-      const sig = new Ed25519Signature(signatureResponse.signature.slice(2)); // drop 0x from sig
-      const senderAuthenticator = new AccountAuthenticatorEd25519(
-        publicKey,
-        sig
-      );
-
-      // Submit transaction
-      const pending = await aptos!.transaction.submit.simple({
-        transaction: rawTxn,
-        senderAuthenticator,
-      });
-
-      // Wait for transaction to be executed
-      const executed = await aptos!.waitForTransaction({
-        transactionHash: pending.hash,
-      });
-
-      console.log("Swap transaction executed:", executed.hash);
-      setTxHash(executed.hash);
-
-      // Refresh balances after successful swap
-      const balanceResponse = await fetch(
-        `/api/balance?address=${encodeURIComponent(walletAddress || senderAddress)}`
-      );
-      if (balanceResponse.ok) {
-        const balanceData = await balanceResponse.json();
-        if (
-          balanceData.success &&
-          balanceData.balances &&
-          balanceData.balances.length > 0
-        ) {
-          // Update fromToken balance
-          if (fromTokenFullInfo) {
-            const normalizedFromToken = fromToken
-              .toUpperCase()
-              .replace(/\./g, "");
-            const fromTokenBalance = balanceData.balances.find(
-              (b: TokenBalance) => {
-                const normalizedSymbol = b.metadata.symbol
-                  .toUpperCase()
-                  .replace(/\./g, "");
-                return (
-                  normalizedSymbol === normalizedFromToken ||
-                  normalizedSymbol.startsWith(normalizedFromToken) ||
-                  normalizedFromToken.startsWith(normalizedSymbol)
-                );
-              }
-            );
-            if (fromTokenBalance) {
-              setFromBalance(fromTokenBalance.formattedAmount);
-            }
-          }
-
-          // Update toToken balance
-          if (toTokenFullInfo) {
-            const normalizedToToken = toToken.toUpperCase().replace(/\./g, "");
-            const toTokenBalance = balanceData.balances.find(
-              (b: TokenBalance) => {
-                const normalizedSymbol = b.metadata.symbol
-                  .toUpperCase()
-                  .replace(/\./g, "");
-                return (
-                  normalizedSymbol === normalizedToToken ||
-                  normalizedSymbol.startsWith(normalizedToToken) ||
-                  normalizedToToken.startsWith(normalizedSymbol)
-                );
-              }
-            );
-            if (toTokenBalance) {
-              setToBalance(toTokenBalance.formattedAmount);
-            }
-          }
-        }
-      }
+      // Refresh balances from the centralized context
+      await refreshBalances();
     } catch (err: unknown) {
       console.error("Swap error:", err);
       setSwapError(

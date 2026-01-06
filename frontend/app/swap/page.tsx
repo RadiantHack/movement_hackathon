@@ -1,17 +1,19 @@
 "use client";
 
 import { usePrivy, WalletWithMetadata } from "@privy-io/react-auth";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { Sidebar } from "../components/sidebar";
 import { RightSidebar } from "../components/right-sidebar";
 import { ThemeToggle } from "../components/themeToggle";
 import { SwapCard } from "../components/features/swap";
 import { AuthGuard } from "../components/auth-guard";
+import { useBalance } from "../hooks/useBalanceContext";
 
 export default function SwapPage() {
   const { authenticated, user } = usePrivy();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isRightSidebarOpen, setIsRightSidebarOpen] = useState(false);
+  const { setWalletAddress } = useBalance();
 
   // Get Movement wallet address (chainType is "aptos" for Movement wallets)
   const movementWallet = useMemo(() => {
@@ -40,6 +42,13 @@ export default function SwapPage() {
     }
     return null;
   }, [movementWallet]);
+
+  // Update balance context wallet address
+  useEffect(() => {
+    if (walletAddress) {
+      setWalletAddress(walletAddress);
+    }
+  }, [walletAddress, setWalletAddress]);
 
   return (
     <AuthGuard>

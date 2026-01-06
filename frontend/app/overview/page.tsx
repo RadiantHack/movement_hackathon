@@ -7,22 +7,14 @@ import { Sidebar } from "../components/sidebar";
 import { RightSidebar } from "../components/right-sidebar";
 import { ThemeToggle } from "../components/themeToggle";
 import { AuthGuard } from "../components/auth-guard";
-import { TransferForm } from "../components/transfer-form";
-import { SwapCard } from "../components/features/swap/SwapCard";
-import { QRCodeSVG } from "qrcode.react";
-import { getTokenIconUrl } from "../utils/token-icons";
 
-interface TokenBalance {
-  assetType: string;
-  amount: string;
-  formattedAmount: string;
-  metadata: {
-    name: string;
-    symbol: string;
-    decimals: number;
-  };
-  isNative: boolean;
-}
+import TransferModal from "../components/transfer/TransferModal";
+import SwapModal from "../components/swap/SwapModal";
+import BridgeModal from "../components/bridge/BridgeModal";
+import BalanceCard from "../components/overview/BalanceCard";
+import AssetsList from "../components/overview/AssetsList";
+import { QRCodeSVG } from "qrcode.react";
+import { TokenBalance } from "../types";
 
 export default function OverviewPage() {
   const { ready, authenticated, user } = usePrivy();
@@ -232,12 +224,6 @@ export default function OverviewPage() {
     );
   }, [balances, searchQuery]);
 
-  const displayedBalances = useMemo(() => {
-    return filteredBalances.slice(0, displayLimit);
-  }, [filteredBalances, displayLimit]);
-
-  const hasMore = filteredBalances.length > displayLimit;
-
   const [selectedTokenForTransfer, setSelectedTokenForTransfer] =
     useState<TokenBalance | null>(null);
 
@@ -254,7 +240,7 @@ export default function OverviewPage() {
   };
 
   const handleBridgeClick = () => {
-    router.push("/bridge");
+    setShowBridgeModal(true);
   };
 
   const handleSwapClick = () => {
@@ -331,666 +317,29 @@ export default function OverviewPage() {
           {/* Main Content */}
           <div className="flex flex-1 overflow-hidden">
             <div className="flex-1 overflow-y-auto p-4 md:p-6">
-              {/* Balance Card - Desktop */}
-              <div className="hidden md:block mb-6">
-                <div className="relative rounded-lg border border-zinc-200 bg-white p-6 lg:p-8 dark:border-zinc-800 dark:bg-zinc-900 shadow-lg overflow-hidden">
-                  <div className="absolute -top-40 -right-40 w-80 h-80 bg-purple-500/5 rounded-full blur-3xl"></div>
-                  <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-blue-500/5 rounded-full blur-3xl"></div>
-                  <div className="relative z-10">
-                    <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between mb-6 gap-4">
-                      <div>
-                        <p className="text-zinc-600 dark:text-zinc-400 text-sm font-medium mb-2">
-                          Total Balance
-                        </p>
-                        <h2 className="text-3xl lg:text-5xl font-bold text-zinc-950 dark:text-zinc-50">
-                          $
-                          {totalBalanceUsd.toLocaleString(undefined, {
-                            minimumFractionDigits: 2,
-                            maximumFractionDigits: 2,
-                          })}
-                        </h2>
-                      </div>
-                      <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
-                        <button
-                          onClick={handleTransferClick}
-                          className="flex-1 px-4 sm:px-6 py-3 rounded-lg bg-purple-600 text-white font-semibold hover:bg-purple-700 transition-all duration-300 shadow-md hover:shadow-lg hover:scale-105 active:scale-95 text-sm sm:text-base"
-                        >
-                          <div className="flex items-center justify-center gap-2">
-                            <svg
-                              className="w-4 h-4 sm:w-5 sm:h-5"
-                              fill="none"
-                              stroke="currentColor"
-                              viewBox="0 0 24 24"
-                            >
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth={2}
-                                d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"
-                              />
-                            </svg>
-                            <span>Transfer</span>
-                          </div>
-                        </button>
-                        <button
-                          onClick={handleSwapClick}
-                          className="flex-1 px-4 sm:px-6 py-3 rounded-lg bg-green-600 text-white font-semibold hover:bg-green-700 transition-all duration-300 shadow-md hover:shadow-lg hover:scale-105 active:scale-95 text-sm sm:text-base"
-                        >
-                          <div className="flex items-center justify-center gap-2">
-                            <svg
-                              className="w-4 h-4 sm:w-5 sm:h-5"
-                              fill="none"
-                              stroke="currentColor"
-                              viewBox="0 0 24 24"
-                            >
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth={2}
-                                d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"
-                              />
-                            </svg>
-                            <span>Swap</span>
-                          </div>
-                        </button>
-                        <button
-                          onClick={handleBridgeClick}
-                          className="flex-1 px-4 sm:px-6 py-3 rounded-lg bg-blue-600 text-white font-semibold hover:bg-blue-700 transition-all duration-300 shadow-md hover:shadow-lg hover:scale-105 active:scale-95 text-sm sm:text-base"
-                        >
-                          <div className="flex items-center justify-center gap-2">
-                            <svg
-                              className="w-4 h-4 sm:w-5 sm:h-5"
-                              fill="none"
-                              stroke="currentColor"
-                              viewBox="0 0 24 24"
-                            >
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth={2}
-                                d="M13 10V3L4 14h7v7l9-11h-7z"
-                              />
-                            </svg>
-                            <span>Bridge</span>
-                          </div>
-                        </button>
-                      </div>
-                    </div>
-                    {walletAddress && (
-                      <div className="mt-4 p-4 rounded-lg bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700">
-                        <div className="flex items-center justify-between mb-2">
-                          <p className="text-zinc-600 dark:text-zinc-400 text-xs flex items-center gap-2">
-                            <svg
-                              className="w-3 h-3"
-                              fill="none"
-                              stroke="currentColor"
-                              viewBox="0 0 24 24"
-                            >
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth={2}
-                                d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"
-                              />
-                            </svg>
-                            Wallet Address
-                          </p>
-                          <button
-                            onClick={() => setShowQRCode(true)}
-                            className="p-1.5 rounded-lg bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 hover:bg-purple-200 dark:hover:bg-purple-900/50 transition-colors"
-                            title="Show QR Code"
-                          >
-                            <svg
-                              className="w-4 h-4"
-                              fill="none"
-                              stroke="currentColor"
-                              viewBox="0 0 24 24"
-                            >
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth={2}
-                                d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"
-                              />
-                            </svg>
-                          </button>
-                        </div>
-                        <p className="text-zinc-900 dark:text-zinc-100 font-mono text-xs sm:text-sm break-all">
-                          {walletAddress}
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
+              {/* Balance Card */}
+              <BalanceCard
+                totalBalanceUsd={totalBalanceUsd}
+                walletAddress={walletAddress}
+                onTransferClick={handleTransferClick}
+                onSwapClick={handleSwapClick}
+                onBridgeClick={handleBridgeClick}
+                onShowQRCode={() => setShowQRCode(true)}
+              />
 
-              {/* Balance Card - Mobile */}
-              <div className="md:hidden mb-4">
-                <div className="relative rounded-lg border border-zinc-200 bg-white p-4 sm:p-6 dark:border-zinc-800 dark:bg-zinc-900 shadow-lg overflow-hidden">
-                  <div className="absolute -top-20 -right-20 w-40 h-40 bg-purple-500/5 rounded-full blur-2xl"></div>
-                  <div className="absolute -bottom-20 -left-20 w-40 h-40 bg-blue-500/5 rounded-full blur-2xl"></div>
-                  <div className="relative z-10">
-                    <p className="text-zinc-600 dark:text-zinc-400 text-xs font-medium mb-2">
-                      Total Balance
-                    </p>
-                    <h2 className="text-2xl sm:text-3xl font-bold text-zinc-950 dark:text-zinc-50 mb-4">
-                      $
-                      {totalBalanceUsd.toLocaleString(undefined, {
-                        minimumFractionDigits: 2,
-                        maximumFractionDigits: 2,
-                      })}
-                    </h2>
-                    {walletAddress && (
-                      <div className="mb-4 p-3 rounded-lg bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700">
-                        <div className="flex items-center justify-between mb-1">
-                          <p className="text-zinc-600 dark:text-zinc-400 text-xs">
-                            Wallet
-                          </p>
-                          <button
-                            onClick={() => setShowQRCode(true)}
-                            className="p-1 rounded-lg bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 hover:bg-purple-200 dark:hover:bg-purple-900/50 transition-colors"
-                            title="Show QR Code"
-                          >
-                            <svg
-                              className="w-3.5 h-3.5"
-                              fill="none"
-                              stroke="currentColor"
-                              viewBox="0 0 24 24"
-                            >
-                              <path
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                strokeWidth={2}
-                                d="M12 4v1m6 11h2m-6 0h-2v4m0-11v3m0 0h.01M12 12h4.01M16 20h4M4 12h4m12 0h.01M5 8h2a1 1 0 001-1V5a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1zm12 0h2a1 1 0 001-1V5a1 1 0 00-1-1h-2a1 1 0 00-1 1v2a1 1 0 001 1zM5 20h2a1 1 0 001-1v-2a1 1 0 00-1-1H5a1 1 0 00-1 1v2a1 1 0 001 1z"
-                              />
-                            </svg>
-                          </button>
-                        </div>
-                        <p className="text-zinc-900 dark:text-zinc-100 font-mono text-xs break-all">
-                          {walletAddress.slice(0, 6)}...
-                          {walletAddress.slice(-4)}
-                        </p>
-                      </div>
-                    )}
-                    <div className="grid grid-cols-3 gap-2">
-                      <button
-                        onClick={handleTransferClick}
-                        className="px-3 py-3 rounded-lg bg-purple-600 text-white font-semibold text-xs hover:bg-purple-700 transition-all duration-300 shadow-md active:scale-95"
-                      >
-                        <div className="flex flex-col items-center justify-center gap-1">
-                          <svg
-                            className="w-4 h-4"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"
-                            />
-                          </svg>
-                          <span>Transfer</span>
-                        </div>
-                      </button>
-                      <button
-                        onClick={handleSwapClick}
-                        className="px-3 py-3 rounded-lg bg-green-600 text-white font-semibold text-xs hover:bg-green-700 transition-all duration-300 shadow-md active:scale-95"
-                      >
-                        <div className="flex flex-col items-center justify-center gap-1">
-                          <svg
-                            className="w-4 h-4"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4"
-                            />
-                          </svg>
-                          <span>Swap</span>
-                        </div>
-                      </button>
-                      <button
-                        onClick={handleBridgeClick}
-                        className="px-3 py-3 rounded-lg bg-blue-600 text-white font-semibold text-xs hover:bg-blue-700 transition-all duration-300 shadow-md active:scale-95"
-                      >
-                        <div className="flex flex-col items-center justify-center gap-1">
-                          <svg
-                            className="w-4 h-4"
-                            fill="none"
-                            stroke="currentColor"
-                            viewBox="0 0 24 24"
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              strokeWidth={2}
-                              d="M13 10V3L4 14h7v7l9-11h-7z"
-                            />
-                          </svg>
-                          <span>Bridge</span>
-                        </div>
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Tokens List */}
-              <div className="space-y-4">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-lg font-semibold text-zinc-950 dark:text-zinc-50">
-                    Assets {balances.length > 0 && `(${balances.length})`}
-                  </h3>
-                  {loadingBalances && (
-                    <div className="h-4 w-4 animate-spin rounded-full border-2 border-zinc-300 border-t-zinc-900 dark:border-zinc-700 dark:border-t-zinc-100"></div>
-                  )}
-                </div>
-
-                {/* Search Bar */}
-                {balances.length > 0 && (
-                  <div className="relative mb-4">
-                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                      <svg
-                        className="h-4 w-4 sm:h-5 sm:w-5 text-zinc-400"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-                        />
-                      </svg>
-                    </div>
-                    <input
-                      type="text"
-                      value={searchQuery}
-                      onChange={(e) => {
-                        setSearchQuery(e.target.value);
-                        setDisplayLimit(10);
-                      }}
-                      placeholder="Search assets..."
-                      className="w-full pl-9 sm:pl-10 pr-8 sm:pr-10 py-2 sm:py-2.5 text-sm sm:text-base rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-50 placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
-                    />
-                    {searchQuery && (
-                      <button
-                        onClick={() => {
-                          setSearchQuery("");
-                          setDisplayLimit(10);
-                        }}
-                        className="absolute inset-y-0 right-0 pr-2 sm:pr-3 flex items-center"
-                      >
-                        <svg
-                          className="h-4 w-4 sm:h-5 sm:w-5 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
-                          fill="none"
-                          stroke="currentColor"
-                          viewBox="0 0 24 24"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M6 18L18 6M6 6l12 12"
-                          />
-                        </svg>
-                      </button>
-                    )}
-                  </div>
-                )}
-
-                {balanceError && (
-                  <div className="p-4 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400 text-sm">
-                    {balanceError}
-                  </div>
-                )}
-
-                {!loadingBalances && balances.length === 0 && !balanceError && (
-                  <div className="p-8 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-center">
-                    <p className="text-zinc-600 dark:text-zinc-400">
-                      No assets found
-                    </p>
-                  </div>
-                )}
-
-                {!loadingBalances &&
-                  filteredBalances.length === 0 &&
-                  searchQuery && (
-                    <div className="p-8 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-center">
-                      <p className="text-zinc-600 dark:text-zinc-400">
-                        No assets found matching "{searchQuery}"
-                      </p>
-                    </div>
-                  )}
-
-                <div className="space-y-3">
-                  {displayedBalances.map((balance, index) => {
-                    const amount = parseFloat(balance.formattedAmount);
-                    const formattedAmount = amount.toLocaleString(undefined, {
-                      minimumFractionDigits: amount < 1 ? 6 : 2,
-                      maximumFractionDigits: amount < 1 ? 8 : 6,
-                    });
-                    const isNative = balance.isNative;
-                    const symbol = balance.metadata.symbol.toUpperCase();
-                    const symbolWithoutE = symbol.replace(/\.E$/, "");
-                    // Try to find price with original symbol first, then without .E suffix
-                    const price =
-                      tokenPrices[symbol] || tokenPrices[symbolWithoutE] || 0;
-                    const usdValue = amount * price;
-                    const formattedUsdValue =
-                      usdValue > 0
-                        ? usdValue.toLocaleString(undefined, {
-                            minimumFractionDigits: 2,
-                            maximumFractionDigits: 2,
-                          })
-                        : null;
-
-                    return (
-                      <div key={balance.assetType}>
-                        {/* Mobile version with liquid styling */}
-                        <div className="md:hidden group relative rounded-2xl overflow-hidden transition-all duration-300 hover:scale-[1.02] active:scale-[0.98]">
-                          {/* Animated liquid gradient background */}
-                          <div className="absolute inset-0 bg-gradient-to-br from-purple-100/60 via-blue-100/40 to-green-100/60 dark:from-purple-950/50 dark:via-blue-950/40 dark:to-green-950/50 liquid-flow"></div>
-
-                          {/* Continuously animated liquid blobs */}
-                          <div className="absolute -top-12 -right-12 w-40 h-40 bg-purple-400/30 dark:bg-purple-500/20 rounded-full blur-3xl liquid-blob-1"></div>
-                          <div className="absolute -bottom-12 -left-12 w-40 h-40 bg-blue-400/30 dark:bg-blue-500/20 rounded-full blur-3xl liquid-blob-2"></div>
-                          <div
-                            className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-32 h-32 bg-green-400/20 dark:bg-green-500/15 rounded-full blur-2xl liquid-blob-1"
-                            style={{ animationDelay: "2s" }}
-                          ></div>
-
-                          {/* Glassmorphism card with liquid border effect */}
-                          <div className="relative backdrop-blur-md bg-white/80 dark:bg-zinc-900/80 border-2 border-purple-200/50 dark:border-purple-800/50 p-4 rounded-2xl shadow-xl group-hover:shadow-2xl group-hover:border-purple-300/70 dark:group-hover:border-purple-600/70 transition-all duration-300 overflow-hidden">
-                            {/* Liquid shimmer overlay */}
-                            <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent liquid-shimmer pointer-events-none"></div>
-                            {/* Liquid wave at bottom */}
-                            <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-purple-400/50 via-blue-400/50 to-green-400/50 dark:from-purple-500/40 dark:via-blue-500/40 dark:to-green-500/40 liquid-flow"></div>
-                            <div className="flex items-center justify-between gap-3 relative z-10">
-                              <div className="flex items-center gap-3 flex-1 min-w-0">
-                                {/* Enhanced token icon with liquid effect */}
-                                <div
-                                  className={`relative flex-shrink-0 w-14 h-14 rounded-2xl overflow-hidden ${
-                                    isNative
-                                      ? "bg-gradient-to-br from-purple-400 via-purple-500 to-blue-500 dark:from-purple-600 dark:via-purple-700 dark:to-blue-600 shadow-lg shadow-purple-500/40 dark:shadow-purple-600/30 liquid-flow"
-                                      : "bg-gradient-to-br from-zinc-200 via-zinc-300 to-zinc-400 dark:from-zinc-700 dark:via-zinc-600 dark:to-zinc-500 shadow-md"
-                                  } flex items-center justify-center border-2 ${
-                                    isNative
-                                      ? "border-purple-300/70 dark:border-purple-500/70"
-                                      : "border-zinc-300/50 dark:border-zinc-600/50"
-                                  } group-hover:scale-110 transition-transform duration-300`}
-                                >
-                                  {/* Continuous liquid shimmer effect */}
-                                  <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent liquid-shimmer pointer-events-none"></div>
-
-                                  {(() => {
-                                    const iconUrl = getTokenIconUrl(
-                                      balance.metadata.symbol,
-                                      balance.assetType
-                                    );
-                                    if (iconUrl) {
-                                      return (
-                                        <>
-                                          <img
-                                            src={iconUrl}
-                                            alt={balance.metadata.symbol}
-                                            className="w-full h-full object-cover relative z-10"
-                                            onError={(e) => {
-                                              const target =
-                                                e.target as HTMLImageElement;
-                                              target.style.display = "none";
-                                              const fallback =
-                                                target.nextElementSibling as HTMLElement;
-                                              if (fallback) {
-                                                fallback.style.display = "flex";
-                                              }
-                                            }}
-                                          />
-                                          <div
-                                            className={`hidden items-center justify-center w-full h-full text-base font-bold relative z-10 ${
-                                              isNative
-                                                ? "text-white"
-                                                : "text-zinc-700 dark:text-zinc-200"
-                                            }`}
-                                          >
-                                            {balance.metadata.symbol.length <= 4
-                                              ? balance.metadata.symbol
-                                              : balance.metadata.symbol.charAt(
-                                                  0
-                                                )}
-                                          </div>
-                                        </>
-                                      );
-                                    }
-                                    return (
-                                      <span
-                                        className={`text-base font-bold relative z-10 ${
-                                          isNative
-                                            ? "text-white"
-                                            : "text-zinc-700 dark:text-zinc-200"
-                                        }`}
-                                      >
-                                        {balance.metadata.symbol.length <= 4
-                                          ? balance.metadata.symbol
-                                          : balance.metadata.symbol.charAt(0)}
-                                      </span>
-                                    );
-                                  })()}
-
-                                  {/* Native token indicator with pulse */}
-                                  {isNative && (
-                                    <div className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-gradient-to-br from-purple-400 to-purple-600 rounded-full border-2 border-white dark:border-zinc-900 z-20 shadow-lg shadow-purple-500/50 animate-pulse"></div>
-                                  )}
-                                </div>
-
-                                <div className="flex-1 min-w-0">
-                                  <h4 className="text-base font-bold text-zinc-900 dark:text-zinc-50 truncate mb-0.5">
-                                    {balance.metadata.symbol}
-                                  </h4>
-                                  <p className="text-xs text-zinc-500 dark:text-zinc-400 truncate">
-                                    {balance.metadata.name}
-                                  </p>
-                                </div>
-                              </div>
-
-                              <div className="flex items-center gap-3 flex-shrink-0">
-                                <div className="text-right">
-                                  <p className="text-base font-bold text-zinc-900 dark:text-zinc-50">
-                                    {formattedAmount}
-                                  </p>
-                                  {formattedUsdValue ? (
-                                    <p className="text-xs font-medium text-zinc-600 dark:text-zinc-400 mt-0.5">
-                                      ${formattedUsdValue}
-                                    </p>
-                                  ) : (
-                                    <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-0.5">
-                                      {balance.metadata.symbol}
-                                    </p>
-                                  )}
-                                </div>
-
-                                {/* Enhanced transfer button */}
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleTokenTransferClick(balance);
-                                  }}
-                                  className="flex-shrink-0 p-2.5 rounded-xl bg-gradient-to-br from-purple-500 to-purple-600 dark:from-purple-600 dark:to-purple-700 text-white shadow-md shadow-purple-500/30 dark:shadow-purple-600/20 hover:shadow-lg hover:shadow-purple-500/40 dark:hover:shadow-purple-600/30 hover:scale-110 active:scale-95 transition-all duration-200"
-                                  title="Transfer"
-                                >
-                                  <svg
-                                    className="w-4 h-4"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    viewBox="0 0 24 24"
-                                  >
-                                    <path
-                                      strokeLinecap="round"
-                                      strokeLinejoin="round"
-                                      strokeWidth={2.5}
-                                      d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"
-                                    />
-                                  </svg>
-                                </button>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Desktop version */}
-                        <div className="hidden md:block group relative rounded-xl border border-zinc-200 bg-white p-3 sm:p-4 dark:border-zinc-800 dark:bg-zinc-900 transition-all duration-200 hover:shadow-lg hover:border-purple-300 dark:hover:border-purple-700 hover:-translate-y-0.5">
-                          <div className="flex items-center justify-between gap-2 sm:gap-3">
-                            <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
-                              <div
-                                className={`relative flex-shrink-0 w-12 h-12 sm:w-14 sm:h-14 rounded-xl overflow-hidden ${
-                                  isNative
-                                    ? "bg-gradient-to-br from-purple-100 to-blue-100 dark:from-purple-900/30 dark:to-blue-900/30 border-2 border-purple-300 dark:border-purple-700"
-                                    : "bg-gradient-to-br from-zinc-100 to-zinc-200 dark:from-zinc-800 dark:to-zinc-700 border border-zinc-300 dark:border-zinc-600"
-                                } flex items-center justify-center shadow-sm`}
-                              >
-                                {(() => {
-                                  const iconUrl = getTokenIconUrl(
-                                    balance.metadata.symbol,
-                                    balance.assetType
-                                  );
-                                  if (iconUrl) {
-                                    return (
-                                      <>
-                                        <img
-                                          src={iconUrl}
-                                          alt={balance.metadata.symbol}
-                                          className="w-full h-full object-cover"
-                                          onError={(e) => {
-                                            const target =
-                                              e.target as HTMLImageElement;
-                                            target.style.display = "none";
-                                            const fallback =
-                                              target.nextElementSibling as HTMLElement;
-                                            if (fallback) {
-                                              fallback.style.display = "flex";
-                                            }
-                                          }}
-                                        />
-                                        <div
-                                          className={`hidden items-center justify-center w-full h-full text-sm sm:text-lg font-bold ${
-                                            isNative
-                                              ? "text-purple-700 dark:text-purple-300"
-                                              : "text-zinc-700 dark:text-zinc-300"
-                                          }`}
-                                        >
-                                          {balance.metadata.symbol.length <= 4
-                                            ? balance.metadata.symbol
-                                            : balance.metadata.symbol.charAt(0)}
-                                        </div>
-                                      </>
-                                    );
-                                  }
-                                  return (
-                                    <span
-                                      className={`text-sm sm:text-lg font-bold ${
-                                        isNative
-                                          ? "text-purple-700 dark:text-purple-300"
-                                          : "text-zinc-700 dark:text-zinc-300"
-                                      }`}
-                                    >
-                                      {balance.metadata.symbol.length <= 4
-                                        ? balance.metadata.symbol
-                                        : balance.metadata.symbol.charAt(0)}
-                                    </span>
-                                  );
-                                })()}
-                                {isNative && (
-                                  <div className="absolute -top-1 -right-1 w-2.5 h-2.5 sm:w-3 sm:h-3 bg-purple-500 rounded-full border-2 border-white dark:border-zinc-900 z-10"></div>
-                                )}
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <h4 className="text-sm sm:text-base font-semibold text-zinc-900 dark:text-zinc-50 truncate">
-                                  {balance.metadata.symbol}
-                                </h4>
-                                <p className="text-xs text-zinc-500 dark:text-zinc-400 truncate hidden sm:block">
-                                  {balance.metadata.name}
-                                </p>
-                              </div>
-                            </div>
-                            <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
-                              <div className="text-right">
-                                <p className="text-sm sm:text-base font-semibold text-zinc-900 dark:text-zinc-50">
-                                  {formattedAmount}
-                                </p>
-                                {formattedUsdValue ? (
-                                  <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                                    ${formattedUsdValue}
-                                  </p>
-                                ) : (
-                                  <p className="text-xs text-zinc-500 dark:text-zinc-400 hidden sm:block">
-                                    {balance.metadata.symbol}
-                                  </p>
-                                )}
-                              </div>
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleTokenTransferClick(balance);
-                                }}
-                                className="flex-shrink-0 p-1.5 sm:p-2 rounded-lg bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 hover:bg-purple-200 dark:hover:bg-purple-900/50 transition-all hover:scale-110 active:scale-95"
-                                title="Transfer"
-                              >
-                                <svg
-                                  className="w-4 h-4 sm:w-5 sm:h-5"
-                                  fill="none"
-                                  stroke="currentColor"
-                                  viewBox="0 0 24 24"
-                                >
-                                  <path
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    strokeWidth={2}
-                                    d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"
-                                  />
-                                </svg>
-                              </button>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-
-                {/* Show More Button */}
-                {hasMore && (
-                  <div className="flex justify-center pt-2">
-                    <button
-                      onClick={() => setDisplayLimit((prev) => prev + 10)}
-                      className="px-6 py-2.5 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 font-medium hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors"
-                    >
-                      Show More ({filteredBalances.length - displayLimit}{" "}
-                      remaining)
-                    </button>
-                  </div>
-                )}
-
-                {/* Show Less Button */}
-                {displayLimit > 10 &&
-                  !hasMore &&
-                  filteredBalances.length > 10 && (
-                    <div className="flex justify-center pt-2">
-                      <button
-                        onClick={() => setDisplayLimit(10)}
-                        className="px-6 py-2.5 rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 text-zinc-700 dark:text-zinc-300 font-medium hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors"
-                      >
-                        Show Less
-                      </button>
-                    </div>
-                  )}
-              </div>
+              {/* Assets List */}
+              <AssetsList
+                balances={balances}
+                loadingBalances={loadingBalances}
+                balanceError={balanceError}
+                searchQuery={searchQuery}
+                onSearchChange={setSearchQuery}
+                displayLimit={displayLimit}
+                onDisplayLimitChange={setDisplayLimit}
+                tokenPrices={tokenPrices}
+                onTokenTransferClick={handleTokenTransferClick}
+                filteredBalances={filteredBalances}
+              />
             </div>
           </div>
         </div>
@@ -1000,101 +349,45 @@ export default function OverviewPage() {
           onClose={() => setIsRightSidebarOpen(false)}
         />
 
-        {/* Transfer Modal */}
         {showTransferModal && walletAddress && (
-          <div
-            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in"
-            onClick={(e) => {
-              if (e.target === e.currentTarget) {
-                setShowTransferModal(false);
-                setSelectedTokenForTransfer(null);
-              }
+          <TransferModal
+            walletAddress={walletAddress}
+            balances={balances}
+            initialToken={selectedTokenForTransfer}
+            onClose={() => {
+              setShowTransferModal(false);
+              setSelectedTokenForTransfer(null);
             }}
-          >
-            <div className="relative w-full max-w-md rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900 shadow-2xl animate-scale-in max-h-[90vh] overflow-y-auto">
-              <button
-                onClick={() => {
-                  setShowTransferModal(false);
-                  setSelectedTokenForTransfer(null);
-                }}
-                className="absolute top-4 right-4 z-10 text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors p-2 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800"
-              >
-                <svg
-                  className="w-6 h-6"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M6 18L18 6M6 6l12 12"
-                  />
-                </svg>
-              </button>
-              <div className="p-6">
-                <TransferForm
-                  walletAddress={walletAddress}
-                  balances={balances}
-                  initialToken={selectedTokenForTransfer}
-                  onTransferComplete={() => {
-                    // Don't close modal automatically - let user see success message and view link
-                    // Refresh balances after a delay
-                    setTimeout(() => {
-                      if (walletAddress) {
-                        fetch(
-                          `/api/balance?address=${encodeURIComponent(walletAddress)}`
-                        )
-                          .then((res) => res.json())
-                          .then((data) => {
-                            if (data.success && data.balances) {
-                              setBalances(data.balances);
-                            }
-                          });
+            onTransferComplete={() => {
+              setTimeout(() => {
+                if (walletAddress) {
+                  fetch(
+                    `/api/balance?address=${encodeURIComponent(walletAddress)}`
+                  )
+                    .then((res) => res.json())
+                    .then((data) => {
+                      if (data.success && data.balances) {
+                        setBalances(data.balances);
                       }
-                    }, 2000);
-                  }}
-                />
-              </div>
-            </div>
-          </div>
+                    });
+                }
+              }, 2000);
+            }}
+          />
         )}
 
-        {/* Swap Modal */}
         {showSwapModal && walletAddress && (
-          <div
-            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in"
-            onClick={(e) => {
-              if (e.target === e.currentTarget) {
-                setShowSwapModal(false);
-              }
-            }}
-          >
-            <div className="relative w-full max-w-lg rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900 shadow-2xl animate-scale-in max-h-[90vh] overflow-y-auto">
-              <button
-                onClick={() => setShowSwapModal(false)}
-                className="absolute top-4 right-4 z-10 text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors p-2 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800"
-              >
-                <svg
-                  className="w-6 h-6"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M6 18L18 6M6 6l12 12"
-                  />
-                </svg>
-              </button>
-              <div className="p-6">
-                <SwapCard walletAddress={walletAddress} />
-              </div>
-            </div>
-          </div>
+          <SwapModal
+            walletAddress={walletAddress}
+            onClose={() => setShowSwapModal(false)}
+          />
+        )}
+
+        {showBridgeModal && walletAddress && (
+          <BridgeModal
+            walletAddress={walletAddress}
+            onClose={() => setShowBridgeModal(false)}
+          />
         )}
 
         {/* QR Code Modal */}

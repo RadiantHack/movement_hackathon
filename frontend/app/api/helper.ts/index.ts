@@ -286,17 +286,34 @@ export class A2AMiddlewareAgent extends AbstractAgent {
         let pendingA2ACalls = new Set<string>();
         const pendingTextMessages = new Set<string>();
         const agentCards = await this.agentCards;
+        
+        const messages = input.messages;
+
+        // Extract wallet address from existing system messages
+        let walletAddressContext = "";
+        const existingSystemMessages = messages.filter(m => m.role === "system");
+        for (const sysMsg of existingSystemMessages) {
+          const content = sysMsg.content || "";
+          // Look for wallet address in JSON format
+          const jsonMatch = content.match(/"address"\s*:\s*"(0x[a-fA-F0-9]{64})"/);
+          if (jsonMatch) {
+            walletAddressContext = `\n\n🔑 CRITICAL - USER'S WALLET ADDRESS:\nThe user has a connected Movement Network wallet address: ${jsonMatch[1]}\nYOU MUST use this EXACT address for all balance queries and agent calls. DO NOT use any other address.\n`;
+            break;
+          }
+          // Also check plain text format
+          const plainMatch = content.match(/wallet address:\s*(0x[a-fA-F0-9]{64})/i);
+          if (plainMatch) {
+            walletAddressContext = `\n\n🔑 CRITICAL - USER'S WALLET ADDRESS:\nThe user has a connected Movement Network wallet address: ${plainMatch[1]}\nYOU MUST use this EXACT address for all balance queries and agent calls. DO NOT use any other address.\n`;
+            break;
+          }
+        }
+
         const newSystemPrompt = createSystemPrompt(
           agentCards,
           this.instructions
-        );
+        ) + walletAddressContext;
 
-        const messages = input.messages;
-        if (messages.length && messages[0].role === "system") {
-          // remove the first message if it is a system message
-          messages.shift();
-        }
-
+        // Prepend middleware system prompt without removing existing system messages
         messages.unshift({
           role: "system",
           content: newSystemPrompt,
