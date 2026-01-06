@@ -14,18 +14,7 @@ import BridgeModal from "../components/bridge/BridgeModal";
 import BalanceCard from "../components/overview/BalanceCard";
 import AssetsList from "../components/overview/AssetsList";
 import { QRCodeSVG } from "qrcode.react";
-
-interface TokenBalance {
-  assetType: string;
-  amount: string;
-  formattedAmount: string;
-  metadata: {
-    name: string;
-    symbol: string;
-    decimals: number;
-  };
-  isNative: boolean;
-}
+import { TokenBalance } from "../types";
 
 export default function OverviewPage() {
   const { ready, authenticated, user } = usePrivy();

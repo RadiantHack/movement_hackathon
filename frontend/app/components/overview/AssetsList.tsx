@@ -2,18 +2,7 @@
 
 import React from "react";
 import { getTokenIconUrl } from "../../utils/token-icons";
-
-interface TokenBalance {
-  assetType: string;
-  amount: string;
-  formattedAmount: string;
-  metadata: {
-    name: string;
-    symbol: string;
-    decimals: number;
-  };
-  isNative: boolean;
-}
+import { TokenBalance } from "../../types";
 
 interface AssetsListProps {
   balances: TokenBalance[];
