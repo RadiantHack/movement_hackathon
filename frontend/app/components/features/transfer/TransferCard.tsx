@@ -13,20 +13,14 @@
 import React, { useState, useMemo } from "react";
 import { usePrivy, WalletWithMetadata } from "@privy-io/react-auth";
 import { TransferData } from "../../types";
-import {
-  Aptos,
-  AptosConfig,
-  Network,
-  AccountAuthenticatorEd25519,
-  Ed25519PublicKey,
-  Ed25519Signature,
-  generateSigningMessageForTransaction,
-  ChainId,
-  AccountAddress,
-} from "@aptos-labs/ts-sdk";
-import { toHex } from "viem";
+import { TokenBalance } from "../../../types";
 import { useSignRawHash } from "@privy-io/react-auth/extended-chains";
 import { useMovementConfig } from "../../../hooks/useMovementConfig";
+import {
+  executeTransfer,
+  getTransferErrorMessage,
+} from "../../../utils/transfer";
+import { createAptosClient } from "../../../utils/aptos-client";
 
 interface TransferCardProps {
   data: TransferData;
@@ -43,22 +37,16 @@ export const TransferCard: React.FC<TransferCardProps> = ({
   const { user, ready, authenticated } = usePrivy();
   const config = useMovementConfig();
 
-  // Create Aptos instance with config from Redux store
-  // Use CUSTOM network with mainnet RPC (same as transfer page)
+  // Create Aptos instance using shared utility
   const aptos = useMemo(() => {
-    if (!config.movementFullNode) return null;
-    return new Aptos(
-      new AptosConfig({
-        network: Network.CUSTOM,
-        fullnode: config.movementFullNode,
-      })
-    );
+    return createAptosClient({
+      movementFullNode: config.movementFullNode,
+    });
   }, [config.movementFullNode]);
 
   const movementChainId = useMemo(() => {
-    // Use mainnet chain ID (126) - same as transfer page
-    return 126;
-  }, []);
+    return config.movementChainId || 126;
+  }, [config.movementChainId]);
 
   const [transferring, setTransferring] = useState(false);
   const [transferError, setTransferError] = useState<string | null>(null);
@@ -116,19 +104,6 @@ export const TransferCard: React.FC<TransferCardProps> = ({
         throw new Error("Public key not found");
       }
 
-      // Handle public key format - same as transfer page
-      let pubKeyNoScheme = publicKey.startsWith("0x")
-        ? publicKey.slice(2)
-        : publicKey;
-      if (pubKeyNoScheme.startsWith("00") && pubKeyNoScheme.length > 64) {
-        pubKeyNoScheme = pubKeyNoScheme.slice(2);
-      }
-      if (pubKeyNoScheme.length !== 64) {
-        throw new Error(
-          `Invalid public key length: expected 64 hex characters (32 bytes), got ${pubKeyNoScheme.length}`
-        );
-      }
-
       // Validate recipient address
       if (
         !toAddress ||
@@ -140,83 +115,68 @@ export const TransferCard: React.FC<TransferCardProps> = ({
         );
       }
 
-      // Convert amount to Octas (Aptos uses 8 decimals)
-      const parsedAmount = parseFloat(amount);
-      if (isNaN(parsedAmount) || parsedAmount <= 0) {
-        throw new Error("Invalid amount. Please enter a positive number.");
-      }
-      const amountInOctas = Math.floor(parsedAmount * 100000000);
-
       // Determine if this is native MOVE token
       const isNativeMove =
         (tokenSymbol || token || "").toUpperCase() === "MOVE";
 
-      let rawTxn;
-      if (isNativeMove) {
-        // For native MOVE tokens, use aptos_account::transfer_coins which automatically registers CoinStore
-        rawTxn = await aptos.transaction.build.simple({
-          sender: senderAddress,
-          data: {
-            function: "0x1::aptos_account::transfer_coins",
-            typeArguments: ["0x1::aptos_coin::AptosCoin"],
-            functionArguments: [toAddress, amountInOctas],
-          },
-        });
-      } else {
-        // For other tokens (fungible assets), we need the assetType (fungible asset metadata address)
-        // Since TransferData doesn't include assetType, we'll need to fetch it or handle it differently
-        // For now, throw an error asking for assetType
+      if (!isNativeMove) {
         throw new Error(
           `Transfer of ${tokenSymbol || token} requires assetType information. ` +
             `Please use the transfer page for non-native tokens or provide assetType in TransferData.`
         );
       }
 
-      // Override chain ID to match Movement Network mainnet (same as transfer page)
-      const txnObj = rawTxn as any;
-      if (txnObj.rawTransaction) {
-        txnObj.rawTransaction.chain_id = new ChainId(movementChainId);
-      }
+      // Create minimal TokenBalance object for MOVE token
+      // TransferCard only supports MOVE transfers currently
+      const selectedToken: TokenBalance = {
+        assetType: "0x1::aptos_coin::AptosCoin",
+        amount: amount,
+        formattedAmount: amount,
+        metadata: {
+          name: "Move Coin",
+          symbol: "MOVE",
+          decimals: 8,
+        },
+        isNative: true,
+      };
 
-      // Generate signing message and hash
-      const message = generateSigningMessageForTransaction(rawTxn);
-      const hash = toHex(message);
-
-      // Sign the hash using Privy's signRawHash
-      const signatureResponse = await signRawHash({
-        address: senderAddress,
-        chainType: "aptos",
-        hash: hash,
+      // Execute transfer using utility function
+      const txHash = await executeTransfer({
+        aptos: aptos!,
+        movementChainId,
+        senderAddress,
+        senderPubKeyWithScheme: publicKey,
+        selectedToken,
+        toAddress,
+        amount,
+        signRawHash,
       });
 
-      // Create authenticator from signature (same as transfer page)
-      const publicKeyObj = new Ed25519PublicKey(`0x${pubKeyNoScheme}`);
-      const sig = new Ed25519Signature(signatureResponse.signature.slice(2)); // drop 0x from sig
-      const senderAuthenticator = new AccountAuthenticatorEd25519(
-        publicKeyObj,
-        sig
-      );
-
-      // Submit transaction
-      const pending = await aptos.transaction.submit.simple({
-        transaction: rawTxn,
-        senderAuthenticator,
-      });
-
-      // Wait for transaction to be executed (same as transfer page)
-      await aptos.waitForTransaction({
-        transactionHash: pending.hash,
-        options: { checkSuccess: true },
-      });
-
-      setTxHash(pending.hash);
+      setTxHash(txHash);
       onTransferInitiate?.();
     } catch (err: unknown) {
       console.error("Transfer error:", err);
-      const errorMessage =
-        err instanceof Error
-          ? err.message
-          : "Transfer failed. Please try again.";
+
+      // Create a minimal TokenBalance for error message (only used if we have token info)
+      const isNativeMove =
+        (tokenSymbol || token || "").toUpperCase() === "MOVE";
+      const selectedToken: TokenBalance = {
+        assetType: isNativeMove ? "0x1::aptos_coin::AptosCoin" : "",
+        amount: amount,
+        formattedAmount: amount,
+        metadata: {
+          name: tokenSymbol || token || "Unknown",
+          symbol: tokenSymbol || token || "UNKNOWN",
+          decimals: 8,
+        },
+        isNative: isNativeMove,
+      };
+
+      const errorMessage = getTransferErrorMessage(
+        err,
+        toAddress,
+        selectedToken
+      );
       setTransferError(errorMessage);
     } finally {
       setTransferring(false);

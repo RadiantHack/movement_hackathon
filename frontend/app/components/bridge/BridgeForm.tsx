@@ -2,20 +2,11 @@
 
 import React, { useMemo, useState, useEffect, useRef } from "react";
 import { usePrivy, WalletWithMetadata } from "@privy-io/react-auth";
-import {
-  Aptos,
-  AptosConfig,
-  Network,
-  AccountAuthenticatorEd25519,
-  Ed25519PublicKey,
-  Ed25519Signature,
-  generateSigningMessageForTransaction,
-  ChainId,
-} from "@aptos-labs/ts-sdk";
-import { toHex } from "viem";
 import { useSignRawHash } from "@privy-io/react-auth/extended-chains";
 import { useMovementConfig } from "../../hooks/useMovementConfig";
-import { getTokenIconUrl } from "../../utils/token-icons";
+import { AssetIcon } from "../asset-icon";
+import { executeBridge, isValidEthereumAddress } from "../../utils/bridge";
+import { createAptosClient } from "../../utils/aptos-client";
 
 const MOVEMENT_CHAIN = {
   id: "movement",
@@ -57,13 +48,9 @@ export default function BridgeForm({ walletAddress }: BridgeFormProps) {
   const tokenDropdownRef = useRef<HTMLDivElement>(null);
 
   const aptos = useMemo(() => {
-    if (!config.movementFullNode) return null;
-    return new Aptos(
-      new AptosConfig({
-        network: Network.CUSTOM,
-        fullnode: config.movementFullNode,
-      })
-    );
+    return createAptosClient({
+      movementFullNode: config.movementFullNode,
+    });
   }, [config.movementFullNode]);
 
   const movementChainId = useMemo(() => {
@@ -128,21 +115,6 @@ export default function BridgeForm({ walletAddress }: BridgeFormProps) {
     fetchBalance();
   }, [walletAddress, token]);
 
-  const addressToBytes32 = (address: string): Uint8Array => {
-    const addr = address.startsWith("0x") ? address.slice(2) : address;
-    const addressBytes = new Uint8Array(20);
-    for (let i = 0; i < addr.length; i += 2) {
-      addressBytes[i / 2] = parseInt(addr.substr(i, 2), 16);
-    }
-    const bytes32 = new Uint8Array(32);
-    bytes32.set(addressBytes, 12);
-    return bytes32;
-  };
-
-  const isValidEthereumAddress = (address: string): boolean => {
-    return /^0x[a-fA-F0-9]{40}$/.test(address);
-  };
-
   const handleBridge = async () => {
     if (!recipientAddress || !isValidEthereumAddress(recipientAddress)) return;
     if (!walletAddress || !movementWallet || !aptos) return;
@@ -151,97 +123,20 @@ export default function BridgeForm({ walletAddress }: BridgeFormProps) {
     try {
       const senderAddress = walletAddress;
       const senderPubKeyWithScheme = movementWallet.publicKey as string;
-      if (!senderPubKeyWithScheme || senderPubKeyWithScheme.length < 2) {
-        throw new Error("Invalid public key format");
-      }
-      const pubKeyNoScheme = senderPubKeyWithScheme.slice(2);
 
-      const parsedAmount = parseFloat(amount);
-      if (isNaN(parsedAmount) || parsedAmount <= 0)
-        throw new Error("Invalid amount");
-      const amountLd = BigInt(
-        Math.floor(parsedAmount * Math.pow(10, tokenDecimals))
-      );
-      const minAmountLd = amountLd;
-
-      const dstEid = 30101;
-      const toBytes32 = addressToBytes32(recipientAddress);
-      const toVector = Array.from(toBytes32).map((b) => b.toString());
-
-      const extraOptionsHex = "0x00030100110100000000000000000000000000061a80";
-      const extraOptionsBytes = Buffer.from(extraOptionsHex.slice(2), "hex");
-      const extraOptionsVector = Array.from(extraOptionsBytes).map((b) =>
-        b.toString()
-      );
-
-      const composeMessageHex = "0x00";
-      const composeMessageBytes = Buffer.from(
-        composeMessageHex.slice(2),
-        "hex"
-      );
-      const composeMessageVector = Array.from(composeMessageBytes).map((b) =>
-        b.toString()
-      );
-
-      const oftCmdHex = "0x00";
-      const oftCmdBytes = Buffer.from(oftCmdHex.slice(2), "hex");
-      const oftCmdVector = Array.from(oftCmdBytes).map((b) => b.toString());
-
-      const nativeFee = BigInt(481762913);
-      const zroFee = BigInt(0);
-
-      const rawTxn = await aptos.transaction.build.simple({
-        sender: senderAddress,
-        data: {
-          function:
-            "0x4d2969d384e440db9f1a51391cfc261d1ec08ee1bdf7b9711a6c05d485a4110a::oft::send_withdraw_coin",
-          typeArguments: [],
-          functionArguments: [
-            dstEid.toString(),
-            toVector,
-            amountLd.toString(),
-            minAmountLd.toString(),
-            extraOptionsVector,
-            composeMessageVector,
-            oftCmdVector,
-            nativeFee.toString(),
-            zroFee.toString(),
-          ],
-        },
+      // Execute bridge using utility function
+      const txHash = await executeBridge({
+        aptos: aptos!,
+        movementChainId,
+        senderAddress,
+        senderPubKeyWithScheme,
+        recipientAddress,
+        amount,
+        tokenDecimals,
+        signRawHash,
       });
 
-      const txnObj = rawTxn as any;
-      if (txnObj.rawTransaction) {
-        const chainIdObj = new ChainId(movementChainId);
-        txnObj.rawTransaction.chain_id = chainIdObj;
-      }
-
-      const message = generateSigningMessageForTransaction(rawTxn);
-      const hash = toHex(message);
-
-      const signatureResponse = await signRawHash({
-        address: senderAddress,
-        chainType: "aptos",
-        hash: hash as `0x${string}`,
-      });
-
-      const publicKey = new Ed25519PublicKey(`0x${pubKeyNoScheme}`);
-      const sig = new Ed25519Signature(signatureResponse.signature.slice(2));
-      const senderAuthenticator = new AccountAuthenticatorEd25519(
-        publicKey,
-        sig
-      );
-
-      const pending = await aptos.transaction.submit.simple({
-        transaction: rawTxn,
-        senderAuthenticator,
-      });
-
-      const executed = await aptos.waitForTransaction({
-        transactionHash: pending.hash,
-      });
-
-      alert(`Bridge transaction successful! Hash: ${executed.hash}`);
+      alert(`Bridge transaction successful! Hash: ${txHash}`);
       setAmount("");
       setRecipientAddress("");
     } catch (error) {
@@ -259,7 +154,6 @@ export default function BridgeForm({ walletAddress }: BridgeFormProps) {
   const selectedToken = TOKENS.find((t) => t.symbol === token) || TOKENS[0];
 
   const tokenItems = TOKENS.map((t) => {
-    const iconUrl = getTokenIconUrl(t.symbol);
     return (
       <button
         key={t.symbol}
@@ -267,30 +161,28 @@ export default function BridgeForm({ walletAddress }: BridgeFormProps) {
           setToken(t.symbol);
           setShowTokenDropdown(false);
         }}
-        className={`w-full flex items-center gap-3 p-4 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors ${
+        className={`w-full flex items-center gap-2.5 sm:gap-3 p-3 sm:p-3.5 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors active:scale-[0.98] ${
           token === t.symbol ? "bg-blue-50 dark:bg-blue-900/20" : ""
         }`}
       >
-        <div className="relative w-12 h-12 rounded-xl bg-white dark:bg-zinc-800 flex items-center justify-center shadow-sm ring-1 ring-zinc-200 dark:ring-zinc-700 overflow-hidden">
-          {iconUrl ? (
-            <img
-              src={iconUrl as string}
-              alt={t.symbol}
-              className="w-10 h-10 object-contain p-1"
-            />
-          ) : null}
+        <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl bg-white dark:bg-zinc-800 flex items-center justify-center shadow-sm ring-1 ring-zinc-200 dark:ring-zinc-700 overflow-hidden flex-shrink-0 p-0.5 sm:p-1">
+          <AssetIcon
+            symbol={t.symbol}
+            size="w-8 h-8 sm:w-9 sm:h-9"
+            className="rounded-lg"
+          />
         </div>
-        <div className="text-left flex-1">
-          <div className="text-sm font-bold text-zinc-900 dark:text-zinc-50">
+        <div className="text-left flex-1 min-w-0">
+          <div className="text-sm sm:text-base font-bold text-zinc-900 dark:text-zinc-50 truncate">
             {t.symbol}
           </div>
-          <div className="text-xs text-zinc-500 dark:text-zinc-400">
+          <div className="text-xs text-zinc-500 dark:text-zinc-400 truncate">
             {t.name}
           </div>
         </div>
         {token === t.symbol && (
           <svg
-            className="w-5 h-5 text-blue-500"
+            className="w-4 h-4 sm:w-5 sm:h-5 text-blue-500 flex-shrink-0"
             fill="none"
             viewBox="0 0 24 24"
             stroke="currentColor"
@@ -307,13 +199,21 @@ export default function BridgeForm({ walletAddress }: BridgeFormProps) {
     );
   });
 
+  const canBridge =
+    amount &&
+    parseFloat(amount) > 0 &&
+    !bridging &&
+    recipientAddress &&
+    isValidEthereumAddress(recipientAddress);
+
   return (
-    <div className="w-full max-w-[480px] mx-auto">
-      <div className="relative rounded-2xl p-6 sm:p-8 bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-700/50 shadow-xl shadow-zinc-200/50 dark:shadow-zinc-950/50 overflow-hidden">
-        <div className="relative flex items-center gap-3 mb-6">
-          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-yellow-400 via-amber-500 to-blue-500 shadow-lg shadow-yellow-500/30">
+    <div className="w-full max-w-md mx-auto">
+      <div className="relative">
+        {/* Header */}
+        <div className="flex items-center gap-3 mb-5 sm:mb-6">
+          <div className="flex h-10 w-10 sm:h-12 sm:w-12 items-center justify-center rounded-lg sm:rounded-xl bg-gradient-to-br from-yellow-400 via-amber-500 to-blue-500 shadow-lg shadow-yellow-500/30 flex-shrink-0">
             <svg
-              className="w-6 h-6 text-white"
+              className="w-5 h-5 sm:w-6 sm:h-6 text-white"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -326,53 +226,46 @@ export default function BridgeForm({ walletAddress }: BridgeFormProps) {
               />
             </svg>
           </div>
-          <div>
-            <h2 className="text-xl font-bold text-zinc-900 dark:text-zinc-50">
+          <div className="min-w-0 flex-1">
+            <h2 className="text-lg sm:text-xl font-bold text-zinc-900 dark:text-zinc-50 truncate">
               Bridge to Ethereum
             </h2>
-            <p className="text-xs text-zinc-500 dark:text-zinc-400">
+            <p className="text-xs text-zinc-500 dark:text-zinc-400 truncate">
               Transfer assets from Movement Network
             </p>
           </div>
         </div>
 
-        <div className="relative mb-4">
-          <label className="block text-[10px] font-bold uppercase tracking-widest text-zinc-400 dark:text-zinc-500 mb-2">
-            Select Token
+        {/* Token Selection */}
+        <div className="relative mb-3 sm:mb-4" ref={tokenDropdownRef}>
+          <label className="block text-[10px] font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400 mb-1.5 sm:mb-2">
+            Token
           </label>
           <div className="relative">
             <button
               onClick={() => setShowTokenDropdown(!showTokenDropdown)}
               disabled={bridging}
-              className="w-full flex items-center justify-between p-4 rounded-xl border border-zinc-200 dark:border-zinc-700/50 bg-white dark:bg-zinc-900 shadow-sm hover:border-zinc-300 dark:hover:border-zinc-600 transition-colors"
+              className="w-full flex items-center justify-between p-3 sm:p-3.5 rounded-lg sm:rounded-xl border border-zinc-200 dark:border-zinc-700/50 bg-white dark:bg-zinc-900 hover:border-zinc-300 dark:hover:border-zinc-600 transition-all active:scale-[0.98]"
             >
-              <div className="flex items-center gap-3">
-                <div className="relative w-12 h-12 rounded-xl bg-white dark:bg-zinc-800 flex items-center justify-center shadow-sm ring-1 ring-zinc-200 dark:ring-zinc-700 overflow-hidden">
-                  {(() => {
-                    const iconUrl = getTokenIconUrl(selectedToken.symbol);
-                    if (iconUrl) {
-                      return (
-                        <img
-                          src={iconUrl as string}
-                          alt={selectedToken.symbol}
-                          className="w-10 h-10 object-contain p-1"
-                        />
-                      );
-                    }
-                    return null;
-                  })()}
+              <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1">
+                <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl bg-white dark:bg-zinc-800 flex items-center justify-center shadow-sm ring-1 ring-zinc-200 dark:ring-zinc-700 overflow-hidden flex-shrink-0 p-0.5 sm:p-1">
+                  <AssetIcon
+                    symbol={selectedToken.symbol}
+                    size="w-8 h-8 sm:w-9 sm:h-9"
+                    className="rounded-lg"
+                  />
                 </div>
-                <div className="text-left">
-                  <div className="text-sm font-bold text-zinc-900 dark:text-zinc-50">
+                <div className="text-left min-w-0 flex-1">
+                  <div className="text-sm sm:text-base font-bold text-zinc-900 dark:text-zinc-50 truncate">
                     {selectedToken.symbol}
                   </div>
-                  <div className="text-xs text-zinc-500 dark:text-zinc-400">
+                  <div className="text-xs text-zinc-500 dark:text-zinc-400 truncate">
                     {selectedToken.name}
                   </div>
                 </div>
               </div>
               <svg
-                className={`w-5 h-5 text-zinc-400 transition-transform ${showTokenDropdown ? "rotate-180" : ""}`}
+                className={`w-4 h-4 sm:w-5 sm:h-5 text-zinc-400 transition-transform flex-shrink-0 ${showTokenDropdown ? "rotate-180" : ""}`}
                 fill="none"
                 viewBox="0 0 24 24"
                 stroke="currentColor"
@@ -387,19 +280,20 @@ export default function BridgeForm({ walletAddress }: BridgeFormProps) {
             </button>
 
             {showTokenDropdown && (
-              <div className="absolute z-20 w-full mt-2 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 shadow-xl overflow-hidden">
+              <div className="absolute z-20 w-full mt-1.5 sm:mt-2 rounded-lg sm:rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 shadow-xl overflow-hidden max-h-[240px] overflow-y-auto">
                 {tokenItems}
               </div>
             )}
           </div>
         </div>
 
-        <div className="relative mb-4">
-          <label className="block text-[10px] font-bold uppercase tracking-widest text-zinc-400 dark:text-zinc-500 mb-2">
+        {/* Amount Input */}
+        <div className="relative mb-3 sm:mb-4">
+          <label className="block text-[10px] font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400 mb-1.5 sm:mb-2">
             Amount
           </label>
-          <div className="rounded-xl border border-zinc-200 dark:border-zinc-700/50 bg-white dark:bg-zinc-900 p-4 shadow-sm">
-            <div className="flex items-center gap-3">
+          <div className="rounded-lg sm:rounded-xl border border-zinc-200 dark:border-zinc-700/50 bg-white dark:bg-zinc-900 p-3 sm:p-4 shadow-sm">
+            <div className="flex items-center gap-2 sm:gap-3 mb-2 sm:mb-3">
               <input
                 type="text"
                 inputMode="decimal"
@@ -409,17 +303,38 @@ export default function BridgeForm({ walletAddress }: BridgeFormProps) {
                   setAmount(val);
                 }}
                 placeholder="0.0"
-                className="flex-1 min-w-0 bg-transparent text-2xl font-bold text-zinc-900 dark:text-zinc-50 placeholder-zinc-300 dark:placeholder-zinc-600 focus:outline-none"
+                className="flex-1 min-w-0 bg-transparent text-xl sm:text-2xl font-bold text-zinc-900 dark:text-zinc-50 placeholder-zinc-300 dark:placeholder-zinc-600 focus:outline-none"
                 disabled={bridging}
               />
-              <div className="text-sm font-semibold text-zinc-600 dark:text-zinc-400 px-3 py-2">
+              <div className="text-xs sm:text-sm font-semibold text-zinc-600 dark:text-zinc-400 px-2 sm:px-3 py-1 sm:py-1.5 flex-shrink-0">
                 {selectedToken.symbol}
               </div>
             </div>
-            <div className="mt-3 pt-3 border-t border-zinc-100 dark:border-zinc-800 flex items-center justify-between">
-              <span className="text-xs text-zinc-400">
+            <div className="pt-2 sm:pt-3 border-t border-zinc-100 dark:border-zinc-800 flex items-center justify-between gap-2">
+              <span className="text-[10px] sm:text-xs text-zinc-500 dark:text-zinc-400 truncate">
                 {loadingBalance ? (
-                  <span className="flex items-center gap-1">Loading...</span>
+                  <span className="flex items-center gap-1">
+                    <svg
+                      className="w-3 h-3 animate-spin"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                    >
+                      <circle
+                        className="opacity-25"
+                        cx="12"
+                        cy="12"
+                        r="10"
+                        stroke="currentColor"
+                        strokeWidth="4"
+                      />
+                      <path
+                        className="opacity-75"
+                        fill="currentColor"
+                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                      />
+                    </svg>
+                    Loading...
+                  </span>
                 ) : (
                   `Balance: ${balance ? parseFloat(balance).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 6 }) : "0.00"} ${selectedToken.symbol}`
                 )}
@@ -428,7 +343,7 @@ export default function BridgeForm({ walletAddress }: BridgeFormProps) {
                 onClick={() => {
                   if (balance) setAmount(balance);
                 }}
-                className="text-xs font-bold text-blue-500 hover:text-blue-600 dark:text-blue-400 dark:hover:text-blue-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="text-[10px] sm:text-xs font-bold text-blue-500 hover:text-blue-600 dark:text-blue-400 dark:hover:text-blue-300 transition-colors disabled:opacity-50 disabled:cursor-not-allowed px-2 py-1 rounded active:scale-95 flex-shrink-0"
                 disabled={
                   bridging || !balance || parseFloat(balance || "0") === 0
                 }
@@ -439,37 +354,80 @@ export default function BridgeForm({ walletAddress }: BridgeFormProps) {
           </div>
         </div>
 
-        <div className="mb-2">
-          <label className="block text-[10px] font-bold uppercase tracking-widest text-zinc-400 dark:text-zinc-500 mb-2">
+        {/* Recipient Address */}
+        <div className="mb-4 sm:mb-5">
+          <label className="block text-[10px] font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400 mb-1.5 sm:mb-2">
             Recipient (Ethereum)
           </label>
-          <input
-            type="text"
-            value={recipientAddress}
-            onChange={(e) => setRecipientAddress(e.target.value)}
-            placeholder="0x..."
-            className="w-full px-4 py-3 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 text-sm focus:outline-none"
-            disabled={bridging}
-          />
+          <div className="rounded-lg sm:rounded-xl border border-zinc-200 dark:border-zinc-700/50 bg-white dark:bg-zinc-900 p-3 sm:p-3.5 shadow-sm focus-within:ring-2 focus-within:ring-blue-500/20 focus-within:border-blue-500/50 transition-all">
+            <input
+              type="text"
+              value={recipientAddress}
+              onChange={(e) => setRecipientAddress(e.target.value)}
+              placeholder="0x..."
+              className="w-full bg-transparent text-xs sm:text-sm font-mono text-zinc-900 dark:text-zinc-50 placeholder-zinc-400 dark:placeholder-zinc-500 focus:outline-none"
+              disabled={bridging}
+            />
+            {recipientAddress && !isValidEthereumAddress(recipientAddress) && (
+              <p className="mt-2 text-[10px] sm:text-xs text-red-500">
+                Invalid Ethereum address
+              </p>
+            )}
+          </div>
         </div>
 
-        <div className="mt-4">
-          <button
-            onClick={handleBridge}
-            disabled={
-              !(
-                amount &&
-                parseFloat(amount) > 0 &&
-                !bridging &&
-                recipientAddress &&
-                isValidEthereumAddress(recipientAddress)
-              )
-            }
-            className="w-full px-4 py-3 rounded-xl bg-blue-600 text-white font-semibold hover:bg-blue-700 disabled:opacity-60"
-          >
-            {bridging ? "Bridging..." : "Bridge"}
-          </button>
-        </div>
+        {/* Bridge Button */}
+        <button
+          onClick={handleBridge}
+          disabled={!canBridge}
+          className={`w-full py-2.5 sm:py-3 rounded-lg sm:rounded-xl font-bold text-sm sm:text-base transition-all duration-200 ${
+            canBridge
+              ? "bg-gradient-to-r from-blue-600 to-cyan-600 text-white shadow-lg shadow-blue-500/30 hover:shadow-xl hover:shadow-blue-500/40 hover:scale-[1.01] active:scale-[0.99] cursor-pointer"
+              : "bg-zinc-100 dark:bg-zinc-800 text-zinc-400 dark:text-zinc-500 cursor-not-allowed"
+          }`}
+        >
+          {bridging ? (
+            <span className="flex items-center justify-center gap-2">
+              <svg
+                className="w-4 h-4 sm:w-5 sm:h-5 animate-spin"
+                fill="none"
+                viewBox="0 0 24 24"
+              >
+                <circle
+                  className="opacity-25"
+                  cx="12"
+                  cy="12"
+                  r="10"
+                  stroke="currentColor"
+                  strokeWidth="4"
+                />
+                <path
+                  className="opacity-75"
+                  fill="currentColor"
+                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                />
+              </svg>
+              Bridging...
+            </span>
+          ) : (
+            <span className="flex items-center justify-center gap-2">
+              <svg
+                className="w-4 h-4 sm:w-5 sm:h-5"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M13 10V3L4 14h7v7l9-11h-7z"
+                />
+              </svg>
+              Bridge {selectedToken.symbol}
+            </span>
+          )}
+        </button>
       </div>
     </div>
   );

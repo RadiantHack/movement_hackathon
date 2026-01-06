@@ -3,17 +3,8 @@
 import { useState, useMemo } from "react";
 import { usePrivy, WalletWithMetadata } from "@privy-io/react-auth";
 import { useSignRawHash } from "@privy-io/react-auth/extended-chains";
-import {
-  Aptos,
-  AptosConfig,
-  Network,
-  AccountAuthenticatorEd25519,
-  Ed25519PublicKey,
-  Ed25519Signature,
-  generateSigningMessageForTransaction,
-  ChainId,
-} from "@aptos-labs/ts-sdk";
-import { toHex } from "viem";
+import { executeBorrowTransaction } from "@/app/hooks/useEchelonTransactions";
+import { AssetIcon } from "./asset-icon";
 
 interface EchelonAsset {
   symbol: string;
@@ -26,6 +17,7 @@ interface EchelonAsset {
   decimals?: number;
   market?: string;
   faAddress?: string; // Fungible asset address
+  marketAddress?: string;
 }
 
 interface EchelonBorrowModalProps {
@@ -41,10 +33,6 @@ interface EchelonBorrowModalProps {
   onSuccess?: () => void; // Callback after successful transaction
 }
 
-// Echelon contract address
-const ECHELON_CONTRACT =
-  "0x6a01d5761d43a5b5a0ccbfc42edf2d02c0611464aae99a2ea0e0d4819f0550b5";
-
 // Market addresses for each asset
 const MARKET_ADDRESSES: Record<string, string> = {
   MOVE: "0x568f96c4ed010869d810abcf348f4ff6b66d14ff09672fb7b5872e4881a25db7",
@@ -58,30 +46,6 @@ const MARKET_ADDRESSES: Record<string, string> = {
   sUSDe: "0x481fe68db505bc15973d0014c35217726efd6ee353d91a2a9faaac201f3423d",
   rsETH: "0x4cbeca747528f340ef9065c93dea0cc1ac8a46b759e31fc8b8d04bc52a86614b",
 };
-
-// Type arguments for each asset
-const TYPE_ARGUMENTS: Record<string, string> = {
-  MOVE: "0x1::aptos_coin::AptosCoin",
-  USDC: "0x83121c9f9b0527d1f056e21a950d6bf3b9e9e2e8353d0e95ccea726713cbea39",
-  USDT: "0x447721a30109c662dde9c73a0c2c9c9c459fb5e5a9c92f03c50fa69737f5d08d",
-  WBTC: "0xb06f29f24dde9c6daeec1f930f14a441a8d6c0fbea590725e88b340af3e1939c",
-  WETH: "0x908828f4fb0213d4034c3ded1630bbd904e8a3a6bf3c63270887f0b06653a376",
-  LBTC: "0x658f4ef6f76c8eeffdc06a30946f3f06723a7f9532e2413312b2a612183759c",
-  SolvBTC: "0x527c43638a6c389a9ad702e7085f31c48223624d5102a5207dfab861f482c46d",
-  ezETH: "0x2f6af255328fe11b88d840d1e367e946ccd16bd7ebddd6ee7e2ef9f7ae0c53ef",
-  sUSDe: "0x74f0c7504507f7357f8a218cc70ce3fc0f4b4e9eb8474e53ca778cb1e0c6dcc5",
-  rsETH: "0x51ffc9885233adf3dd411078cad57535ed1982013dc82d9d6c433a55f2e0035d",
-};
-
-const MOVEMENT_RPC = "https://mainnet.movementnetwork.xyz/v1";
-const MOVEMENT_CHAIN_ID = 126;
-
-const aptos = new Aptos(
-  new AptosConfig({
-    network: Network.CUSTOM,
-    fullnode: MOVEMENT_RPC,
-  })
-);
 
 export function EchelonBorrowModal({
   isOpen,
@@ -101,6 +65,7 @@ export function EchelonBorrowModal({
   const [error, setError] = useState<string | null>(null);
   const [txHash, setTxHash] = useState<string | null>(null);
   const [step, setStep] = useState<string>("");
+  const [showSuccessMessage, setShowSuccessMessage] = useState(false);
 
   const { user, ready, authenticated } = usePrivy();
   const { signRawHash } = useSignRawHash();
@@ -155,37 +120,21 @@ export function EchelonBorrowModal({
   };
 
   const handleBorrow = async () => {
-    console.log("[Borrow] handleBorrow called", {
-      asset,
-      numericAmount,
-      availableBalance,
-    });
-
     if (!asset || numericAmount <= 0) {
-      console.log("[Borrow] Validation failed", {
-        asset: !!asset,
-        numericAmount,
-      });
       setError("Please enter a valid amount to borrow");
       return;
     }
 
     if (!movementWallet) {
-      console.log("[Borrow] No wallet connected");
       setError("Please connect a Movement wallet");
       return;
     }
 
     // Validate that user has collateral
     if (!hasCollateral && totalSupplyBalance <= 0) {
-      const errorMsg =
-        "You need to supply collateral before you can borrow. Please supply assets first.";
-      console.log("[Borrow] No collateral", {
-        hasCollateral,
-        totalSupplyBalance,
-      });
-      setError(errorMsg);
-      setSubmitting(false);
+      setError(
+        "You need to supply collateral before you can borrow. Please supply assets first."
+      );
       return;
     }
 
@@ -197,27 +146,14 @@ export function EchelonBorrowModal({
       } else {
         errorMsg = `Insufficient borrowing power. You have ${totalBorrowBalance.toFixed(2)} USD borrowed against ${totalSupplyBalance.toFixed(2)} USD collateral. Please supply more assets or repay existing borrows.`;
       }
-      console.log("[Borrow] No borrowing power", {
-        hasCollateral,
-        totalSupplyBalance,
-        totalBorrowBalance,
-        availableBalance,
-      });
       setError(errorMsg);
-      setSubmitting(false);
       return;
     }
 
     if (numericAmount > availableBalance) {
-      const errorMsg = `Insufficient borrowing power. You can borrow up to ${availableBalance.toFixed(6)} ${asset.symbol} based on your collateral.`;
-      console.log("[Borrow] Borrowing power check failed", {
-        numericAmount,
-        availableBalance,
-        totalSupplyBalance,
-        totalBorrowBalance,
-      });
-      setError(errorMsg);
-      setSubmitting(false);
+      setError(
+        `Insufficient borrowing power. You can borrow up to ${availableBalance.toFixed(6)} ${asset.symbol} based on your collateral.`
+      );
       return;
     }
 
@@ -225,278 +161,57 @@ export function EchelonBorrowModal({
     setError(null);
     setTxHash(null);
 
-    try {
-      const senderAddress = movementWallet.address as string;
-      const publicKey = (movementWallet as any).publicKey as string;
+    const marketAddress =
+      asset.market ||
+      MARKET_ADDRESSES[asset.symbol] ||
+      asset.marketAddress ||
+      "";
 
-      console.log("[Borrow] Wallet info", {
-        senderAddress: !!senderAddress,
-        publicKey: !!publicKey,
-      });
+    if (!marketAddress) {
+      setError(`Market address not found for ${asset.symbol}`);
+      setSubmitting(false);
+      return;
+    }
 
-      if (!senderAddress || !publicKey) {
-        throw new Error("Wallet address or public key not found");
-      }
-
-      // Get market address and determine if it's a fungible asset
-      const marketAddress = asset.market || MARKET_ADDRESSES[asset.symbol];
-      // MOVE is a coin, everything else with faAddress is a fungible asset
-      const isFungibleAsset = asset.symbol !== "MOVE" && !!asset.faAddress;
-
-      console.log("[Borrow] Asset details", {
+    const result = await executeBorrowTransaction({
+      asset: {
         symbol: asset.symbol,
-        market: asset.market,
+        decimals: asset.decimals || 8,
         marketAddress,
         faAddress: asset.faAddress,
-        isFungibleAsset,
-      });
+      },
+      amount: numericAmount,
+      availableBalance,
+      hasCollateral,
+      totalSupplyBalance,
+      totalBorrowBalance,
+      movementWallet,
+      publicKey: (movementWallet as any).publicKey,
+      signRawHash,
+      onStepChange: setStep,
+    });
 
-      if (!marketAddress) {
-        throw new Error(
-          `Unsupported asset: ${asset.symbol}. Market address not found.`
-        );
-      }
-
-      // Convert amount to smallest unit (8 decimals for most assets)
-      // Use the same approach as supply modal for consistency
-      const decimals = asset.decimals || 8;
-      const maxU64 = BigInt("18446744073709551615"); // Maximum u64 value
-      const maxAmount = Number(maxU64) / Math.pow(10, decimals);
-
-      // Validate input amount first - ensure it's within safe range
-      if (numericAmount > maxAmount) {
-        throw new Error(
-          `Amount too large. Maximum borrowable amount is ${maxAmount.toFixed(decimals)} ${asset.symbol}`
-        );
-      }
-
-      if (numericAmount <= 0) {
-        throw new Error("Amount must be greater than 0");
-      }
-
-      // Use Math.floor like supply modal does, but validate the result
-      // This works for amounts within JavaScript's safe integer range
-      const multiplier = Math.pow(10, decimals);
-
-      // Check if the calculation would exceed safe integer range
-      if (numericAmount * multiplier > Number.MAX_SAFE_INTEGER) {
-        throw new Error(`Amount too large. Please use a smaller amount.`);
-      }
-
-      const rawAmountNum = Math.floor(numericAmount * multiplier);
-
-      // Validate the result is within u64 range
-      const maxU64Num = Number(maxU64);
-      if (rawAmountNum > maxU64Num || !Number.isSafeInteger(rawAmountNum)) {
-        throw new Error(
-          `Amount too large. Maximum borrowable amount is ${maxAmount.toFixed(decimals)} ${asset.symbol}`
-        );
-      }
-
-      if (rawAmountNum <= 0) {
-        throw new Error("Amount must be greater than 0");
-      }
-
-      // Convert to string (Aptos SDK accepts string for u64)
-      const rawAmount = rawAmountNum.toString();
-
-      console.log("[Borrow] Amount conversion", {
-        numericAmount,
-        decimals,
-        rawAmount,
-        rawAmountNum,
-        maxU64: maxU64.toString(),
-        isValid: rawAmountNum <= Number(maxU64),
-      });
-
-      setStep("Building transaction...");
-
-      // Build the transaction payload
-      // Use borrow_fa for fungible assets, borrow for coins
-      let functionName: `${string}::${string}::${string}`;
-      let typeArguments: string[] | undefined = undefined;
-      let functionArguments: any[];
-
-      if (isFungibleAsset && asset.faAddress) {
-        // For fungible assets, use borrow_fa (no type arguments needed)
-        // Based on actual payload structure: borrow_fa takes Object<Market> and u64
-        // The SDK will automatically wrap the address in Object format
-        functionName =
-          `${ECHELON_CONTRACT}::scripts::borrow_fa` as `${string}::${string}::${string}`;
-        // borrow_fa params: &signer, Object<Market>, u64
-        // Pass market address directly - SDK handles Object wrapping
-        functionArguments = [marketAddress, rawAmount];
-      } else {
-        // For coins (like MOVE), use borrow with type argument
-        const typeArgument = TYPE_ARGUMENTS[asset.symbol];
-        if (!typeArgument) {
-          throw new Error(
-            `Unsupported asset: ${asset.symbol}. Type argument not found.`
-          );
-        }
-        functionName =
-          `${ECHELON_CONTRACT}::scripts::borrow` as `${string}::${string}::${string}`;
-        typeArguments = [typeArgument];
-        // borrow params: &signer, Object<Market>, u64
-        functionArguments = [marketAddress, rawAmount];
-      }
-
-      console.log("[Borrow] Building transaction", {
-        functionName,
-        typeArguments,
-        functionArguments,
-        isFungibleAsset,
-      });
-
-      const transactionData: any = {
-        function: functionName,
-        functionArguments,
-      };
-
-      // Only add typeArguments if they exist (for coin types, not fungible assets)
-      if (typeArguments && typeArguments.length > 0) {
-        transactionData.typeArguments = typeArguments;
-      }
-
-      const rawTxn = await aptos.transaction.build.simple({
-        sender: senderAddress,
-        data: transactionData,
-      });
-
-      console.log("[Borrow] Transaction built successfully");
-
-      // Override chain ID
-      const txnObj = rawTxn as any;
-      if (txnObj.rawTransaction) {
-        txnObj.rawTransaction.chain_id = new ChainId(MOVEMENT_CHAIN_ID);
-      }
-
-      setStep("Waiting for signature...");
-
-      // Generate signing message
-      const message = generateSigningMessageForTransaction(rawTxn);
-      const hash = toHex(message);
-
-      // Sign using Privy
-      const signatureResponse = await signRawHash({
-        address: senderAddress,
-        chainType: "aptos",
-        hash: hash as `0x${string}`,
-      });
-
-      setStep("Submitting transaction...");
-
-      // Create authenticator
-      // Privy public key format: "004a4b8e35..." or "0x004a4b8e35..."
-      // We need to drop the "00" prefix to get the actual 32-byte key
-      let pubKeyNoScheme = publicKey.startsWith("0x")
-        ? publicKey.slice(2)
-        : publicKey;
-      // Remove leading "00" if present (Privy adds this prefix)
-      if (pubKeyNoScheme.startsWith("00") && pubKeyNoScheme.length > 64) {
-        pubKeyNoScheme = pubKeyNoScheme.slice(2);
-      }
-      // Ensure we have exactly 64 hex characters (32 bytes)
-      if (pubKeyNoScheme.length !== 64) {
-        throw new Error(
-          `Invalid public key length: expected 64 hex characters (32 bytes), got ${pubKeyNoScheme.length}`
-        );
-      }
-      const publicKeyObj = new Ed25519PublicKey(`0x${pubKeyNoScheme}`);
-      const sig = new Ed25519Signature(signatureResponse.signature.slice(2));
-      const senderAuthenticator = new AccountAuthenticatorEd25519(
-        publicKeyObj,
-        sig
-      );
-
-      // Submit transaction
-      const pending = await aptos.transaction.submit.simple({
-        transaction: rawTxn,
-        senderAuthenticator,
-      });
-
-      setStep("Waiting for confirmation...");
-
-      // Wait for transaction
-      await aptos.waitForTransaction({
-        transactionHash: pending.hash,
-        options: { checkSuccess: true },
-      });
-
-      setTxHash(pending.hash);
+    if (result.success) {
+      setTxHash(result.txHash || "");
       setStep("");
+      setShowSuccessMessage(true);
 
-      // Call onSuccess callback to refresh data
       if (onSuccess) {
         onSuccess();
       }
 
-      // Only close modal if not in inline mode (for chat, keep it open)
-      if (!inline) {
-        setTimeout(() => {
-          onClose();
-          setAmount("");
-          setTxHash(null);
-        }, 2000);
-      } else {
-        // In inline mode, just reset the amount but keep the card visible
-        setTimeout(() => {
-          setAmount("");
-        }, 2000);
-      }
-    } catch (err: any) {
-      console.error("[Borrow] Error occurred:", err);
-      console.error("[Borrow] Error details:", {
-        message: err.message,
-        stack: err.stack,
-        name: err.name,
-        fullError: err,
-      });
-
-      // Parse Move abort errors for better user experience
-      let errorMessage = err.message || "Transaction failed";
-
-      // Check for Move abort errors
-      if (errorMessage.includes("ERR_LENDING_INSUFFICIENT_BORROW_POWER")) {
-        errorMessage =
-          "Insufficient borrowing power. You don't have enough collateral to borrow this amount. Please supply more assets or reduce the borrow amount.";
-      } else if (errorMessage.includes("Move abort")) {
-        // Try to extract the error code and name
-        const abortMatch = errorMessage.match(
-          /Move abort in .*?::(\w+):\s*(\w+)\(0x([0-9a-fA-F]+)\)/
-        );
-        if (abortMatch) {
-          const [, moduleName, errorName, errorCode] = abortMatch;
-          if (errorName === "ERR_LENDING_INSUFFICIENT_BORROW_POWER") {
-            errorMessage =
-              "Insufficient borrowing power. You don't have enough collateral to borrow this amount. Please supply more assets or reduce the borrow amount.";
-          } else {
-            errorMessage = `Transaction failed: ${errorName} (Error code: 0x${errorCode}). Please check your collateral and try again.`;
-          }
-        }
-      }
-
-      // Check if error is from transaction wait
-      if (
-        errorMessage.includes("Transaction") &&
-        errorMessage.includes("failed")
-      ) {
-        // Try to extract more details from the error
-        const detailsMatch = errorMessage.match(/failed with an error: (.+)/);
-        if (detailsMatch) {
-          const details = detailsMatch[1];
-          if (details.includes("ERR_LENDING_INSUFFICIENT_BORROW_POWER")) {
-            errorMessage =
-              "Insufficient borrowing power. You don't have enough collateral to borrow this amount. Please supply more assets or reduce the borrow amount.";
-          }
-        }
-      }
-
-      setError(errorMessage);
+      // Show explorer link on button for 250ms, then reset to initial state
+      setTimeout(() => {
+        setShowSuccessMessage(false);
+        setTxHash(null);
+        setAmount("");
+      }, 250);
+    } else {
+      setError(result.error || "Transaction failed");
       setStep("");
-    } finally {
-      setSubmitting(false);
     }
+
+    setSubmitting(false);
   };
 
   const content = (
@@ -541,23 +256,12 @@ export function EchelonBorrowModal({
           <div className="flex items-start justify-between gap-4">
             <div className="flex items-center gap-4">
               <div className="relative">
-                {asset.icon ? (
-                  <img
-                    src={
-                      asset.icon.startsWith("/")
-                        ? `https://app.echelon.market${asset.icon}`
-                        : asset.icon
-                    }
-                    alt={asset.symbol}
-                    className="w-12 h-12 rounded-full ring-2 ring-white dark:ring-zinc-800 shadow-lg"
-                  />
-                ) : (
-                  <div className="w-12 h-12 rounded-full bg-gradient-to-br from-purple-500 via-violet-500 to-indigo-600 flex items-center justify-center ring-2 ring-white dark:ring-zinc-800 shadow-lg">
-                    <span className="text-white font-bold text-lg">
-                      {asset.symbol.charAt(0)}
-                    </span>
-                  </div>
-                )}
+                <AssetIcon
+                  symbol={asset.symbol}
+                  echelonIcon={asset.icon}
+                  size="lg"
+                  ring={true}
+                />
               </div>
               <div>
                 <input
@@ -609,49 +313,6 @@ export function EchelonBorrowModal({
                 )}
               </div>
             </div>
-          </div>
-        </div>
-
-        {/* Percentage Presets */}
-        <div className="flex gap-2 mb-4">
-          {[25, 50, 75, 100].map((pct) => (
-            <button
-              key={pct}
-              onClick={() => handlePresetPercentage(pct)}
-              className={`flex-1 py-2 rounded-xl text-sm font-medium transition-all duration-200 ${
-                percentage === pct
-                  ? "bg-purple-600 text-white shadow-lg shadow-purple-500/25"
-                  : "bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700"
-              }`}
-            >
-              {pct}%
-            </button>
-          ))}
-        </div>
-
-        {/* Slider */}
-        <div className="mb-6">
-          <div className="relative h-2 bg-zinc-200 dark:bg-zinc-700 rounded-full overflow-hidden">
-            <div
-              className="absolute h-full bg-gradient-to-r from-purple-500 to-violet-500 rounded-full transition-all duration-200"
-              style={{ width: `${percentage}%` }}
-            />
-          </div>
-          <input
-            type="range"
-            min="0"
-            max="100"
-            value={percentage}
-            onChange={(e) => handlePercentageChange(Number(e.target.value))}
-            className="absolute w-full h-2 opacity-0 cursor-pointer"
-            style={{ marginTop: "-8px" }}
-          />
-          <div className="flex justify-between text-xs text-zinc-400 dark:text-zinc-500 mt-2">
-            <span>0%</span>
-            <span>25%</span>
-            <span>50%</span>
-            <span>75%</span>
-            <span>100%</span>
           </div>
         </div>
 
@@ -805,65 +466,10 @@ export function EchelonBorrowModal({
           </div>
         </div>
 
-        {/* Status Message - Shows error, success, or step in one place */}
-        {(error || txHash || step) && (
-          <div
-            className={`mb-4 p-3 rounded-lg text-sm ${
-              error
-                ? "bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400"
-                : txHash
-                  ? "bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-green-700 dark:text-green-400"
-                  : "bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-400"
-            }`}
-          >
-            {error ? (
-              <div>{error}</div>
-            ) : txHash ? (
-              <>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <svg
-                    className="w-5 h-5 flex-shrink-0"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-                    />
-                  </svg>
-                  <span className="font-medium">Transaction successful!</span>
-                  <a
-                    href={`https://explorer.movementnetwork.xyz/txn/${txHash}?network=mainnet`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="ml-auto text-green-600 dark:text-green-400 hover:text-green-800 dark:hover:text-green-300 underline font-semibold flex items-center gap-1"
-                  >
-                    View Transaction
-                    <svg
-                      className="w-4 h-4"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
-                      />
-                    </svg>
-                  </a>
-                </div>
-                <div className="mt-2 text-xs font-mono text-green-600 dark:text-green-400 break-all">
-                  {txHash}
-                </div>
-              </>
-            ) : (
-              <div>{step}</div>
-            )}
+        {/* Error Message */}
+        {error && (
+          <div className="mb-4 p-3 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-sm text-red-700 dark:text-red-400">
+            {error}
           </div>
         )}
 
@@ -888,18 +494,84 @@ export function EchelonBorrowModal({
               });
             }
           }}
-          disabled={numericAmount <= 0 || submitting}
+          disabled={
+            (!numericAmount || numericAmount <= 0 || submitting) && !txHash
+          }
           className={`w-full py-4 rounded-2xl font-semibold text-lg transition-all duration-200 relative z-10 ${
-            numericAmount > 0 && !submitting
-              ? "bg-gradient-to-r from-purple-600 to-violet-600 text-white shadow-lg shadow-purple-500/30 hover:shadow-xl hover:shadow-purple-500/40 hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
-              : "bg-zinc-100 dark:bg-zinc-800 text-zinc-400 dark:text-zinc-500 cursor-not-allowed"
+            txHash
+              ? "bg-green-600 text-white cursor-pointer"
+              : numericAmount > 0 && !submitting
+                ? "bg-gradient-to-r from-purple-600 to-violet-600 text-white shadow-lg shadow-purple-500/30 hover:shadow-xl hover:shadow-purple-500/40 hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
+                : "bg-zinc-100 dark:bg-zinc-800 text-zinc-400 dark:text-zinc-500 cursor-not-allowed"
           }`}
         >
-          {submitting
-            ? step || "Processing..."
-            : numericAmount > 0
-              ? `Borrow ${asset.symbol}`
-              : "Enter amount to borrow"}
+          {txHash && showSuccessMessage ? (
+            <span className="flex items-center justify-center gap-2">
+              <svg
+                className="w-5 h-5"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M5 13l4 4L19 7"
+                />
+              </svg>
+              Transaction Submitted!
+              <a
+                href={`https://explorer.movementnetwork.xyz/txn/${txHash}?network=mainnet`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="ml-2 underline hover:opacity-80 flex items-center gap-1"
+                onClick={(e) => e.stopPropagation()}
+              >
+                View
+                <svg
+                  className="w-4 h-4"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+                  />
+                </svg>
+              </a>
+            </span>
+          ) : submitting ? (
+            <span className="flex items-center justify-center gap-2">
+              <svg
+                className="w-5 h-5 animate-spin"
+                fill="none"
+                viewBox="0 0 24 24"
+              >
+                <circle
+                  className="opacity-25"
+                  cx="12"
+                  cy="12"
+                  r="10"
+                  stroke="currentColor"
+                  strokeWidth="4"
+                />
+                <path
+                  className="opacity-75"
+                  fill="currentColor"
+                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                />
+              </svg>
+              {step || "Processing..."}
+            </span>
+          ) : numericAmount > 0 ? (
+            `Borrow ${asset.symbol}`
+          ) : (
+            "Enter amount to borrow"
+          )}
         </button>
       </div>
     </div>

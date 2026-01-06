@@ -3,17 +3,8 @@
 import { useState, useMemo } from "react";
 import { usePrivy, WalletWithMetadata } from "@privy-io/react-auth";
 import { useSignRawHash } from "@privy-io/react-auth/extended-chains";
-import {
-  Aptos,
-  AptosConfig,
-  Network,
-  AccountAuthenticatorEd25519,
-  Ed25519PublicKey,
-  Ed25519Signature,
-  generateSigningMessageForTransaction,
-  ChainId,
-} from "@aptos-labs/ts-sdk";
-import { toHex } from "viem";
+import { executeSupplyTransaction } from "@/app/hooks/useEchelonTransactions";
+import { AssetIcon } from "./asset-icon";
 
 interface EchelonAsset {
   symbol: string;
@@ -23,6 +14,7 @@ interface EchelonAsset {
   supplyApr: number;
   faAddress?: string;
   decimals?: number;
+  marketAddress?: string;
 }
 
 interface EchelonSupplyModalProps {
@@ -33,10 +25,6 @@ interface EchelonSupplyModalProps {
   inline?: boolean; // If true, renders inline without backdrop (for chat)
   onSuccess?: () => void; // Callback after successful transaction
 }
-
-// Echelon contract address
-const ECHELON_CONTRACT =
-  "0x6a01d5761d43a5b5a0ccbfc42edf2d02c0611464aae99a2ea0e0d4819f0550b5";
 
 // Market addresses for each asset
 const MARKET_ADDRESSES: Record<string, string> = {
@@ -66,16 +54,6 @@ const TYPE_ARGUMENTS: Record<string, string> = {
   rsETH: "0x51ffc9885233adf3dd411078cad57535ed1982013dc82d9d6c433a55f2e0035d",
 };
 
-const MOVEMENT_RPC = "https://mainnet.movementnetwork.xyz/v1";
-const MOVEMENT_CHAIN_ID = 126;
-
-const aptos = new Aptos(
-  new AptosConfig({
-    network: Network.CUSTOM,
-    fullnode: MOVEMENT_RPC,
-  })
-);
-
 export function EchelonSupplyModal({
   isOpen,
   onClose,
@@ -90,6 +68,7 @@ export function EchelonSupplyModal({
   const [error, setError] = useState<string | null>(null);
   const [txHash, setTxHash] = useState<string | null>(null);
   const [step, setStep] = useState<string>("");
+  const [showSuccessMessage, setShowSuccessMessage] = useState(false);
 
   const { user, ready, authenticated } = usePrivy();
   const { signRawHash } = useSignRawHash();
@@ -145,375 +124,50 @@ export function EchelonSupplyModal({
     setError(null);
     setTxHash(null);
 
-    try {
-      const senderAddress = movementWallet.address as string;
-      const publicKey = (movementWallet as any).publicKey as string;
+    const marketAddress =
+      MARKET_ADDRESSES[asset.symbol] || asset.marketAddress || "";
 
-      if (!senderAddress || !publicKey) {
-        throw new Error("Wallet address or public key not found");
-      }
+    if (!marketAddress) {
+      setError(`Market address not found for ${asset.symbol}`);
+      setSubmitting(false);
+      return;
+    }
 
-      // Get market address and determine if it's a fungible asset
-      const marketAddress = MARKET_ADDRESSES[asset.symbol];
-      // MOVE is a coin, everything else with faAddress is a fungible asset
-      // Also check if it's a known fungible asset (USDC, USDT, etc.) even if faAddress is missing
-      const knownFungibleAssets = [
-        "USDC",
-        "USDT",
-        "WBTC",
-        "WETH",
-        "LBTC",
-        "SolvBTC",
-        "ezETH",
-        "sUSDe",
-        "rsETH",
-      ];
-      const isKnownFungible = knownFungibleAssets.includes(
-        asset.symbol.toUpperCase()
-      );
-      const isFungibleAsset =
-        asset.symbol.toUpperCase() !== "MOVE" &&
-        (!!asset.faAddress || isKnownFungible);
-
-      console.log("[EchelonSupply] Asset details:", {
+    const result = await executeSupplyTransaction({
+      asset: {
         symbol: asset.symbol,
-        faAddress: asset.faAddress,
-        isKnownFungible,
-        isFungibleAsset,
+        decimals: asset.decimals || 8,
         marketAddress,
-      });
+        faAddress: asset.faAddress,
+      },
+      amount: numericAmount,
+      movementWallet,
+      publicKey: (movementWallet as any).publicKey,
+      signRawHash,
+      onStepChange: setStep,
+    });
 
-      if (!marketAddress) {
-        throw new Error(
-          `Unsupported asset: ${asset.symbol}. Market address not found.`
-        );
-      }
-
-      // Verify balance before proceeding - we need to get the actual token decimals from the balance
-      setStep("Verifying balance...");
-
-      let actualDecimals = asset.decimals || 8; // Default to 8, but will be updated from balance response
-      let rawAmount: string;
-
-      if (isFungibleAsset) {
-        // For fungible assets, verify the actual on-chain balance and get correct decimals
-        try {
-          const balanceResponse = await fetch(
-            `/api/balance?address=${encodeURIComponent(senderAddress)}&token=${encodeURIComponent(asset.symbol)}`
-          );
-
-          if (balanceResponse.ok) {
-            const balanceData = await balanceResponse.json();
-            if (
-              balanceData.success &&
-              balanceData.balances &&
-              balanceData.balances.length > 0
-            ) {
-              const normalizedToken = asset.symbol
-                .toUpperCase()
-                .replace(/\./g, "")
-                .trim();
-
-              const tokenBalance = balanceData.balances.find((b: any) => {
-                const normalizedSymbol = (b.metadata?.symbol || "")
-                  .toUpperCase()
-                  .replace(/\./g, "")
-                  .trim();
-                return (
-                  normalizedSymbol === normalizedToken ||
-                  normalizedSymbol.startsWith(normalizedToken) ||
-                  normalizedToken.startsWith(normalizedSymbol)
-                );
-              });
-
-              if (tokenBalance) {
-                // Use the actual decimals from the token balance metadata
-                actualDecimals =
-                  tokenBalance.metadata?.decimals || asset.decimals || 8;
-
-                // Convert amount using the correct decimals
-                rawAmount = Math.floor(
-                  numericAmount * Math.pow(10, actualDecimals)
-                ).toString();
-
-                const balanceAmount = BigInt(tokenBalance.amount || "0");
-                const requestedAmount = BigInt(rawAmount);
-
-                console.log("[EchelonSupply] Balance check (fungible asset):", {
-                  symbol: asset.symbol,
-                  assetDecimals: asset.decimals,
-                  actualDecimals,
-                  balanceAmount: balanceAmount.toString(),
-                  requestedAmount: requestedAmount.toString(),
-                  balanceFormatted:
-                    Number(balanceAmount) / Math.pow(10, actualDecimals),
-                  requestedFormatted: numericAmount,
-                  hasEnough: balanceAmount >= requestedAmount,
-                });
-
-                if (balanceAmount < requestedAmount) {
-                  const balanceFormatted =
-                    Number(balanceAmount) / Math.pow(10, actualDecimals);
-                  throw new Error(
-                    `Insufficient balance. You have ${balanceFormatted.toFixed(actualDecimals)} ${asset.symbol}, but trying to supply ${numericAmount} ${asset.symbol}.`
-                  );
-                }
-              } else {
-                throw new Error(
-                  `No balance found for ${asset.symbol}. Please ensure you have ${asset.symbol} tokens in your wallet.`
-                );
-              }
-            } else {
-              throw new Error(
-                `No balance found for ${asset.symbol}. Please ensure you have ${asset.symbol} tokens in your wallet.`
-              );
-            }
-          } else {
-            // If balance check fails, use asset decimals as fallback
-            actualDecimals = asset.decimals || 8;
-            rawAmount = Math.floor(
-              numericAmount * Math.pow(10, actualDecimals)
-            ).toString();
-            console.warn(
-              "[EchelonSupply] Balance check failed, using asset decimals:",
-              actualDecimals
-            );
-          }
-        } catch (balanceError: any) {
-          // If it's already our custom error, throw it
-          if (
-            balanceError.message &&
-            (balanceError.message.includes("Insufficient balance") ||
-              balanceError.message.includes("No balance found"))
-          ) {
-            throw balanceError;
-          }
-          // Otherwise, use asset decimals as fallback
-          actualDecimals = asset.decimals || 8;
-          rawAmount = Math.floor(
-            numericAmount * Math.pow(10, actualDecimals)
-          ).toString();
-          console.warn(
-            "[EchelonSupply] Balance check failed, using asset decimals:",
-            actualDecimals,
-            balanceError
-          );
-        }
-      } else {
-        // For coins (MOVE), MOVE always has 8 decimals
-        actualDecimals = 8; // MOVE always uses 8 decimals
-        rawAmount = Math.floor(
-          numericAmount * Math.pow(10, actualDecimals)
-        ).toString();
-
-        try {
-          // Use the same method as other parts of the codebase
-          const coinStoreResource = `0x1::coin::CoinStore<${TYPE_ARGUMENTS[asset.symbol]}>`;
-
-          // Get all account resources and find the coin store
-          const resources = await aptos.account.getAccountResources({
-            accountAddress: senderAddress,
-          });
-
-          const coinStore = resources.find((r) => r.type === coinStoreResource);
-
-          if (!coinStore) {
-            throw new Error(
-              `No balance found for ${asset.symbol}. Please ensure you have ${asset.symbol} tokens in your wallet.`
-            );
-          }
-
-          const coinBalance = BigInt(
-            (coinStore.data as any)?.coin?.value || "0"
-          );
-          const requestedAmount = BigInt(rawAmount);
-
-          console.log("[EchelonSupply] Coin balance check:", {
-            symbol: asset.symbol,
-            decimals: actualDecimals,
-            coinBalance: coinBalance.toString(),
-            requestedAmount: requestedAmount.toString(),
-            balanceFormatted:
-              Number(coinBalance) / Math.pow(10, actualDecimals),
-            requestedFormatted: numericAmount,
-            hasEnough: coinBalance >= requestedAmount,
-          });
-
-          if (coinBalance < requestedAmount) {
-            const balanceFormatted =
-              Number(coinBalance) / Math.pow(10, actualDecimals);
-            throw new Error(
-              `Insufficient balance. You have ${balanceFormatted.toFixed(actualDecimals)} ${asset.symbol}, but trying to supply ${numericAmount} ${asset.symbol}.`
-            );
-          }
-        } catch (balanceError: any) {
-          // If it's already our custom error, throw it
-          if (
-            balanceError.message &&
-            balanceError.message.includes("Insufficient balance")
-          ) {
-            throw balanceError;
-          }
-          // If resource not found, user might not have the coin store registered
-          if (
-            balanceError.message &&
-            balanceError.message.includes("No balance found")
-          ) {
-            throw balanceError;
-          }
-          // Otherwise, log warning but continue (transaction might still work)
-          console.warn(
-            "[EchelonSupply] Coin balance check failed:",
-            balanceError
-          );
-        }
-      }
-
-      console.log("[EchelonSupply] Final amount conversion:", {
-        symbol: asset.symbol,
-        numericAmount,
-        decimals: actualDecimals,
-        rawAmount,
-      });
-
-      setStep("Building transaction...");
-
-      // Build the transaction payload
-      // Use supply_fa for fungible assets, supply for coins
-      let functionName: `${string}::${string}::${string}`;
-      let typeArguments: string[] | undefined = undefined;
-      let functionArguments: any[];
-
-      if (isFungibleAsset) {
-        // For fungible assets, use supply_fa (no type arguments needed)
-        // Based on actual payload structure: supply_fa takes Object<Market> and u64
-        console.log(
-          "[EchelonSupply] Using supply_fa for fungible asset:",
-          asset.symbol
-        );
-        functionName =
-          `${ECHELON_CONTRACT}::scripts::supply_fa` as `${string}::${string}::${string}`;
-        // supply_fa params: &signer, Object<Market>, u64
-        // Pass market address directly - SDK handles Object wrapping
-        functionArguments = [marketAddress, rawAmount];
-      } else {
-        // For coins (like MOVE), use supply with type argument
-        console.log("[EchelonSupply] Using supply for coin:", asset.symbol);
-        // For coins (like MOVE), use supply with type argument
-        const typeArgument = TYPE_ARGUMENTS[asset.symbol];
-        if (!typeArgument) {
-          throw new Error(
-            `Unsupported asset: ${asset.symbol}. Type argument not found.`
-          );
-        }
-        functionName =
-          `${ECHELON_CONTRACT}::scripts::supply` as `${string}::${string}::${string}`;
-        typeArguments = [typeArgument];
-        // supply params: &signer, Object<Market>, u64
-        functionArguments = [marketAddress, rawAmount];
-      }
-
-      const transactionData: any = {
-        function: functionName,
-        functionArguments,
-      };
-
-      // Only add typeArguments if they exist (for coin types, not fungible assets)
-      if (typeArguments && typeArguments.length > 0) {
-        transactionData.typeArguments = typeArguments;
-      }
-
-      const rawTxn = await aptos.transaction.build.simple({
-        sender: senderAddress,
-        data: transactionData,
-      });
-
-      // Override chain ID
-      const txnObj = rawTxn as any;
-      if (txnObj.rawTransaction) {
-        txnObj.rawTransaction.chain_id = new ChainId(MOVEMENT_CHAIN_ID);
-      }
-
-      setStep("Waiting for signature...");
-
-      // Generate signing message
-      const message = generateSigningMessageForTransaction(rawTxn);
-      const hash = toHex(message);
-
-      // Sign using Privy
-      const signatureResponse = await signRawHash({
-        address: senderAddress,
-        chainType: "aptos",
-        hash: hash as `0x${string}`,
-      });
-
-      setStep("Submitting transaction...");
-
-      // Create authenticator
-      // Privy public key format: "004a4b8e35..." or "0x004a4b8e35..."
-      // We need to drop the "00" prefix to get the actual 32-byte key
-      let pubKeyNoScheme = publicKey.startsWith("0x")
-        ? publicKey.slice(2)
-        : publicKey;
-      // Remove leading "00" if present (Privy adds this prefix)
-      if (pubKeyNoScheme.startsWith("00") && pubKeyNoScheme.length > 64) {
-        pubKeyNoScheme = pubKeyNoScheme.slice(2);
-      }
-      // Ensure we have exactly 64 hex characters (32 bytes)
-      if (pubKeyNoScheme.length !== 64) {
-        throw new Error(
-          `Invalid public key length: expected 64 hex characters (32 bytes), got ${pubKeyNoScheme.length}`
-        );
-      }
-      const publicKeyObj = new Ed25519PublicKey(`0x${pubKeyNoScheme}`);
-      const sig = new Ed25519Signature(signatureResponse.signature.slice(2));
-      const senderAuthenticator = new AccountAuthenticatorEd25519(
-        publicKeyObj,
-        sig
-      );
-
-      // Submit transaction
-      const pending = await aptos.transaction.submit.simple({
-        transaction: rawTxn,
-        senderAuthenticator,
-      });
-
-      setStep("Waiting for confirmation...");
-
-      // Wait for transaction
-      await aptos.waitForTransaction({
-        transactionHash: pending.hash,
-        options: { checkSuccess: true },
-      });
-
-      setTxHash(pending.hash);
+    if (result.success) {
+      setTxHash(result.txHash || "");
       setStep("");
+      setShowSuccessMessage(true);
 
-      // Call onSuccess callback to refresh data
       if (onSuccess) {
         onSuccess();
       }
 
-      // Only close modal if not in inline mode (for chat, keep it open)
-      if (!inline) {
-        setTimeout(() => {
-          onClose();
-          setAmount("");
-          setTxHash(null);
-        }, 2000);
-      } else {
-        // In inline mode, just reset the amount but keep the card visible
-        setTimeout(() => {
-          setAmount("");
-        }, 2000);
-      }
-    } catch (err: any) {
-      console.error("Supply error:", err);
-      setError(err.message || "Transaction failed");
+      // Show explorer link on button for 250ms, then reset to initial state
+      setTimeout(() => {
+        setShowSuccessMessage(false);
+        setTxHash(null);
+        setAmount("");
+      }, 250);
+    } else {
+      setError(result.error || "Transaction failed");
       setStep("");
-    } finally {
-      setSubmitting(false);
     }
+
+    setSubmitting(false);
   };
 
   if (!isOpen || !asset) {
@@ -562,23 +216,12 @@ export function EchelonSupplyModal({
           <div className="flex items-start justify-between gap-4">
             <div className="flex items-center gap-4">
               <div className="relative">
-                {asset.icon ? (
-                  <img
-                    src={
-                      asset.icon.startsWith("/")
-                        ? `https://app.echelon.market${asset.icon}`
-                        : asset.icon
-                    }
-                    alt={asset.symbol}
-                    className="w-12 h-12 rounded-full ring-2 ring-white dark:ring-zinc-800 shadow-lg"
-                  />
-                ) : (
-                  <div className="w-12 h-12 rounded-full bg-gradient-to-br from-purple-500 via-violet-500 to-indigo-600 flex items-center justify-center ring-2 ring-white dark:ring-zinc-800 shadow-lg">
-                    <span className="text-white font-bold text-lg">
-                      {asset.symbol.charAt(0)}
-                    </span>
-                  </div>
-                )}
+                <AssetIcon
+                  symbol={asset.symbol}
+                  echelonIcon={asset.icon}
+                  size="lg"
+                  ring={true}
+                />
                 <div className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-green-500 border-2 border-white dark:border-zinc-800 flex items-center justify-center">
                   <svg
                     className="w-3 h-3 text-white"
@@ -626,42 +269,6 @@ export function EchelonSupplyModal({
               </div>
             </div>
           </div>
-        </div>
-
-        {/* Percentage Presets */}
-        <div className="flex gap-2 mb-4">
-          {[25, 50, 75, 100].map((pct) => (
-            <button
-              key={pct}
-              onClick={() => handlePresetPercentage(pct)}
-              className={`flex-1 py-2 rounded-xl text-sm font-medium transition-all duration-200 ${
-                percentage === pct
-                  ? "bg-purple-600 text-white shadow-lg shadow-purple-500/25"
-                  : "bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700"
-              }`}
-            >
-              {pct}%
-            </button>
-          ))}
-        </div>
-
-        {/* Slider */}
-        <div className="mb-6">
-          <div className="relative h-2 bg-zinc-200 dark:bg-zinc-700 rounded-full overflow-hidden">
-            <div
-              className="absolute h-full bg-gradient-to-r from-purple-500 to-violet-500 rounded-full transition-all duration-200"
-              style={{ width: `${percentage}%` }}
-            />
-          </div>
-          <input
-            type="range"
-            min="0"
-            max="100"
-            value={percentage}
-            onChange={(e) => handlePercentageChange(Number(e.target.value))}
-            className="absolute w-full h-2 opacity-0 cursor-pointer"
-            style={{ marginTop: "-8px" }}
-          />
         </div>
 
         {/* Stats */}
@@ -719,12 +326,24 @@ export function EchelonSupplyModal({
           </div>
         )}
 
-        {/* Success Message */}
-        {txHash && (
-          <div className="mb-4 p-3 rounded-xl bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-sm text-green-700 dark:text-green-400">
-            <div className="flex items-center gap-2 flex-wrap">
+        {/* Supply Button */}
+        <button
+          onClick={handleSupply}
+          disabled={
+            (!numericAmount || numericAmount <= 0 || submitting) && !txHash
+          }
+          className={`w-full py-4 rounded-2xl font-semibold text-lg transition-all duration-200 ${
+            txHash
+              ? "bg-green-600 text-white cursor-pointer"
+              : numericAmount > 0 && !submitting
+                ? "bg-gradient-to-r from-purple-600 to-violet-600 text-white shadow-lg shadow-purple-500/30 hover:shadow-xl hover:shadow-purple-500/40 hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
+                : "bg-zinc-100 dark:bg-zinc-800 text-zinc-400 dark:text-zinc-500 cursor-not-allowed"
+          }`}
+        >
+          {txHash && showSuccessMessage ? (
+            <span className="flex items-center justify-center gap-2">
               <svg
-                className="w-5 h-5 flex-shrink-0"
+                className="w-5 h-5"
                 fill="none"
                 viewBox="0 0 24 24"
                 stroke="currentColor"
@@ -733,17 +352,18 @@ export function EchelonSupplyModal({
                   strokeLinecap="round"
                   strokeLinejoin="round"
                   strokeWidth={2}
-                  d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                  d="M5 13l4 4L19 7"
                 />
               </svg>
-              <span className="font-medium">Transaction successful!</span>
+              Transaction Submitted!
               <a
                 href={`https://explorer.movementnetwork.xyz/txn/${txHash}?network=mainnet`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="ml-auto text-green-600 dark:text-green-400 hover:text-green-800 dark:hover:text-green-300 underline font-semibold flex items-center gap-1"
+                className="ml-2 underline hover:opacity-80 flex items-center gap-1"
+                onClick={(e) => e.stopPropagation()}
               >
-                View Transaction
+                View
                 <svg
                   className="w-4 h-4"
                   fill="none"
@@ -758,54 +378,35 @@ export function EchelonSupplyModal({
                   />
                 </svg>
               </a>
-            </div>
-            <div className="mt-2 text-xs font-mono text-green-600 dark:text-green-400 break-all">
-              {txHash}
-            </div>
-          </div>
-        )}
-
-        {/* Progress Step */}
-        {step && (
-          <div className="mb-4 p-3 rounded-xl bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 text-sm text-blue-700 dark:text-blue-400 flex items-center gap-2">
-            <svg
-              className="w-4 h-4 animate-spin"
-              fill="none"
-              viewBox="0 0 24 24"
-            >
-              <circle
-                className="opacity-25"
-                cx="12"
-                cy="12"
-                r="10"
-                stroke="currentColor"
-                strokeWidth="4"
-              />
-              <path
-                className="opacity-75"
-                fill="currentColor"
-                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-              />
-            </svg>
-            {step}
-          </div>
-        )}
-
-        {/* Supply Button */}
-        <button
-          onClick={handleSupply}
-          disabled={numericAmount <= 0 || submitting}
-          className={`w-full py-4 rounded-2xl font-semibold text-lg transition-all duration-200 ${
-            numericAmount > 0 && !submitting
-              ? "bg-gradient-to-r from-purple-600 to-violet-600 text-white shadow-lg shadow-purple-500/30 hover:shadow-xl hover:shadow-purple-500/40 hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
-              : "bg-zinc-100 dark:bg-zinc-800 text-zinc-400 dark:text-zinc-500 cursor-not-allowed"
-          }`}
-        >
-          {submitting
-            ? "Processing..."
-            : numericAmount > 0
-              ? `Supply ${asset.symbol}`
-              : "Enter an amount"}
+            </span>
+          ) : submitting ? (
+            <span className="flex items-center justify-center gap-2">
+              <svg
+                className="w-5 h-5 animate-spin"
+                fill="none"
+                viewBox="0 0 24 24"
+              >
+                <circle
+                  className="opacity-25"
+                  cx="12"
+                  cy="12"
+                  r="10"
+                  stroke="currentColor"
+                  strokeWidth="4"
+                />
+                <path
+                  className="opacity-75"
+                  fill="currentColor"
+                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                />
+              </svg>
+              {step || "Processing..."}
+            </span>
+          ) : numericAmount > 0 ? (
+            `Supply ${asset.symbol}`
+          ) : (
+            "Enter an amount"
+          )}
         </button>
       </div>
     </div>

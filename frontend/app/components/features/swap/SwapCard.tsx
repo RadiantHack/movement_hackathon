@@ -8,12 +8,13 @@ import {
   getMosaicAssetFormat,
   type MosaicQuoteResponse,
 } from "../../../utils/mosaic-api";
-import { Aptos, AptosConfig, Network } from "@aptos-labs/ts-sdk";
+import { Network } from "@aptos-labs/ts-sdk";
 import { useSignRawHash } from "@privy-io/react-auth/extended-chains";
 import { useMovementConfig } from "@/app/hooks/useMovementConfig";
 import { TokenBalance } from "../../../types";
 import { executeSwap } from "../../../utils/swap";
 import { useBalance } from "@/app/hooks/useBalanceContext";
+import { createAptosClient } from "../../../utils/aptos-client";
 
 // Mosaic API is used for quotes and routing - no hardcoded routes needed
 
@@ -46,15 +47,12 @@ export const SwapCard: React.FC<SwapCardProps> = ({
   const { refreshBalances, setWalletAddress: setBalanceContextWalletAddress } =
     useBalance();
 
-  // Create Aptos instance with config from Redux store
+  // Create Aptos instance using shared utility
   const aptos = useMemo(() => {
-    if (!config.movementFullNode) return null;
-    return new Aptos(
-      new AptosConfig({
-        network: Network.MAINNET,
-        fullnode: config.movementFullNode,
-      })
-    );
+    return createAptosClient({
+      movementFullNode: config.movementFullNode,
+      network: Network.MAINNET,
+    });
   }, [config.movementFullNode]);
 
   const movementChainId = useMemo(() => {

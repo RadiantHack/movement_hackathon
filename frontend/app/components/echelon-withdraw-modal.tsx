@@ -3,17 +3,8 @@
 import { useState, useMemo } from "react";
 import { usePrivy, WalletWithMetadata } from "@privy-io/react-auth";
 import { useSignRawHash } from "@privy-io/react-auth/extended-chains";
-import {
-  Aptos,
-  AptosConfig,
-  Network,
-  AccountAuthenticatorEd25519,
-  Ed25519PublicKey,
-  Ed25519Signature,
-  generateSigningMessageForTransaction,
-  ChainId,
-} from "@aptos-labs/ts-sdk";
-import { toHex } from "viem";
+import { executeWithdrawTransaction } from "@/app/hooks/useEchelonTransactions";
+import { AssetIcon } from "./asset-icon";
 
 interface WithdrawAsset {
   symbol: string;
@@ -32,32 +23,6 @@ interface EchelonWithdrawModalProps {
   onSuccess?: () => void; // Callback after successful transaction
 }
 
-const ECHELON_CONTRACT =
-  "0x6a01d5761d43a5b5a0ccbfc42edf2d02c0611464aae99a2ea0e0d4819f0550b5";
-
-const TYPE_ARGUMENTS: Record<string, string> = {
-  MOVE: "0x1::aptos_coin::AptosCoin",
-  USDC: "0x83121c9f9b0527d1f056e21a950d6bf3b9e9e2e8353d0e95ccea726713cbea39",
-  USDT: "0x447721a30109c662dde9c73a0c2c9c9c459fb5e5a9c92f03c50fa69737f5d08d",
-  WBTC: "0xb06f29f24dde9c6daeec1f930f14a441a8d6c0fbea590725e88b340af3e1939c",
-  WETH: "0x908828f4fb0213d4034c3ded1630bbd904e8a3a6bf3c63270887f0b06653a376",
-  LBTC: "0x658f4ef6f76c8eeffdc06a30946f3f06723a7f9532e2413312b2a612183759c",
-  SolvBTC: "0x527c43638a6c389a9ad702e7085f31c48223624d5102a5207dfab861f482c46d",
-  ezETH: "0x2f6af255328fe11b88d840d1e367e946ccd16bd7ebddd6ee7e2ef9f7ae0c53ef",
-  sUSDe: "0x74f0c7504507f7357f8a218cc70ce3fc0f4b4e9eb8474e53ca778cb1e0c6dcc5",
-  rsETH: "0x51ffc9885233adf3dd411078cad57535ed1982013dc82d9d6c433a55f2e0035d",
-};
-
-const MOVEMENT_RPC = "https://mainnet.movementnetwork.xyz/v1";
-const MOVEMENT_CHAIN_ID = 126;
-
-const aptos = new Aptos(
-  new AptosConfig({
-    network: Network.CUSTOM,
-    fullnode: MOVEMENT_RPC,
-  })
-);
-
 export function EchelonWithdrawModal({
   isOpen,
   onClose,
@@ -70,6 +35,7 @@ export function EchelonWithdrawModal({
   const [error, setError] = useState<string | null>(null);
   const [txHash, setTxHash] = useState<string | null>(null);
   const [step, setStep] = useState<string>("");
+  const [showSuccessMessage, setShowSuccessMessage] = useState(false);
 
   const { user, ready, authenticated } = usePrivy();
   const { signRawHash } = useSignRawHash();
@@ -125,154 +91,42 @@ export function EchelonWithdrawModal({
     setError(null);
     setTxHash(null);
 
-    try {
-      const senderAddress = movementWallet.address as string;
-      const publicKey = (movementWallet as any).publicKey as string;
+    const result = await executeWithdrawTransaction({
+      asset: {
+        symbol: asset.symbol,
+        decimals: asset.decimals,
+        marketAddress: asset.marketAddress,
+        faAddress: asset.faAddress,
+      },
+      amount: numericAmount,
+      percentage,
+      movementWallet,
+      publicKey: (movementWallet as any).publicKey,
+      signRawHash,
+      onStepChange: setStep,
+    });
 
-      if (!senderAddress || !publicKey) {
-        throw new Error("Wallet address or public key not found");
-      }
-
-      // Determine if it's a fungible asset
-      // MOVE is a coin, everything else with faAddress is a fungible asset
-      const isFungibleAsset = asset.symbol !== "MOVE" && !!asset.faAddress;
-
-      setStep("Building transaction...");
-
-      // Use withdraw_all when withdrawing 100%, otherwise use withdraw with amount
-      const isWithdrawAll = percentage >= 99.9;
-
-      // Build the transaction payload
-      // Use withdraw_fa/withdraw_all_fa for fungible assets, withdraw/withdraw_all for coins
-      let functionName: `${string}::${string}::${string}`;
-      let typeArguments: string[] | undefined = undefined;
-      let functionArguments: any[];
-
-      if (isFungibleAsset && asset.faAddress) {
-        // For fungible assets, use withdraw_fa or withdraw_all_fa (no type arguments needed)
-        functionName = isWithdrawAll
-          ? (`${ECHELON_CONTRACT}::scripts::withdraw_all_fa` as `${string}::${string}::${string}`)
-          : (`${ECHELON_CONTRACT}::scripts::withdraw_fa` as `${string}::${string}::${string}`);
-
-        // withdraw_fa params: &signer, Object<Market>, u64
-        // withdraw_all_fa params: &signer, Object<Market>
-        // Pass market address directly - SDK handles Object wrapping
-        functionArguments = isWithdrawAll
-          ? [asset.marketAddress]
-          : [
-              asset.marketAddress,
-              Math.floor(
-                numericAmount * Math.pow(10, asset.decimals)
-              ).toString(),
-            ];
-      } else {
-        // For coins (like MOVE), use withdraw or withdraw_all with type argument
-        const typeArgument = TYPE_ARGUMENTS[asset.symbol];
-        if (!typeArgument) {
-          throw new Error(
-            `Unsupported asset: ${asset.symbol}. Type argument not found.`
-          );
-        }
-        functionName = isWithdrawAll
-          ? (`${ECHELON_CONTRACT}::scripts::withdraw_all` as `${string}::${string}::${string}`)
-          : (`${ECHELON_CONTRACT}::scripts::withdraw` as `${string}::${string}::${string}`);
-
-        typeArguments = [typeArgument];
-        // withdraw params: &signer, Object<Market>, u64
-        // withdraw_all params: &signer, Object<Market>
-        functionArguments = isWithdrawAll
-          ? [asset.marketAddress]
-          : [
-              asset.marketAddress,
-              Math.floor(
-                numericAmount * Math.pow(10, asset.decimals)
-              ).toString(),
-            ];
-      }
-
-      const transactionData: any = {
-        function: functionName,
-        functionArguments,
-      };
-
-      // Only add typeArguments if they exist (for coin types, not fungible assets)
-      if (typeArguments && typeArguments.length > 0) {
-        transactionData.typeArguments = typeArguments;
-      }
-
-      const rawTxn = await aptos.transaction.build.simple({
-        sender: senderAddress,
-        data: transactionData,
-      });
-
-      const txnObj = rawTxn as any;
-      if (txnObj.rawTransaction) {
-        txnObj.rawTransaction.chain_id = new ChainId(MOVEMENT_CHAIN_ID);
-      }
-
-      setStep("Waiting for signature...");
-
-      const message = generateSigningMessageForTransaction(rawTxn);
-      const hash = toHex(message);
-
-      const signatureResponse = await signRawHash({
-        address: senderAddress,
-        chainType: "aptos",
-        hash: hash as `0x${string}`,
-      });
-
-      setStep("Submitting transaction...");
-
-      let pubKeyNoScheme = publicKey.startsWith("0x")
-        ? publicKey.slice(2)
-        : publicKey;
-      if (pubKeyNoScheme.startsWith("00") && pubKeyNoScheme.length > 64) {
-        pubKeyNoScheme = pubKeyNoScheme.slice(2);
-      }
-      if (pubKeyNoScheme.length !== 64) {
-        throw new Error(
-          `Invalid public key length: expected 64 hex characters (32 bytes), got ${pubKeyNoScheme.length}`
-        );
-      }
-      const publicKeyObj = new Ed25519PublicKey(`0x${pubKeyNoScheme}`);
-      const sig = new Ed25519Signature(signatureResponse.signature.slice(2));
-      const senderAuthenticator = new AccountAuthenticatorEd25519(
-        publicKeyObj,
-        sig
-      );
-
-      const pending = await aptos.transaction.submit.simple({
-        transaction: rawTxn,
-        senderAuthenticator,
-      });
-
-      setStep("Waiting for confirmation...");
-
-      await aptos.waitForTransaction({
-        transactionHash: pending.hash,
-        options: { checkSuccess: true },
-      });
-
-      setTxHash(pending.hash);
+    if (result.success) {
+      setTxHash(result.txHash || "");
       setStep("");
+      setShowSuccessMessage(true);
 
-      // Call onSuccess callback to refresh data
       if (onSuccess) {
         onSuccess();
       }
 
+      // Show explorer link on button for 250ms, then reset to initial state
       setTimeout(() => {
-        onClose();
-        setAmount("");
+        setShowSuccessMessage(false);
         setTxHash(null);
-      }, 2000);
-    } catch (err: any) {
-      console.error("Withdraw error:", err);
-      setError(err.message || "Transaction failed");
+        setAmount("");
+      }, 250);
+    } else {
+      setError(result.error || "Transaction failed");
       setStep("");
-    } finally {
-      setSubmitting(false);
     }
+
+    setSubmitting(false);
   };
 
   return (
@@ -312,23 +166,12 @@ export function EchelonWithdrawModal({
             <div className="flex items-start justify-between gap-4">
               <div className="flex items-center gap-4">
                 <div className="relative">
-                  {asset.icon ? (
-                    <img
-                      src={
-                        asset.icon.startsWith("/")
-                          ? `https://app.echelon.market${asset.icon}`
-                          : asset.icon
-                      }
-                      alt={asset.symbol}
-                      className="w-12 h-12 rounded-full ring-2 ring-white dark:ring-zinc-800 shadow-lg"
-                    />
-                  ) : (
-                    <div className="w-12 h-12 rounded-full bg-gradient-to-br from-purple-500 via-violet-500 to-indigo-600 flex items-center justify-center ring-2 ring-white dark:ring-zinc-800 shadow-lg">
-                      <span className="text-white font-bold text-lg">
-                        {asset.symbol.charAt(0)}
-                      </span>
-                    </div>
-                  )}
+                  <AssetIcon
+                    symbol={asset.symbol}
+                    echelonIcon={asset.icon}
+                    size="lg"
+                    ring={true}
+                  />
                 </div>
                 <div>
                   <input
@@ -362,31 +205,6 @@ export function EchelonWithdrawModal({
                   {asset.symbol}
                 </div>
               </div>
-            </div>
-          </div>
-
-          <div className="mb-6">
-            <div className="relative h-2 bg-zinc-200 dark:bg-zinc-700 rounded-full overflow-hidden">
-              <div
-                className="absolute h-full bg-gradient-to-r from-purple-500 to-violet-500 rounded-full transition-all duration-200"
-                style={{ width: `${percentage}%` }}
-              />
-            </div>
-            <input
-              type="range"
-              min="0"
-              max="100"
-              value={percentage}
-              onChange={(e) => handlePercentageChange(Number(e.target.value))}
-              className="absolute w-full h-2 opacity-0 cursor-pointer"
-              style={{ marginTop: "-8px" }}
-            />
-            <div className="flex justify-between text-xs text-zinc-400 dark:text-zinc-500 mt-2">
-              <span>0%</span>
-              <span>25%</span>
-              <span>50%</span>
-              <span>75%</span>
-              <span>100%</span>
             </div>
           </div>
 
@@ -468,11 +286,23 @@ export function EchelonWithdrawModal({
             </div>
           )}
 
-          {txHash && (
-            <div className="mb-4 p-3 rounded-xl bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-sm text-green-700 dark:text-green-400">
-              <div className="flex items-center gap-2 flex-wrap">
+          <button
+            onClick={handleWithdraw}
+            disabled={
+              (!numericAmount || numericAmount <= 0 || submitting) && !txHash
+            }
+            className={`w-full py-4 rounded-2xl font-semibold text-lg transition-all duration-200 ${
+              txHash
+                ? "bg-green-600 text-white cursor-pointer"
+                : numericAmount > 0 && !submitting
+                  ? "bg-gradient-to-r from-purple-600 to-violet-600 text-white shadow-lg shadow-purple-500/30 hover:shadow-xl hover:shadow-purple-500/40 hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
+                  : "bg-zinc-100 dark:bg-zinc-800 text-zinc-400 dark:text-zinc-500 cursor-not-allowed"
+            }`}
+          >
+            {txHash && showSuccessMessage ? (
+              <span className="flex items-center justify-center gap-2">
                 <svg
-                  className="w-5 h-5 flex-shrink-0"
+                  className="w-5 h-5"
                   fill="none"
                   viewBox="0 0 24 24"
                   stroke="currentColor"
@@ -481,17 +311,18 @@ export function EchelonWithdrawModal({
                     strokeLinecap="round"
                     strokeLinejoin="round"
                     strokeWidth={2}
-                    d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                    d="M5 13l4 4L19 7"
                   />
                 </svg>
-                <span className="font-medium">Transaction successful!</span>
+                Transaction Submitted!
                 <a
                   href={`https://explorer.movementnetwork.xyz/txn/${txHash}?network=mainnet`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="ml-auto text-green-600 dark:text-green-400 hover:text-green-800 dark:hover:text-green-300 underline font-semibold flex items-center gap-1"
+                  className="ml-2 underline hover:opacity-80 flex items-center gap-1"
+                  onClick={(e) => e.stopPropagation()}
                 >
-                  View Transaction
+                  View
                   <svg
                     className="w-4 h-4"
                     fill="none"
@@ -506,52 +337,35 @@ export function EchelonWithdrawModal({
                     />
                   </svg>
                 </a>
-              </div>
-              <div className="mt-2 text-xs font-mono text-green-600 dark:text-green-400 break-all">
-                {txHash}
-              </div>
-            </div>
-          )}
-
-          {step && (
-            <div className="mb-4 p-3 rounded-xl bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 text-sm text-blue-700 dark:text-blue-400 flex items-center gap-2">
-              <svg
-                className="w-4 h-4 animate-spin"
-                fill="none"
-                viewBox="0 0 24 24"
-              >
-                <circle
-                  className="opacity-25"
-                  cx="12"
-                  cy="12"
-                  r="10"
-                  stroke="currentColor"
-                  strokeWidth="4"
-                />
-                <path
-                  className="opacity-75"
-                  fill="currentColor"
-                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                />
-              </svg>
-              {step}
-            </div>
-          )}
-
-          <button
-            onClick={handleWithdraw}
-            disabled={numericAmount <= 0 || submitting}
-            className={`w-full py-4 rounded-2xl font-semibold text-lg transition-all duration-200 ${
-              numericAmount > 0 && !submitting
-                ? "bg-gradient-to-r from-purple-600 to-violet-600 text-white shadow-lg shadow-purple-500/30 hover:shadow-xl hover:shadow-purple-500/40 hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
-                : "bg-zinc-100 dark:bg-zinc-800 text-zinc-400 dark:text-zinc-500 cursor-not-allowed"
-            }`}
-          >
-            {submitting
-              ? "Processing..."
-              : numericAmount > 0
-                ? "Withdraw"
-                : "Withdraw"}
+              </span>
+            ) : submitting ? (
+              <span className="flex items-center justify-center gap-2">
+                <svg
+                  className="w-5 h-5 animate-spin"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                >
+                  <circle
+                    className="opacity-25"
+                    cx="12"
+                    cy="12"
+                    r="10"
+                    stroke="currentColor"
+                    strokeWidth="4"
+                  />
+                  <path
+                    className="opacity-75"
+                    fill="currentColor"
+                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                  />
+                </svg>
+                {step || "Processing..."}
+              </span>
+            ) : numericAmount > 0 ? (
+              "Withdraw"
+            ) : (
+              "Withdraw"
+            )}
           </button>
         </div>
       </div>

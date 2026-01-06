@@ -10,64 +10,19 @@ import { EchelonSupplyModal } from "../components/echelon-supply-modal";
 import { EchelonBorrowModal } from "../components/echelon-borrow-modal";
 import { EchelonWithdrawModal } from "../components/echelon-withdraw-modal";
 import { EchelonRepayModal } from "../components/echelon-repay-modal";
-
-interface EchelonAsset {
-  symbol: string;
-  name: string;
-  icon: string;
-  price: number;
-  supplyApr: number;
-  borrowApr: number;
-  supplyCap: number;
-  borrowCap: number;
-  ltv: number;
-  decimals: number;
-  faAddress: string;
-  market?: string;
-  totalCash?: number;
-}
-
-interface MarketStats {
-  totalShares: number;
-  totalLiability: number;
-  totalReserve: number;
-  totalCash: number;
-}
-
-interface UserSupply {
-  marketAddress: string;
-  amount: string;
-  symbol: string;
-  icon: string;
-  price: number;
-  apr: number;
-  decimals: number;
-}
-
-interface UserBorrow {
-  marketAddress: string;
-  amount: string;
-  symbol: string;
-  icon: string;
-  price: number;
-  apr: number;
-  decimals: number;
-}
-
-// Market address to symbol mapping
-const MARKET_TO_SYMBOL: Record<string, string> = {
-  "0x568f96c4ed010869d810abcf348f4ff6b66d14ff09672fb7b5872e4881a25db7": "MOVE",
-  "0x789d7711b7979d47a1622692559ccd221ef7c35bb04f8762dadb5cc70222a0a0": "USDC",
-  "0x8191d4b8c0fc0af511b3c56c555528a3e74b7f3cfab3047df9ebda803f3bc3d2": "USDT",
-  "0xa24e2eaacf9603538af362f44dfcf9d411363923b9206260474abfaa8abebee4": "WBTC",
-  "0x6889932d2ff09c9d299e72b23a62a7f07af807789c98141d08475701e7b21b7c": "WETH",
-  "0x62cb5f64b5a9891c57ff12d38fbab141e18c3d63e859a595ff6525b4221eaf23": "LBTC",
-  "0x185f42070ab2ca5910ebfdea83c9f26f4015ad2c0f5c8e6ca1566d07c6c60aca":
-    "SolvBTC",
-  "0x8dd513b2bb41f0180f807ecaa1e0d2ddfacd57bf739534201247deca13f3542": "ezETH",
-  "0x481fe68db505bc15973d0014c35217726efd6ee353d91a2a9faaac201f3423d": "sUSDe",
-  "0x4cbeca747528f340ef9065c93dea0cc1ac8a46b759e31fc8b8d04bc52a86614b": "rsETH",
-};
+import { AssetIcon } from "../components/asset-icon";
+import {
+  EchelonAsset,
+  MarketStats,
+  UserSupply,
+  UserBorrow,
+} from "../types/echelon";
+import { MARKET_TO_SYMBOL } from "../constants/echelon";
+import {
+  processVaultCollaterals,
+  processVaultLiabilities,
+  fetchAvailableBalances,
+} from "../hooks/useEchelonVault";
 
 export default function EchelonPage() {
   const { ready, authenticated, user } = usePrivy();
@@ -203,136 +158,17 @@ export default function EchelonPage() {
       // Process collaterals - use coinAmount (converted from shares)
       // Handle both possible response structures
       const collaterals = data.data?.collaterals || data.collaterals || [];
-
-      if (Array.isArray(collaterals) && collaterals.length > 0) {
-        console.log(`[UI] Processing ${collaterals.length} collateral(s)`);
-
-        const supplies: UserSupply[] = collaterals
-          .map(
-            (item: {
-              marketAddress: string;
-              shares: string;
-              coinAmount: string;
-            }) => {
-              const marketAddress = item.marketAddress;
-              const symbol = MARKET_TO_SYMBOL[marketAddress] || "Unknown";
-              const asset = assets.find((a) => a.symbol === symbol);
-
-              console.log(`[UI] Processing collateral:`, {
-                marketAddress,
-                symbol,
-                coinAmount: item.coinAmount,
-                foundAsset: !!asset,
-                assetSymbol: asset?.symbol,
-              });
-
-              // Always include the supply, even if asset metadata isn't found
-              return {
-                marketAddress,
-                amount: item.coinAmount, // Use coinAmount (actual coin amount, not shares)
-                symbol: symbol || "Unknown",
-                icon: asset?.icon || "",
-                price: asset?.price || 0,
-                apr: asset?.supplyApr || 0,
-                decimals: asset?.decimals || 8,
-              };
-            }
-          )
-          .filter((supply) => {
-            // Only filter out if amount is 0 or invalid
-            // Handle both string and number amounts
-            const amountStr = String(supply.amount || "0");
-            const amount = parseFloat(amountStr);
-            const isValid = !isNaN(amount) && amount > 0;
-
-            if (!isValid) {
-              console.warn(`[UI] Filtering out supply with invalid amount:`, {
-                marketAddress: supply.marketAddress,
-                amount: supply.amount,
-                parsed: amount,
-              });
-            }
-
-            return isValid;
-          });
-
-        console.log("[UI] Processed supplies (after filtering):", supplies);
-        console.log(
-          "[UI] Setting userSupplies with",
-          supplies.length,
-          "item(s)"
-        );
-        setUserSupplies(supplies);
-      } else {
-        console.log("[UI] No collaterals found or invalid structure:", {
-          hasData: !!data.data,
-          hasCollaterals: !!data.data?.collaterals,
-          hasCollateralsDirect: !!data.collaterals,
-          isArray: Array.isArray(data.data?.collaterals),
-          collateralsLength: collaterals.length,
-          collaterals: collaterals,
-          fullData: data,
-        });
-        setUserSupplies([]);
-      }
+      const supplies = processVaultCollaterals(collaterals, assets);
+      console.log("[UI] Processed supplies (after filtering):", supplies);
+      console.log("[UI] Setting userSupplies with", supplies.length, "item(s)");
+      setUserSupplies(supplies);
 
       // Process liabilities - use totalLiability (principal + interest_accumulated)
       // Handle both possible response structures
       const liabilities = data.data?.liabilities || data.liabilities || [];
-
-      if (Array.isArray(liabilities) && liabilities.length > 0) {
-        console.log(
-          `[UI] Processing ${liabilities.length} liability/borrow(s)`
-        );
-
-        const borrows: UserBorrow[] = liabilities
-          .map(
-            (item: {
-              marketAddress: string;
-              principal: string;
-              interestAccumulated: string;
-              totalLiability: string;
-            }) => {
-              const marketAddress = item.marketAddress;
-              const symbol = MARKET_TO_SYMBOL[marketAddress] || "Unknown";
-              const asset = assets.find((a) => a.symbol === symbol);
-
-              console.log(`[UI] Processing liability:`, {
-                marketAddress,
-                symbol,
-                totalLiability: item.totalLiability,
-                foundAsset: !!asset,
-              });
-
-              return {
-                marketAddress,
-                amount: item.totalLiability, // Use totalLiability (principal + interest)
-                symbol: symbol || "Unknown",
-                icon: asset?.icon || "",
-                price: asset?.price || 0,
-                apr: asset?.borrowApr || 0,
-                decimals: asset?.decimals || 8,
-              };
-            }
-          )
-          .filter((borrow) => {
-            // Only filter out if amount is 0 or invalid
-            const amount = parseFloat(borrow.amount);
-            return !isNaN(amount) && amount > 0;
-          });
-
-        console.log("[UI] Processed borrows (after filtering):", borrows);
-        setUserBorrows(borrows);
-      } else {
-        console.log("[UI] No liabilities found or invalid structure:", {
-          hasData: !!data.data,
-          hasLiabilities: !!data.data?.liabilities,
-          hasLiabilitiesDirect: !!data.liabilities,
-          isArray: Array.isArray(data.data?.liabilities),
-          liabilitiesLength: liabilities.length,
-        });
-        setUserBorrows([]);
-      }
+      const borrows = processVaultLiabilities(liabilities, assets);
+      console.log("[UI] Processed borrows (after filtering):", borrows);
+      setUserBorrows(borrows);
     } catch (err) {
       console.error("[UI] Failed to fetch vault:", err);
 
@@ -359,47 +195,18 @@ export default function EchelonPage() {
     fetchVault();
   }, [movementWallet?.address, assets]);
 
-  // Fetch available balances for tokens
-  const fetchAvailableBalances = async () => {
-    if (!movementWallet?.address) return;
-
-    try {
-      const response = await fetch(
-        `/api/balance?address=${encodeURIComponent(movementWallet.address)}`
-      );
-
-      if (!response.ok) {
-        throw new Error("Failed to fetch balance");
-      }
-
-      const data = await response.json();
-
-      if (data.success && data.balances && data.balances.length > 0) {
-        const balances: Record<string, number> = {};
-        data.balances.forEach(
-          (b: {
-            metadata: { symbol: string; decimals: number };
-            amount: string;
-          }) => {
-            const symbol = b.metadata.symbol.toUpperCase().replace(/\./g, "");
-            const amount =
-              parseFloat(b.amount) / Math.pow(10, b.metadata.decimals);
-            // Store both with and without .e suffix
-            balances[symbol] = amount;
-            if (symbol.endsWith("E")) {
-              balances[symbol.slice(0, -1)] = amount; // USDC.E -> USDC
-            }
-          }
-        );
-        setAvailableBalances(balances);
-      }
-    } catch (error) {
-      console.error("Error fetching available balances:", error);
-    }
-  };
+  useEffect(() => {
+    fetchVault();
+  }, [movementWallet?.address, assets]);
 
   useEffect(() => {
-    fetchAvailableBalances();
+    const loadBalances = async () => {
+      if (movementWallet?.address) {
+        const balances = await fetchAvailableBalances(movementWallet.address);
+        setAvailableBalances(balances);
+      }
+    };
+    loadBalances();
   }, [movementWallet?.address]);
 
   // Calculate totals
@@ -439,8 +246,11 @@ export default function EchelonPage() {
 
   const filteredSupplyAssets = useMemo(() => {
     if (!hideZeroBalance) return assets;
-    return assets.filter((a) => a.supplyCap > 0);
-  }, [assets, hideZeroBalance]);
+    return assets.filter((a) => {
+      const balance = availableBalances[a.symbol.toUpperCase()] || 0;
+      return balance > 0;
+    });
+  }, [assets, hideZeroBalance, availableBalances]);
 
   const borrowableAssets = useMemo(() => {
     return assets.filter((a) => a.borrowCap > 0);
@@ -564,26 +374,12 @@ export default function EchelonPage() {
                             className="grid grid-cols-1 sm:grid-cols-4 gap-3 sm:gap-4 py-3 sm:items-center"
                           >
                             <div className="flex items-center gap-3">
-                              <div className="relative">
-                                {supply.icon ? (
-                                  <img
-                                    src={
-                                      supply.icon.startsWith("/")
-                                        ? `https://app.echelon.market${supply.icon}`
-                                        : supply.icon
-                                    }
-                                    alt={supply.symbol}
-                                    className="w-8 h-8 rounded-full"
-                                  />
-                                ) : (
-                                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 via-violet-500 to-indigo-600 flex items-center justify-center">
-                                    <span className="text-white text-xs font-bold">
-                                      {supply.symbol.charAt(0)}
-                                    </span>
-                                  </div>
-                                )}
-                                <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-purple-500 border-2 border-white dark:border-zinc-900" />
-                              </div>
+                              <AssetIcon
+                                symbol={supply.symbol}
+                                echelonIcon={supply.icon}
+                                size="md"
+                                showBadge={true}
+                              />
                               <span className="text-zinc-950 dark:text-zinc-50 font-medium text-sm sm:text-base">
                                 {supply.symbol}
                               </span>
@@ -691,26 +487,12 @@ export default function EchelonPage() {
                             className="grid grid-cols-1 sm:grid-cols-4 gap-3 sm:gap-4 py-3 sm:items-center"
                           >
                             <div className="flex items-center gap-3">
-                              <div className="relative">
-                                {borrow.icon ? (
-                                  <img
-                                    src={
-                                      borrow.icon.startsWith("/")
-                                        ? `https://app.echelon.market${borrow.icon}`
-                                        : borrow.icon
-                                    }
-                                    alt={borrow.symbol}
-                                    className="w-8 h-8 rounded-full"
-                                  />
-                                ) : (
-                                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 via-violet-500 to-indigo-600 flex items-center justify-center">
-                                    <span className="text-white text-xs font-bold">
-                                      {borrow.symbol.charAt(0)}
-                                    </span>
-                                  </div>
-                                )}
-                                <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-purple-500 border-2 border-white dark:border-zinc-900" />
-                              </div>
+                              <AssetIcon
+                                symbol={borrow.symbol}
+                                echelonIcon={borrow.icon}
+                                size="md"
+                                showBadge={true}
+                              />
                               <span className="text-zinc-950 dark:text-zinc-50 font-medium text-sm sm:text-base">
                                 {borrow.symbol}
                               </span>
@@ -759,13 +541,17 @@ export default function EchelonPage() {
                   <h2 className="text-base sm:text-lg font-semibold text-zinc-950 dark:text-zinc-50">
                     Assets to Supply
                   </h2>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-3">
                     <span className="text-xs sm:text-sm text-zinc-500 dark:text-zinc-400">
                       Hide 0 balance ({filteredSupplyAssets.length})
                     </span>
                     <button
                       onClick={() => setHideZeroBalance(!hideZeroBalance)}
-                      className={`relative w-10 h-5 rounded-full transition-colors cursor-pointer ${hideZeroBalance ? "bg-purple-500" : "bg-zinc-200 dark:bg-zinc-700"}`}
+                      className={`relative w-11 h-6 rounded-full transition-all duration-300 ease-in-out cursor-pointer focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:ring-offset-2 ${
+                        hideZeroBalance
+                          ? "bg-gradient-to-r from-purple-500 to-violet-500 shadow-lg shadow-purple-500/30"
+                          : "bg-zinc-200 dark:bg-zinc-700 hover:bg-zinc-300 dark:hover:bg-zinc-600"
+                      }`}
                       aria-label={
                         hideZeroBalance
                           ? "Show all assets"
@@ -774,7 +560,11 @@ export default function EchelonPage() {
                       type="button"
                     >
                       <span
-                        className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform pointer-events-none ${hideZeroBalance ? "translate-x-5" : "translate-x-0.5"}`}
+                        className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow-md transition-all duration-300 ease-in-out pointer-events-none ${
+                          hideZeroBalance
+                            ? "translate-x-5 shadow-purple-500/20"
+                            : "translate-x-0"
+                        }`}
                       />
                     </button>
                   </div>
@@ -810,36 +600,12 @@ export default function EchelonPage() {
                         className="grid grid-cols-1 sm:grid-cols-4 gap-3 sm:gap-4 py-3 sm:items-center"
                       >
                         <div className="flex items-center gap-3">
-                          <div className="relative">
-                            {asset.icon ? (
-                              <img
-                                src={
-                                  asset.icon.startsWith("/")
-                                    ? `https://app.echelon.market${asset.icon}`
-                                    : asset.icon
-                                }
-                                alt={asset.symbol}
-                                className="w-8 h-8 rounded-full"
-                                onError={(e) => {
-                                  (e.target as HTMLImageElement).style.display =
-                                    "none";
-                                  (
-                                    e.target as HTMLImageElement
-                                  ).nextElementSibling?.classList.remove(
-                                    "hidden"
-                                  );
-                                }}
-                              />
-                            ) : null}
-                            <div
-                              className={`w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 via-violet-500 to-indigo-600 flex items-center justify-center ${asset.icon ? "hidden" : ""}`}
-                            >
-                              <span className="text-white text-xs font-bold">
-                                {asset.symbol.charAt(0)}
-                              </span>
-                            </div>
-                            <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-purple-500 border-2 border-white dark:border-zinc-900" />
-                          </div>
+                          <AssetIcon
+                            symbol={asset.symbol}
+                            echelonIcon={asset.icon}
+                            size="md"
+                            showBadge={true}
+                          />
                           <span className="text-zinc-950 dark:text-zinc-50 font-medium text-sm sm:text-base">
                             {asset.symbol}
                           </span>
@@ -927,36 +693,12 @@ export default function EchelonPage() {
                         className="grid grid-cols-1 sm:grid-cols-4 gap-3 sm:gap-4 py-3 sm:items-center"
                       >
                         <div className="flex items-center gap-3">
-                          <div className="relative">
-                            {asset.icon ? (
-                              <img
-                                src={
-                                  asset.icon.startsWith("/")
-                                    ? `https://app.echelon.market${asset.icon}`
-                                    : asset.icon
-                                }
-                                alt={asset.symbol}
-                                className="w-8 h-8 rounded-full"
-                                onError={(e) => {
-                                  (e.target as HTMLImageElement).style.display =
-                                    "none";
-                                  (
-                                    e.target as HTMLImageElement
-                                  ).nextElementSibling?.classList.remove(
-                                    "hidden"
-                                  );
-                                }}
-                              />
-                            ) : null}
-                            <div
-                              className={`w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 via-violet-500 to-indigo-600 flex items-center justify-center ${asset.icon ? "hidden" : ""}`}
-                            >
-                              <span className="text-white text-xs font-bold">
-                                {asset.symbol.charAt(0)}
-                              </span>
-                            </div>
-                            <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-purple-500 border-2 border-white dark:border-zinc-900" />
-                          </div>
+                          <AssetIcon
+                            symbol={asset.symbol}
+                            echelonIcon={asset.icon}
+                            size="md"
+                            showBadge={true}
+                          />
                           <span className="text-zinc-950 dark:text-zinc-50 font-medium text-sm sm:text-base">
                             {asset.symbol}
                           </span>
@@ -1042,7 +784,12 @@ export default function EchelonPage() {
             await new Promise((resolve) => setTimeout(resolve, 2000));
             // Refresh vault data and balances after successful supply
             await fetchVault();
-            await fetchAvailableBalances();
+            if (movementWallet?.address) {
+              const balances = await fetchAvailableBalances(
+                movementWallet.address
+              );
+              setAvailableBalances(balances);
+            }
           }}
         />
 
@@ -1102,7 +849,12 @@ export default function EchelonPage() {
             await new Promise((resolve) => setTimeout(resolve, 2000));
             // Refresh vault data and balances after successful withdraw
             await fetchVault();
-            await fetchAvailableBalances();
+            if (movementWallet?.address) {
+              const balances = await fetchAvailableBalances(
+                movementWallet.address
+              );
+              setAvailableBalances(balances);
+            }
           }}
         />
 
@@ -1137,7 +889,12 @@ export default function EchelonPage() {
             await new Promise((resolve) => setTimeout(resolve, 2000));
             // Refresh vault data and balances after successful repay
             await fetchVault();
-            await fetchAvailableBalances();
+            if (movementWallet?.address) {
+              const balances = await fetchAvailableBalances(
+                movementWallet.address
+              );
+              setAvailableBalances(balances);
+            }
           }}
         />
       </div>
