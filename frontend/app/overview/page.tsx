@@ -14,7 +14,6 @@ import BridgeModal from "../components/bridge/BridgeModal";
 import BalanceCard from "../components/overview/BalanceCard";
 import AssetsList from "../components/overview/AssetsList";
 import { QRCodeSVG } from "qrcode.react";
-import { getTokenIconUrl } from "../utils/token-icons";
 
 interface TokenBalance {
   assetType: string;
@@ -235,12 +234,6 @@ export default function OverviewPage() {
         balance.metadata.name.toLowerCase().includes(query)
     );
   }, [balances, searchQuery]);
-
-  const displayedBalances = useMemo(() => {
-    return filteredBalances.slice(0, displayLimit);
-  }, [filteredBalances, displayLimit]);
-
-  const hasMore = filteredBalances.length > displayLimit;
 
   const [selectedTokenForTransfer, setSelectedTokenForTransfer] =
     useState<TokenBalance | null>(null);
