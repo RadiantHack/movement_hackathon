@@ -77,6 +77,7 @@ const ChatInner = ({ walletAddress }: MovementChatProps) => {
         supplyApr: number;
         faAddress?: string;
         decimals?: number;
+        marketAddress?: string;
       }
     >
   >({});
@@ -102,6 +103,7 @@ const ChatInner = ({ walletAddress }: MovementChatProps) => {
             supplyApr: number;
             faAddress?: string;
             decimals?: number;
+            marketAddress?: string;
           }
         > = {};
 
@@ -114,6 +116,7 @@ const ChatInner = ({ walletAddress }: MovementChatProps) => {
             supplyApr: number;
             faAddress: string;
             decimals: number;
+            market?: string;
           }) => {
             assetsMap[asset.symbol.toUpperCase()] = {
               symbol: asset.symbol,
@@ -123,6 +126,7 @@ const ChatInner = ({ walletAddress }: MovementChatProps) => {
               supplyApr: asset.supplyApr * 100,
               faAddress: asset.faAddress,
               decimals: asset.decimals,
+              marketAddress: asset.market,
             };
           }
         );
@@ -937,7 +941,8 @@ const ChatInner = ({ walletAddress }: MovementChatProps) => {
                 price: 1,
                 supplyApr: 0,
                 faAddress: undefined,
-                decimals: 8, // Default to 8 decimals if not found
+                decimals: 8,
+                marketAddress: undefined,
               }
             }
             availableBalance={asset ? availableBalances[assetSymbol] || 0 : 0}
@@ -1157,7 +1162,8 @@ REMEMBER: The wallet address is ${walletAddress} - use it exactly as shown.`
                         price: 1,
                         supplyApr: 0,
                         faAddress: undefined,
-                        decimals: 8, // Default to 8 decimals if not found
+                        decimals: 8,
+                        marketAddress: undefined,
                       }
                     }
                     availableBalance={availableBalances[assetSymbol] || 0}
