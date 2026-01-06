@@ -201,6 +201,8 @@ export function SupplyModal({
   const [loadingSimulation, setLoadingSimulation] = useState(false);
   const [loadingPortfolio, setLoadingPortfolio] = useState(false);
   const [submissionStep, setSubmissionStep] = useState<string>("");
+  const [showTxHashOnButton, setShowTxHashOnButton] = useState(false);
+  const [showSuccessMessage, setShowSuccessMessage] = useState(false);
 
   const movementApiBase = getMovementApiBase();
 
@@ -225,6 +227,7 @@ export function SupplyModal({
       setTxHash(null);
       setSubmissionStep("");
       setSimulatedRiskData(null);
+      setShowSuccessMessage(false);
       return;
     }
   }, [isOpen]);
@@ -1198,6 +1201,7 @@ export function SupplyModal({
         txHash
       );
       setTxHash(txHash);
+      setShowSuccessMessage(true);
 
       // Refresh portfolio data to update supplied amounts
       if (walletAddress) {
@@ -1216,12 +1220,12 @@ export function SupplyModal({
         }
       }
 
-      // Close modal on success after a short delay
+      // Show explorer link on button for 250ms, then reset to initial state
       setTimeout(() => {
-        onClose();
-        setAmount("");
+        setShowSuccessMessage(false);
         setTxHash(null);
-      }, 2000);
+        setAmount("");
+      }, 250);
     } catch (err: any) {
       debugger;
       console.error("Transaction error:", err);
@@ -1732,18 +1736,44 @@ export function SupplyModal({
             </div>
           )}
 
-          {/* Success Message */}
-          {txHash && (
-            <div className="mb-4 p-3 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-sm text-green-700 dark:text-green-400">
-              <div className="flex items-center gap-2">
-                <span>Transaction submitted!</span>
+          {/* Submit Button */}
+          <button
+            onClick={handleSubmit}
+            disabled={(!canReview || submitting) && !txHash}
+            className={`w-full font-semibold py-3.5 rounded-lg transition-all duration-200 mt-4 shadow-lg ${
+              txHash
+                ? "bg-green-600 text-white cursor-pointer"
+                : canReview && !submitting
+                  ? activeTab === "supply"
+                    ? "bg-green-600 text-white hover:bg-green-700 hover:shadow-xl active:scale-[0.98] cursor-pointer"
+                    : "bg-yellow-500 text-black hover:bg-yellow-400 hover:shadow-xl active:scale-[0.98] cursor-pointer"
+                  : "bg-zinc-300 dark:bg-zinc-700 text-zinc-500 dark:text-zinc-400 cursor-not-allowed"
+            }`}
+          >
+            {txHash && showSuccessMessage ? (
+              <span className="flex items-center justify-center gap-2">
+                <svg
+                  className="w-5 h-5"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M5 13l4 4L19 7"
+                  />
+                </svg>
+                Transaction Submitted!
                 <a
                   href={`https://explorer.movementnetwork.xyz/txn/${txHash}?network=mainnet`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-green-600 dark:text-green-400 hover:text-green-800 dark:hover:text-green-300 underline font-medium flex items-center gap-1"
+                  className="ml-2 underline hover:opacity-80 flex items-center gap-1"
+                  onClick={(e) => e.stopPropagation()}
                 >
-                  View on Explorer →
+                  View
                   <svg
                     className="w-4 h-4"
                     fill="none"
@@ -1758,51 +1788,8 @@ export function SupplyModal({
                     />
                   </svg>
                 </a>
-              </div>
-            </div>
-          )}
-
-          {/* Submission Step Indicator */}
-          {submitting && submissionStep && (
-            <div className="mb-4 p-3 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 text-sm text-blue-700 dark:text-blue-400">
-              <div className="flex items-center gap-2">
-                <svg
-                  className="w-4 h-4 animate-spin"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                >
-                  <circle
-                    className="opacity-25"
-                    cx="12"
-                    cy="12"
-                    r="10"
-                    stroke="currentColor"
-                    strokeWidth="4"
-                  ></circle>
-                  <path
-                    className="opacity-75"
-                    fill="currentColor"
-                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                  ></path>
-                </svg>
-                {submissionStep}
-              </div>
-            </div>
-          )}
-
-          {/* Submit Button */}
-          <button
-            onClick={handleSubmit}
-            disabled={!canReview || submitting}
-            className={`w-full font-semibold py-3.5 rounded-lg transition-all duration-200 mt-4 shadow-lg ${
-              canReview && !submitting
-                ? activeTab === "supply"
-                  ? "bg-green-600 text-white hover:bg-green-700 hover:shadow-xl active:scale-[0.98] cursor-pointer"
-                  : "bg-yellow-500 text-black hover:bg-yellow-400 hover:shadow-xl active:scale-[0.98] cursor-pointer"
-                : "bg-zinc-300 dark:bg-zinc-700 text-zinc-500 dark:text-zinc-400 cursor-not-allowed"
-            }`}
-          >
-            {submitting ? (
+              </span>
+            ) : submitting ? (
               <span className="flex items-center justify-center gap-2">
                 <svg
                   className="w-5 h-5 animate-spin"

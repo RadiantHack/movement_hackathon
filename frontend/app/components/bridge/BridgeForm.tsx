@@ -4,7 +4,7 @@ import React, { useMemo, useState, useEffect, useRef } from "react";
 import { usePrivy, WalletWithMetadata } from "@privy-io/react-auth";
 import { useSignRawHash } from "@privy-io/react-auth/extended-chains";
 import { useMovementConfig } from "../../hooks/useMovementConfig";
-import { getTokenIconUrl } from "../../utils/token-icons";
+import { AssetIcon } from "../asset-icon";
 import { executeBridge, isValidEthereumAddress } from "../../utils/bridge";
 import { createAptosClient } from "../../utils/aptos-client";
 
@@ -154,7 +154,6 @@ export default function BridgeForm({ walletAddress }: BridgeFormProps) {
   const selectedToken = TOKENS.find((t) => t.symbol === token) || TOKENS[0];
 
   const tokenItems = TOKENS.map((t) => {
-    const iconUrl = getTokenIconUrl(t.symbol);
     return (
       <button
         key={t.symbol}
@@ -166,14 +165,12 @@ export default function BridgeForm({ walletAddress }: BridgeFormProps) {
           token === t.symbol ? "bg-blue-50 dark:bg-blue-900/20" : ""
         }`}
       >
-        <div className="relative w-9 h-9 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl bg-white dark:bg-zinc-800 flex items-center justify-center shadow-sm ring-1 ring-zinc-200 dark:ring-zinc-700 overflow-hidden flex-shrink-0">
-          {iconUrl ? (
-            <img
-              src={iconUrl as string}
-              alt={t.symbol}
-              className="w-8 h-8 sm:w-9 sm:h-9 object-contain p-0.5 sm:p-1"
-            />
-          ) : null}
+        <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl bg-white dark:bg-zinc-800 flex items-center justify-center shadow-sm ring-1 ring-zinc-200 dark:ring-zinc-700 overflow-hidden flex-shrink-0 p-0.5 sm:p-1">
+          <AssetIcon
+            symbol={t.symbol}
+            size="w-8 h-8 sm:w-9 sm:h-9"
+            className="rounded-lg"
+          />
         </div>
         <div className="text-left flex-1 min-w-0">
           <div className="text-sm sm:text-base font-bold text-zinc-900 dark:text-zinc-50 truncate">
@@ -251,20 +248,12 @@ export default function BridgeForm({ walletAddress }: BridgeFormProps) {
               className="w-full flex items-center justify-between p-3 sm:p-3.5 rounded-lg sm:rounded-xl border border-zinc-200 dark:border-zinc-700/50 bg-white dark:bg-zinc-900 hover:border-zinc-300 dark:hover:border-zinc-600 transition-all active:scale-[0.98]"
             >
               <div className="flex items-center gap-2.5 sm:gap-3 min-w-0 flex-1">
-                <div className="relative w-9 h-9 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl bg-white dark:bg-zinc-800 flex items-center justify-center shadow-sm ring-1 ring-zinc-200 dark:ring-zinc-700 overflow-hidden flex-shrink-0">
-                  {(() => {
-                    const iconUrl = getTokenIconUrl(selectedToken.symbol);
-                    if (iconUrl) {
-                      return (
-                        <img
-                          src={iconUrl as string}
-                          alt={selectedToken.symbol}
-                          className="w-8 h-8 sm:w-9 sm:h-9 object-contain p-0.5 sm:p-1"
-                        />
-                      );
-                    }
-                    return null;
-                  })()}
+                <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl bg-white dark:bg-zinc-800 flex items-center justify-center shadow-sm ring-1 ring-zinc-200 dark:ring-zinc-700 overflow-hidden flex-shrink-0 p-0.5 sm:p-1">
+                  <AssetIcon
+                    symbol={selectedToken.symbol}
+                    size="w-8 h-8 sm:w-9 sm:h-9"
+                    className="rounded-lg"
+                  />
                 </div>
                 <div className="text-left min-w-0 flex-1">
                   <div className="text-sm sm:text-base font-bold text-zinc-900 dark:text-zinc-50 truncate">

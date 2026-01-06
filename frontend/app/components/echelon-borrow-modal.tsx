@@ -4,6 +4,7 @@ import { useState, useMemo } from "react";
 import { usePrivy, WalletWithMetadata } from "@privy-io/react-auth";
 import { useSignRawHash } from "@privy-io/react-auth/extended-chains";
 import { executeBorrowTransaction } from "@/app/hooks/useEchelonTransactions";
+import { AssetIcon } from "./asset-icon";
 
 interface EchelonAsset {
   symbol: string;
@@ -64,6 +65,7 @@ export function EchelonBorrowModal({
   const [error, setError] = useState<string | null>(null);
   const [txHash, setTxHash] = useState<string | null>(null);
   const [step, setStep] = useState<string>("");
+  const [showSuccessMessage, setShowSuccessMessage] = useState(false);
 
   const { user, ready, authenticated } = usePrivy();
   const { signRawHash } = useSignRawHash();
@@ -192,22 +194,18 @@ export function EchelonBorrowModal({
     if (result.success) {
       setTxHash(result.txHash || "");
       setStep("");
+      setShowSuccessMessage(true);
 
       if (onSuccess) {
         onSuccess();
       }
 
-      if (!inline) {
-        setTimeout(() => {
-          onClose();
-          setAmount("");
-          setTxHash(null);
-        }, 2000);
-      } else {
-        setTimeout(() => {
-          setAmount("");
-        }, 2000);
-      }
+      // Show explorer link on button for 250ms, then reset to initial state
+      setTimeout(() => {
+        setShowSuccessMessage(false);
+        setTxHash(null);
+        setAmount("");
+      }, 250);
     } else {
       setError(result.error || "Transaction failed");
       setStep("");
@@ -258,23 +256,12 @@ export function EchelonBorrowModal({
           <div className="flex items-start justify-between gap-4">
             <div className="flex items-center gap-4">
               <div className="relative">
-                {asset.icon ? (
-                  <img
-                    src={
-                      asset.icon.startsWith("/")
-                        ? `https://app.echelon.market${asset.icon}`
-                        : asset.icon
-                    }
-                    alt={asset.symbol}
-                    className="w-12 h-12 rounded-full ring-2 ring-white dark:ring-zinc-800 shadow-lg"
-                  />
-                ) : (
-                  <div className="w-12 h-12 rounded-full bg-gradient-to-br from-purple-500 via-violet-500 to-indigo-600 flex items-center justify-center ring-2 ring-white dark:ring-zinc-800 shadow-lg">
-                    <span className="text-white font-bold text-lg">
-                      {asset.symbol.charAt(0)}
-                    </span>
-                  </div>
-                )}
+                <AssetIcon
+                  symbol={asset.symbol}
+                  echelonIcon={asset.icon}
+                  size="lg"
+                  ring={true}
+                />
               </div>
               <div>
                 <input
@@ -326,49 +313,6 @@ export function EchelonBorrowModal({
                 )}
               </div>
             </div>
-          </div>
-        </div>
-
-        {/* Percentage Presets */}
-        <div className="flex gap-2 mb-4">
-          {[25, 50, 75, 100].map((pct) => (
-            <button
-              key={pct}
-              onClick={() => handlePresetPercentage(pct)}
-              className={`flex-1 py-2 rounded-xl text-sm font-medium transition-all duration-200 ${
-                percentage === pct
-                  ? "bg-purple-600 text-white shadow-lg shadow-purple-500/25"
-                  : "bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700"
-              }`}
-            >
-              {pct}%
-            </button>
-          ))}
-        </div>
-
-        {/* Slider */}
-        <div className="mb-6">
-          <div className="relative h-2 bg-zinc-200 dark:bg-zinc-700 rounded-full overflow-hidden">
-            <div
-              className="absolute h-full bg-gradient-to-r from-purple-500 to-violet-500 rounded-full transition-all duration-200"
-              style={{ width: `${percentage}%` }}
-            />
-          </div>
-          <input
-            type="range"
-            min="0"
-            max="100"
-            value={percentage}
-            onChange={(e) => handlePercentageChange(Number(e.target.value))}
-            className="absolute w-full h-2 opacity-0 cursor-pointer"
-            style={{ marginTop: "-8px" }}
-          />
-          <div className="flex justify-between text-xs text-zinc-400 dark:text-zinc-500 mt-2">
-            <span>0%</span>
-            <span>25%</span>
-            <span>50%</span>
-            <span>75%</span>
-            <span>100%</span>
           </div>
         </div>
 
@@ -522,65 +466,10 @@ export function EchelonBorrowModal({
           </div>
         </div>
 
-        {/* Status Message - Shows error, success, or step in one place */}
-        {(error || txHash || step) && (
-          <div
-            className={`mb-4 p-3 rounded-lg text-sm ${
-              error
-                ? "bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-700 dark:text-red-400"
-                : txHash
-                  ? "bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-green-700 dark:text-green-400"
-                  : "bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-400"
-            }`}
-          >
-            {error ? (
-              <div>{error}</div>
-            ) : txHash ? (
-              <>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <svg
-                    className="w-5 h-5 flex-shrink-0"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-                    />
-                  </svg>
-                  <span className="font-medium">Transaction successful!</span>
-                  <a
-                    href={`https://explorer.movementnetwork.xyz/txn/${txHash}?network=mainnet`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="ml-auto text-green-600 dark:text-green-400 hover:text-green-800 dark:hover:text-green-300 underline font-semibold flex items-center gap-1"
-                  >
-                    View Transaction
-                    <svg
-                      className="w-4 h-4"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
-                      />
-                    </svg>
-                  </a>
-                </div>
-                <div className="mt-2 text-xs font-mono text-green-600 dark:text-green-400 break-all">
-                  {txHash}
-                </div>
-              </>
-            ) : (
-              <div>{step}</div>
-            )}
+        {/* Error Message */}
+        {error && (
+          <div className="mb-4 p-3 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-sm text-red-700 dark:text-red-400">
+            {error}
           </div>
         )}
 
@@ -605,18 +494,84 @@ export function EchelonBorrowModal({
               });
             }
           }}
-          disabled={numericAmount <= 0 || submitting}
+          disabled={
+            (!numericAmount || numericAmount <= 0 || submitting) && !txHash
+          }
           className={`w-full py-4 rounded-2xl font-semibold text-lg transition-all duration-200 relative z-10 ${
-            numericAmount > 0 && !submitting
-              ? "bg-gradient-to-r from-purple-600 to-violet-600 text-white shadow-lg shadow-purple-500/30 hover:shadow-xl hover:shadow-purple-500/40 hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
-              : "bg-zinc-100 dark:bg-zinc-800 text-zinc-400 dark:text-zinc-500 cursor-not-allowed"
+            txHash
+              ? "bg-green-600 text-white cursor-pointer"
+              : numericAmount > 0 && !submitting
+                ? "bg-gradient-to-r from-purple-600 to-violet-600 text-white shadow-lg shadow-purple-500/30 hover:shadow-xl hover:shadow-purple-500/40 hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
+                : "bg-zinc-100 dark:bg-zinc-800 text-zinc-400 dark:text-zinc-500 cursor-not-allowed"
           }`}
         >
-          {submitting
-            ? step || "Processing..."
-            : numericAmount > 0
-              ? `Borrow ${asset.symbol}`
-              : "Enter amount to borrow"}
+          {txHash && showSuccessMessage ? (
+            <span className="flex items-center justify-center gap-2">
+              <svg
+                className="w-5 h-5"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M5 13l4 4L19 7"
+                />
+              </svg>
+              Transaction Submitted!
+              <a
+                href={`https://explorer.movementnetwork.xyz/txn/${txHash}?network=mainnet`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="ml-2 underline hover:opacity-80 flex items-center gap-1"
+                onClick={(e) => e.stopPropagation()}
+              >
+                View
+                <svg
+                  className="w-4 h-4"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+                  />
+                </svg>
+              </a>
+            </span>
+          ) : submitting ? (
+            <span className="flex items-center justify-center gap-2">
+              <svg
+                className="w-5 h-5 animate-spin"
+                fill="none"
+                viewBox="0 0 24 24"
+              >
+                <circle
+                  className="opacity-25"
+                  cx="12"
+                  cy="12"
+                  r="10"
+                  stroke="currentColor"
+                  strokeWidth="4"
+                />
+                <path
+                  className="opacity-75"
+                  fill="currentColor"
+                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                />
+              </svg>
+              {step || "Processing..."}
+            </span>
+          ) : numericAmount > 0 ? (
+            `Borrow ${asset.symbol}`
+          ) : (
+            "Enter amount to borrow"
+          )}
         </button>
       </div>
     </div>

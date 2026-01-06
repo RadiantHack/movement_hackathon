@@ -4,6 +4,7 @@ import { useState, useMemo } from "react";
 import { usePrivy, WalletWithMetadata } from "@privy-io/react-auth";
 import { useSignRawHash } from "@privy-io/react-auth/extended-chains";
 import { executeRepayTransaction } from "../hooks/useEchelonTransactions";
+import { AssetIcon } from "./asset-icon";
 
 interface RepayAsset {
   symbol: string;
@@ -227,23 +228,12 @@ export function EchelonRepayModal({
             <div className="flex items-start justify-between gap-4">
               <div className="flex items-center gap-4">
                 <div className="relative">
-                  {asset.icon ? (
-                    <img
-                      src={
-                        asset.icon.startsWith("/")
-                          ? `https://app.echelon.market${asset.icon}`
-                          : asset.icon
-                      }
-                      alt={asset.symbol}
-                      className="w-12 h-12 rounded-full ring-2 ring-white dark:ring-zinc-800 shadow-lg"
-                    />
-                  ) : (
-                    <div className="w-12 h-12 rounded-full bg-gradient-to-br from-purple-500 via-violet-500 to-indigo-600 flex items-center justify-center ring-2 ring-white dark:ring-zinc-800 shadow-lg">
-                      <span className="text-white font-bold text-lg">
-                        {asset.symbol.charAt(0)}
-                      </span>
-                    </div>
-                  )}
+                  <AssetIcon
+                    symbol={asset.symbol}
+                    echelonIcon={asset.icon}
+                    size="lg"
+                    ring={true}
+                  />
                 </div>
                 <div>
                   <input

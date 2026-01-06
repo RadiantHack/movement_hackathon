@@ -10,6 +10,7 @@ import { EchelonSupplyModal } from "../components/echelon-supply-modal";
 import { EchelonBorrowModal } from "../components/echelon-borrow-modal";
 import { EchelonWithdrawModal } from "../components/echelon-withdraw-modal";
 import { EchelonRepayModal } from "../components/echelon-repay-modal";
+import { AssetIcon } from "../components/asset-icon";
 import {
   EchelonAsset,
   MarketStats,
@@ -245,8 +246,11 @@ export default function EchelonPage() {
 
   const filteredSupplyAssets = useMemo(() => {
     if (!hideZeroBalance) return assets;
-    return assets.filter((a) => a.supplyCap > 0);
-  }, [assets, hideZeroBalance]);
+    return assets.filter((a) => {
+      const balance = availableBalances[a.symbol.toUpperCase()] || 0;
+      return balance > 0;
+    });
+  }, [assets, hideZeroBalance, availableBalances]);
 
   const borrowableAssets = useMemo(() => {
     return assets.filter((a) => a.borrowCap > 0);
@@ -370,26 +374,12 @@ export default function EchelonPage() {
                             className="grid grid-cols-1 sm:grid-cols-4 gap-3 sm:gap-4 py-3 sm:items-center"
                           >
                             <div className="flex items-center gap-3">
-                              <div className="relative">
-                                {supply.icon ? (
-                                  <img
-                                    src={
-                                      supply.icon.startsWith("/")
-                                        ? `https://app.echelon.market${supply.icon}`
-                                        : supply.icon
-                                    }
-                                    alt={supply.symbol}
-                                    className="w-8 h-8 rounded-full"
-                                  />
-                                ) : (
-                                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 via-violet-500 to-indigo-600 flex items-center justify-center">
-                                    <span className="text-white text-xs font-bold">
-                                      {supply.symbol.charAt(0)}
-                                    </span>
-                                  </div>
-                                )}
-                                <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-purple-500 border-2 border-white dark:border-zinc-900" />
-                              </div>
+                              <AssetIcon
+                                symbol={supply.symbol}
+                                echelonIcon={supply.icon}
+                                size="md"
+                                showBadge={true}
+                              />
                               <span className="text-zinc-950 dark:text-zinc-50 font-medium text-sm sm:text-base">
                                 {supply.symbol}
                               </span>
@@ -497,26 +487,12 @@ export default function EchelonPage() {
                             className="grid grid-cols-1 sm:grid-cols-4 gap-3 sm:gap-4 py-3 sm:items-center"
                           >
                             <div className="flex items-center gap-3">
-                              <div className="relative">
-                                {borrow.icon ? (
-                                  <img
-                                    src={
-                                      borrow.icon.startsWith("/")
-                                        ? `https://app.echelon.market${borrow.icon}`
-                                        : borrow.icon
-                                    }
-                                    alt={borrow.symbol}
-                                    className="w-8 h-8 rounded-full"
-                                  />
-                                ) : (
-                                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 via-violet-500 to-indigo-600 flex items-center justify-center">
-                                    <span className="text-white text-xs font-bold">
-                                      {borrow.symbol.charAt(0)}
-                                    </span>
-                                  </div>
-                                )}
-                                <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-purple-500 border-2 border-white dark:border-zinc-900" />
-                              </div>
+                              <AssetIcon
+                                symbol={borrow.symbol}
+                                echelonIcon={borrow.icon}
+                                size="md"
+                                showBadge={true}
+                              />
                               <span className="text-zinc-950 dark:text-zinc-50 font-medium text-sm sm:text-base">
                                 {borrow.symbol}
                               </span>
@@ -565,13 +541,17 @@ export default function EchelonPage() {
                   <h2 className="text-base sm:text-lg font-semibold text-zinc-950 dark:text-zinc-50">
                     Assets to Supply
                   </h2>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-3">
                     <span className="text-xs sm:text-sm text-zinc-500 dark:text-zinc-400">
                       Hide 0 balance ({filteredSupplyAssets.length})
                     </span>
                     <button
                       onClick={() => setHideZeroBalance(!hideZeroBalance)}
-                      className={`relative w-10 h-5 rounded-full transition-colors cursor-pointer ${hideZeroBalance ? "bg-purple-500" : "bg-zinc-200 dark:bg-zinc-700"}`}
+                      className={`relative w-11 h-6 rounded-full transition-all duration-300 ease-in-out cursor-pointer focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:ring-offset-2 ${
+                        hideZeroBalance
+                          ? "bg-gradient-to-r from-purple-500 to-violet-500 shadow-lg shadow-purple-500/30"
+                          : "bg-zinc-200 dark:bg-zinc-700 hover:bg-zinc-300 dark:hover:bg-zinc-600"
+                      }`}
                       aria-label={
                         hideZeroBalance
                           ? "Show all assets"
@@ -580,7 +560,11 @@ export default function EchelonPage() {
                       type="button"
                     >
                       <span
-                        className={`absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform pointer-events-none ${hideZeroBalance ? "translate-x-5" : "translate-x-0.5"}`}
+                        className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow-md transition-all duration-300 ease-in-out pointer-events-none ${
+                          hideZeroBalance
+                            ? "translate-x-5 shadow-purple-500/20"
+                            : "translate-x-0"
+                        }`}
                       />
                     </button>
                   </div>
@@ -616,36 +600,12 @@ export default function EchelonPage() {
                         className="grid grid-cols-1 sm:grid-cols-4 gap-3 sm:gap-4 py-3 sm:items-center"
                       >
                         <div className="flex items-center gap-3">
-                          <div className="relative">
-                            {asset.icon ? (
-                              <img
-                                src={
-                                  asset.icon.startsWith("/")
-                                    ? `https://app.echelon.market${asset.icon}`
-                                    : asset.icon
-                                }
-                                alt={asset.symbol}
-                                className="w-8 h-8 rounded-full"
-                                onError={(e) => {
-                                  (e.target as HTMLImageElement).style.display =
-                                    "none";
-                                  (
-                                    e.target as HTMLImageElement
-                                  ).nextElementSibling?.classList.remove(
-                                    "hidden"
-                                  );
-                                }}
-                              />
-                            ) : null}
-                            <div
-                              className={`w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 via-violet-500 to-indigo-600 flex items-center justify-center ${asset.icon ? "hidden" : ""}`}
-                            >
-                              <span className="text-white text-xs font-bold">
-                                {asset.symbol.charAt(0)}
-                              </span>
-                            </div>
-                            <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-purple-500 border-2 border-white dark:border-zinc-900" />
-                          </div>
+                          <AssetIcon
+                            symbol={asset.symbol}
+                            echelonIcon={asset.icon}
+                            size="md"
+                            showBadge={true}
+                          />
                           <span className="text-zinc-950 dark:text-zinc-50 font-medium text-sm sm:text-base">
                             {asset.symbol}
                           </span>
@@ -733,36 +693,12 @@ export default function EchelonPage() {
                         className="grid grid-cols-1 sm:grid-cols-4 gap-3 sm:gap-4 py-3 sm:items-center"
                       >
                         <div className="flex items-center gap-3">
-                          <div className="relative">
-                            {asset.icon ? (
-                              <img
-                                src={
-                                  asset.icon.startsWith("/")
-                                    ? `https://app.echelon.market${asset.icon}`
-                                    : asset.icon
-                                }
-                                alt={asset.symbol}
-                                className="w-8 h-8 rounded-full"
-                                onError={(e) => {
-                                  (e.target as HTMLImageElement).style.display =
-                                    "none";
-                                  (
-                                    e.target as HTMLImageElement
-                                  ).nextElementSibling?.classList.remove(
-                                    "hidden"
-                                  );
-                                }}
-                              />
-                            ) : null}
-                            <div
-                              className={`w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 via-violet-500 to-indigo-600 flex items-center justify-center ${asset.icon ? "hidden" : ""}`}
-                            >
-                              <span className="text-white text-xs font-bold">
-                                {asset.symbol.charAt(0)}
-                              </span>
-                            </div>
-                            <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-purple-500 border-2 border-white dark:border-zinc-900" />
-                          </div>
+                          <AssetIcon
+                            symbol={asset.symbol}
+                            echelonIcon={asset.icon}
+                            size="md"
+                            showBadge={true}
+                          />
                           <span className="text-zinc-950 dark:text-zinc-50 font-medium text-sm sm:text-base">
                             {asset.symbol}
                           </span>

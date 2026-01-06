@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { getTokenIconUrl } from "../../utils/token-icons";
+import { AssetIcon } from "../asset-icon";
 import { TokenBalance } from "../../types";
 
 interface AssetsListProps {
@@ -176,56 +176,13 @@ export default function AssetsList({
                         {/* Continuous liquid shimmer effect */}
                         <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent liquid-shimmer pointer-events-none"></div>
 
-                        {(() => {
-                          const iconUrl = getTokenIconUrl(
-                            balance.metadata.symbol,
-                            balance.assetType
-                          );
-                          if (iconUrl) {
-                            return (
-                              <>
-                                <img
-                                  src={iconUrl}
-                                  alt={balance.metadata.symbol}
-                                  className="w-full h-full object-cover relative z-10"
-                                  onError={(e) => {
-                                    const target = e.target as HTMLImageElement;
-                                    target.style.display = "none";
-                                    const fallback =
-                                      target.nextElementSibling as HTMLElement;
-                                    if (fallback) {
-                                      fallback.style.display = "flex";
-                                    }
-                                  }}
-                                />
-                                <div
-                                  className={`hidden items-center justify-center w-full h-full text-base font-bold relative z-10 ${
-                                    isNative
-                                      ? "text-white"
-                                      : "text-zinc-700 dark:text-zinc-200"
-                                  }`}
-                                >
-                                  {balance.metadata.symbol.length <= 4
-                                    ? balance.metadata.symbol
-                                    : balance.metadata.symbol.charAt(0)}
-                                </div>
-                              </>
-                            );
-                          }
-                          return (
-                            <span
-                              className={`text-base font-bold relative z-10 ${
-                                isNative
-                                  ? "text-white"
-                                  : "text-zinc-700 dark:text-zinc-200"
-                              }`}
-                            >
-                              {balance.metadata.symbol.length <= 4
-                                ? balance.metadata.symbol
-                                : balance.metadata.symbol.charAt(0)}
-                            </span>
-                          );
-                        })()}
+                        <div className="w-full h-full relative z-10">
+                          <AssetIcon
+                            symbol={balance.metadata.symbol}
+                            size="w-full h-full"
+                            className="rounded-full"
+                          />
+                        </div>
 
                         {/* Native token indicator with pulse */}
                         {isNative && (
@@ -298,56 +255,11 @@ export default function AssetsList({
                           : "bg-gradient-to-br from-zinc-100 to-zinc-200 dark:from-zinc-800 dark:to-zinc-700 border border-zinc-300 dark:border-zinc-600"
                       } flex items-center justify-center shadow-sm`}
                     >
-                      {(() => {
-                        const iconUrl = getTokenIconUrl(
-                          balance.metadata.symbol,
-                          balance.assetType
-                        );
-                        if (iconUrl) {
-                          return (
-                            <>
-                              <img
-                                src={iconUrl}
-                                alt={balance.metadata.symbol}
-                                className="w-full h-full object-cover"
-                                onError={(e) => {
-                                  const target = e.target as HTMLImageElement;
-                                  target.style.display = "none";
-                                  const fallback =
-                                    target.nextElementSibling as HTMLElement;
-                                  if (fallback) {
-                                    fallback.style.display = "flex";
-                                  }
-                                }}
-                              />
-                              <div
-                                className={`hidden items-center justify-center w-full h-full text-sm sm:text-lg font-bold ${
-                                  isNative
-                                    ? "text-purple-700 dark:text-purple-300"
-                                    : "text-zinc-700 dark:text-zinc-300"
-                                }`}
-                              >
-                                {balance.metadata.symbol.length <= 4
-                                  ? balance.metadata.symbol
-                                  : balance.metadata.symbol.charAt(0)}
-                              </div>
-                            </>
-                          );
-                        }
-                        return (
-                          <span
-                            className={`text-sm sm:text-lg font-bold ${
-                              isNative
-                                ? "text-purple-700 dark:text-purple-300"
-                                : "text-zinc-700 dark:text-zinc-300"
-                            }`}
-                          >
-                            {balance.metadata.symbol.length <= 4
-                              ? balance.metadata.symbol
-                              : balance.metadata.symbol.charAt(0)}
-                          </span>
-                        );
-                      })()}
+                      <AssetIcon
+                        symbol={balance.metadata.symbol}
+                        size="w-full h-full"
+                        className="rounded-xl"
+                      />
                       {isNative && (
                         <div className="absolute -top-1 -right-1 w-2.5 h-2.5 sm:w-3 sm:h-3 bg-purple-500 rounded-full border-2 border-white dark:border-zinc-900 z-10"></div>
                       )}

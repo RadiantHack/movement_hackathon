@@ -10,6 +10,7 @@ import { AuthGuard } from "../components/auth-guard";
 import { SupplyModal } from "../components/supply-modal";
 import { BorrowModal } from "../components/borrow-modal";
 import { getTokenBySymbol, getVerifiedTokens } from "../utils/token-constants";
+import { AssetIcon } from "../components/asset-icon";
 import { type TokenInfo } from "../utils/tokens";
 import * as superJsonApiClient from "../../lib/super-json-api-client/src";
 import { getMovementApiBase } from "@/lib/super-aptos-sdk/src/globals";
@@ -629,32 +630,12 @@ function PositionsPageContent() {
                           >
                             <td className="px-5 py-4">
                               <div className="flex items-center gap-4">
-                                <div className="relative flex-shrink-0">
-                                  {asset.token?.iconUri ? (
-                                    <img
-                                      src={asset.token.iconUri}
-                                      alt={asset.token?.symbol ?? asset.symbol}
-                                      className="w-11 h-11 rounded-2xl shadow-md group-hover:shadow-lg transition-shadow"
-                                      onError={(e) => {
-                                        (
-                                          e.target as HTMLImageElement
-                                        ).style.display = "none";
-                                        (
-                                          e.target as HTMLImageElement
-                                        ).nextElementSibling?.classList.remove(
-                                          "hidden"
-                                        );
-                                      }}
-                                    />
-                                  ) : null}
-                                  <div
-                                    className={`w-11 h-11 rounded-2xl bg-gradient-to-br from-purple-500 via-violet-500 to-indigo-600 flex items-center justify-center shadow-md ${asset.token?.iconUri ? "hidden" : ""}`}
-                                  >
-                                    <span className="text-white font-bold text-lg">
-                                      {asset.symbol.charAt(0)}
-                                    </span>
-                                  </div>
-                                </div>
+                                <AssetIcon
+                                  symbol={asset.token?.symbol ?? asset.symbol}
+                                  echelonIcon={asset.token?.iconUri}
+                                  size="w-11 h-11"
+                                  className="rounded-2xl shadow-md group-hover:shadow-lg transition-shadow"
+                                />
                                 <div className="min-w-0">
                                   <div className="font-bold text-base text-zinc-900 dark:text-zinc-50 group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors">
                                     {asset.symbol}

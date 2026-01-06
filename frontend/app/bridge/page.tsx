@@ -7,7 +7,7 @@ import { Sidebar } from "../components/sidebar";
 import { RightSidebar } from "../components/right-sidebar";
 import { ThemeToggle } from "../components/themeToggle";
 import { AuthGuard } from "../components/auth-guard";
-import { getTokenIconUrl } from "../utils/token-icons";
+import { AssetIcon } from "../components/asset-icon";
 import { useSignRawHash } from "@privy-io/react-auth/extended-chains";
 import { useMovementConfig } from "../hooks/useMovementConfig";
 import { executeBridge, isValidEthereumAddress } from "../utils/bridge";
@@ -417,36 +417,12 @@ export default function BridgePage() {
                       className="w-full flex items-center justify-between p-4 rounded-xl border border-zinc-200 dark:border-zinc-700/50 bg-white dark:bg-zinc-900 shadow-sm hover:border-zinc-300 dark:hover:border-zinc-600 transition-colors"
                     >
                       <div className="flex items-center gap-3">
-                        <div className="relative w-12 h-12 rounded-xl bg-white dark:bg-zinc-800 flex items-center justify-center shadow-sm ring-1 ring-zinc-200 dark:ring-zinc-700 overflow-hidden">
-                          {(() => {
-                            const iconUrl = getTokenIconUrl(
-                              selectedToken.symbol
-                            );
-                            if (iconUrl) {
-                              return (
-                                <img
-                                  src={iconUrl}
-                                  alt={selectedToken.symbol}
-                                  className="w-10 h-10 object-contain p-1"
-                                  onError={(e) => {
-                                    const target = e.target as HTMLImageElement;
-                                    target.style.display = "none";
-                                    const fallback =
-                                      target.nextElementSibling as HTMLElement;
-                                    if (fallback) {
-                                      fallback.style.display = "flex";
-                                    }
-                                  }}
-                                />
-                              );
-                            }
-                            return null;
-                          })()}
-                          <div className="hidden w-full h-full items-center justify-center bg-gradient-to-br from-blue-500/10 to-cyan-500/10">
-                            <span className="text-sm font-bold text-zinc-600 dark:text-zinc-400">
-                              {selectedToken.symbol.charAt(0)}
-                            </span>
-                          </div>
+                        <div className="w-12 h-12 rounded-xl bg-white dark:bg-zinc-800 flex items-center justify-center shadow-sm ring-1 ring-zinc-200 dark:ring-zinc-700 overflow-hidden p-1">
+                          <AssetIcon
+                            symbol={selectedToken.symbol}
+                            size="w-10 h-10"
+                            className="rounded-lg"
+                          />
                         </div>
                         <div className="text-left">
                           <div className="text-sm font-bold text-zinc-900 dark:text-zinc-50">
@@ -478,7 +454,6 @@ export default function BridgePage() {
                     {showTokenDropdown && (
                       <div className="absolute z-20 w-full mt-2 rounded-xl border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 shadow-xl overflow-hidden">
                         {TOKENS.map((t) => {
-                          const iconUrl = getTokenIconUrl(t.symbol);
                           return (
                             <button
                               key={t.symbol}
@@ -492,29 +467,12 @@ export default function BridgePage() {
                                   : ""
                               }`}
                             >
-                              <div className="relative w-12 h-12 rounded-xl bg-white dark:bg-zinc-800 flex items-center justify-center shadow-sm ring-1 ring-zinc-200 dark:ring-zinc-700 overflow-hidden">
-                                {iconUrl ? (
-                                  <img
-                                    src={iconUrl}
-                                    alt={t.symbol}
-                                    className="w-10 h-10 object-contain p-1"
-                                    onError={(e) => {
-                                      const target =
-                                        e.target as HTMLImageElement;
-                                      target.style.display = "none";
-                                      const fallback =
-                                        target.nextElementSibling as HTMLElement;
-                                      if (fallback) {
-                                        fallback.style.display = "flex";
-                                      }
-                                    }}
-                                  />
-                                ) : null}
-                                <div className="hidden w-full h-full items-center justify-center bg-gradient-to-br from-blue-500/10 to-cyan-500/10">
-                                  <span className="text-sm font-bold text-zinc-600 dark:text-zinc-400">
-                                    {t.symbol.charAt(0)}
-                                  </span>
-                                </div>
+                              <div className="w-12 h-12 rounded-xl bg-white dark:bg-zinc-800 flex items-center justify-center shadow-sm ring-1 ring-zinc-200 dark:ring-zinc-700 overflow-hidden p-1">
+                                <AssetIcon
+                                  symbol={t.symbol}
+                                  size="w-10 h-10"
+                                  className="rounded-lg"
+                                />
                               </div>
                               <div className="text-left flex-1">
                                 <div className="text-sm font-bold text-zinc-900 dark:text-zinc-50">
