@@ -63,6 +63,7 @@ interface PortfolioResponse {
     total_liability: number;
     ltv: number;
   };
+  maxBorrow?: Record<string, string>;
 }
 
 export const BorrowCard: React.FC<BorrowCardProps> = ({ walletAddress, asset }) => {
@@ -83,6 +84,16 @@ export const BorrowCard: React.FC<BorrowCardProps> = ({ walletAddress, asset }) 
     null
   );
   const [loadingPortfolio, setLoadingPortfolio] = useState(false);
+  const [simulatedRiskData, setSimulatedRiskData] = useState<any | null>(null);
+  const [loadingSimulation, setLoadingSimulation] = useState(false);
+
+  // Risk simulation state (matching BorrowModal)
+  const [simHealthFactor, setSimHealthFactor] = useState<number>(0);
+  const [simHealthYellow, setSimHealthYellow] = useState<boolean>(false);
+  const [simHealthRed, setSimHealthRed] = useState<boolean>(false);
+  const [isSimHealthy, setIsSimHealthy] = useState<boolean>(false);
+  const [isLTVWarning, setIsLTVWarning] = useState<boolean>(false);
+  const [simLTV, setSimLTV] = useState<number>(0);
 
   const movementApiBase = getMovementApiBase();
 
@@ -97,6 +108,17 @@ export const BorrowCard: React.FC<BorrowCardProps> = ({ walletAddress, asset }) 
       ) || null
     );
   }, [user, ready, authenticated]);
+
+  const [brokerData, setBrokerData] = useState<superJsonApiClient.Broker | null>(null);
+
+  // Get broker name helper
+  const getBrokerName = (symbol: string): string => {
+    const symbolUpper = symbol.toUpperCase();
+    if (symbolUpper === "USDC" || symbolUpper === "USDC.E") return "movement-usdc";
+    if (symbolUpper === "USDT" || symbolUpper === "USDT.E") return "movement-usdt";
+    if (symbolUpper === "MOVE") return "movement-move";
+    return `movement-${symbol.toLowerCase()}`;
+  };
 
   // Calculate health factor matching MovePosition's implementation
   // Health Factor = equity / minRequiredEquity
@@ -119,11 +141,255 @@ export const BorrowCard: React.FC<BorrowCardProps> = ({ walletAddress, asset }) 
     return portfolioData.evaluation.health_ratio ?? equity / minRequiredEquity;
   }, [portfolioData]);
 
-  // Mock data - replace with actual API calls
-  const borrowed = 0;
-  const borrowAPY = 8.5;
-  const maxBorrow = 0;
+  // Get user's current borrowed amount from portfolio data
+  const borrowed = useMemo(() => {
+    if (!portfolioData || !brokerData) return 0;
+
+    const brokerName = getBrokerName(token);
+    const loanNoteName = `${brokerName}-super-aptos-loan-note`;
+
+    const liability = portfolioData.liabilities.find(
+      (l) => l.instrument.name === loanNoteName
+    );
+
+    if (!liability) return 0;
+
+    // Convert raw note tokens to underlying tokens using exchange rate
+    const loanNoteDecimals = brokerData.loanNote?.decimals ?? 8;
+    const loanNoteExchangeRate = brokerData.loanNoteExchangeRate || 1;
+    const noteBalance = parseFloat(liability.amount) / Math.pow(10, loanNoteDecimals);
+    const underlyingTokenBalance = noteBalance * loanNoteExchangeRate;
+
+    return underlyingTokenBalance;
+  }, [portfolioData, brokerData, token]);
+
+  // Get max borrow amount from portfolio API
+  const maxBorrow = useMemo(() => {
+    if (!portfolioData?.maxBorrow) return 0;
+
+    const brokerName = getBrokerName(token);
+    const loanNoteName = `${brokerName}-super-aptos-loan-note`;
+    const maxBorrowValue = portfolioData.maxBorrow[loanNoteName];
+
+    if (!maxBorrowValue) return 0;
+
+    const maxBorrowAmount = parseFloat(maxBorrowValue);
+    return isNaN(maxBorrowAmount) || maxBorrowAmount <= 0 ? 0 : maxBorrowAmount;
+  }, [portfolioData, token]);
+
+  // Get borrow APY from broker data
+  const borrowAPY = useMemo(() => {
+    if (!brokerData) return 8.5; // Default fallback
+    return brokerData.interestRate * 100; // Convert to percentage
+  }, [brokerData]);
+
   const walletBalance = balance ? parseFloat(balance) : 0;
+
+  /**
+   * Build next portfolio state for risk simulation API
+   */
+  const buildNextPortfolioState = useMemo(() => {
+    if (!portfolioData || !amount || parseFloat(amount) <= 0) {
+      return null;
+    }
+
+    const decimals = getCoinDecimals(token);
+    const amountInSmallestUnit = convertAmountToRaw(amount, decimals);
+
+    const brokerName = getBrokerName(token);
+    const loanNoteName = `${brokerName}-super-aptos-loan-note`;
+
+    // Collaterals remain the same
+    const collaterals = portfolioData.collaterals.map((c) => ({
+      instrumentId: c.instrument.name,
+      amount: c.amount,
+    }));
+
+    // Build liabilities - update the matching liability
+    const liabilities = portfolioData.liabilities
+      .map((l) => {
+        if (l.instrument.name === loanNoteName) {
+          const currentAmount = BigInt(l.amount);
+          let newAmount: bigint;
+
+          if (activeTab === "borrow") {
+            newAmount = currentAmount + BigInt(amountInSmallestUnit);
+          } else {
+            newAmount =
+              currentAmount > BigInt(amountInSmallestUnit)
+                ? currentAmount - BigInt(amountInSmallestUnit)
+                : BigInt(0);
+          }
+
+          return {
+            instrumentId: l.instrument.name,
+            amount: newAmount.toString(),
+          };
+        }
+        return {
+          instrumentId: l.instrument.name,
+          amount: l.amount,
+        };
+      })
+      .filter((l) => BigInt(l.amount) > 0);
+
+    // For borrow, check if we need to add a new liability
+    if (activeTab === "borrow") {
+      const hasLiability = liabilities.some(
+        (l) => l.instrumentId === loanNoteName
+      );
+      if (!hasLiability) {
+        liabilities.push({
+          instrumentId: loanNoteName,
+          amount: amountInSmallestUnit,
+        });
+      }
+    }
+
+    return {
+      collaterals,
+      liabilities,
+    };
+  }, [portfolioData, amount, token, activeTab]);
+
+  /**
+   * Helper functions for health factor zones (matching BorrowModal)
+   */
+  const isYellowZone = (hf: number): boolean => {
+    return hf <= 1.5 && hf > 1.2;
+  };
+
+  const isRedZone = (hf: number): boolean => {
+    return hf <= 1.2;
+  };
+
+  /**
+   * Calculate health factor from evaluation response (matching BorrowModal)
+   * Health factor = (total_collateral - total_liability) / mm
+   */
+  const calcHealthFactor = (evaluation: any): number => {
+    if (!evaluation) {
+      return 0;
+    }
+    const equity = evaluation.total_collateral - evaluation.total_liability;
+    const minReq = evaluation.mm || 0;
+    if (minReq === 0) {
+      return 0;
+    }
+    return equity / minReq;
+  };
+
+  /**
+   * Check if we should get risk evaluation
+   * Only for borrow tab, and only if there's collateral
+   */
+  const shouldGetRiskEval = (): boolean => {
+    if (activeTab !== "borrow") {
+      return false;
+    }
+    if (!buildNextPortfolioState) {
+      return false;
+    }
+    // Check if there's collateral
+    const hasCollateral = buildNextPortfolioState.collaterals.some(
+      (c) => BigInt(c.amount) > 0
+    );
+    return hasCollateral;
+  };
+
+  /**
+   * Fetch simulated risk when amount changes (matching BorrowModal's implementation)
+   */
+  useEffect(() => {
+    const fetchSimulatedRisk = async () => {
+      // Only fetch if we have input and should get risk eval
+      if (!buildNextPortfolioState || !amount || parseFloat(amount) <= 0) {
+        setSimulatedRiskData(null);
+        setSimHealthFactor(0);
+        setSimHealthYellow(false);
+        setSimHealthRed(false);
+        setIsSimHealthy(false);
+        setIsLTVWarning(false);
+        setSimLTV(0);
+        return;
+      }
+
+      // Only fetch for borrow tab with collateral
+      if (!shouldGetRiskEval()) {
+        setSimulatedRiskData(null);
+        setSimHealthFactor(0);
+        setSimHealthYellow(false);
+        setSimHealthRed(false);
+        setIsSimHealthy(false);
+        setIsLTVWarning(false);
+        setSimLTV(0);
+        return;
+      }
+
+      setLoadingSimulation(true);
+      try {
+        const superClient = new superJsonApiClient.SuperClient({
+          BASE: movementApiBase,
+        });
+
+        const response = await superClient.default.getRiskSimulated({
+          collaterals: buildNextPortfolioState.collaterals,
+          liabilities: buildNextPortfolioState.liabilities,
+        });
+
+        console.log("[BorrowCard RiskSimulation] Response:", response);
+
+        // Calculate health factor (matching BorrowModal)
+        const simFactor = calcHealthFactor(response);
+        const ltv = response.ltv || 0;
+
+        console.log("[BorrowCard RiskSimulation] Health factor:", simFactor, "LTV:", ltv);
+
+        // Determine zones (matching BorrowModal)
+        const simYellow = isYellowZone(simFactor);
+        const simRed = isRedZone(simFactor);
+        const healthy = simFactor > 1.0;
+        const ltvWarn = ltv > 0.95;
+
+        // Update state
+        setSimulatedRiskData(response);
+        setSimHealthFactor(simFactor);
+        setSimHealthYellow(simYellow);
+        setSimHealthRed(simRed);
+        setIsSimHealthy(healthy);
+        setIsLTVWarning(healthy && ltvWarn);
+        if (ltvWarn) {
+          setSimLTV(ltv);
+        } else {
+          setSimLTV(0);
+        }
+      } catch (error) {
+        console.error("[BorrowCard RiskSimulation] Error:", error);
+        // On error, set unhealthy state (matching BorrowModal)
+        setSimulatedRiskData(null);
+        setSimHealthFactor(0);
+        setIsSimHealthy(false);
+        setSimHealthRed(true);
+        setIsLTVWarning(false);
+        setSimLTV(0);
+      } finally {
+        setLoadingSimulation(false);
+      }
+    };
+
+    // Debounce API calls (matching BorrowModal's approach)
+    const timeoutId = setTimeout(() => {
+      fetchSimulatedRisk();
+    }, 500);
+
+    return () => clearTimeout(timeoutId);
+  }, [buildNextPortfolioState, amount, activeTab, movementApiBase]);
+
+  // Use simulated health factor if available, otherwise use current
+  const displayHealthFactor =
+    simHealthFactor > 0
+      ? simHealthFactor
+      : (simulatedRiskData?.health_ratio ?? healthFactor);
 
   // Update token when asset prop changes
   useEffect(() => {
@@ -187,31 +453,51 @@ export const BorrowCard: React.FC<BorrowCardProps> = ({ walletAddress, asset }) 
     fetchBalance();
   }, [walletAddress, token]);
 
-  // Fetch portfolio data to calculate health factor
+  // Fetch portfolio and broker data
   useEffect(() => {
     if (!walletAddress) {
       setPortfolioData(null);
+      setBrokerData(null);
       return;
     }
 
-    const fetchPortfolio = async () => {
+    const fetchPortfolioAndBroker = async () => {
       setLoadingPortfolio(true);
       try {
         const superClient = new superJsonApiClient.SuperClient({
           BASE: movementApiBase,
         });
-        const data = await superClient.default.getPortfolio(walletAddress);
-        setPortfolioData(data as unknown as PortfolioResponse);
+
+        // Fetch portfolio and brokers in parallel
+        const [portfolioRes, brokersRes] = await Promise.all([
+          superClient.default.getPortfolio(walletAddress),
+          superClient.default.getBrokers(),
+        ]);
+
+        setPortfolioData(portfolioRes as unknown as PortfolioResponse);
+
+        // Find the broker for current token
+        const brokerName = getBrokerName(token);
+        const broker = brokersRes.find(
+          (b) => b.underlyingAsset.name === brokerName
+        );
+
+        if (broker) {
+          setBrokerData(broker);
+        } else {
+          setBrokerData(null);
+        }
       } catch (error) {
-        console.error("Error fetching portfolio:", error);
+        console.error("Error fetching portfolio/broker:", error);
         setPortfolioData(null);
+        setBrokerData(null);
       } finally {
         setLoadingPortfolio(false);
       }
     };
 
-    fetchPortfolio();
-  }, [walletAddress, movementApiBase]);
+    fetchPortfolioAndBroker();
+  }, [walletAddress, movementApiBase, token]);
 
   const handleAmountChange = (value: string) => {
     const numericValue = value.replace(/[^0-9.]/g, "");
@@ -249,8 +535,9 @@ export const BorrowCard: React.FC<BorrowCardProps> = ({ walletAddress, asset }) 
       return;
     }
 
-    if (parseFloat(amount) > maxBorrow && maxBorrow > 0) {
-      setBorrowError("Amount exceeds maximum borrow limit.");
+    // Validation is handled by validationError useMemo, but check here too for immediate feedback
+    if (validationError) {
+      setBorrowError(validationError);
       return;
     }
 
@@ -408,6 +695,73 @@ export const BorrowCard: React.FC<BorrowCardProps> = ({ walletAddress, asset }) 
     }
   };
 
+  // Validation logic similar to BorrowModal
+  const validationError = useMemo(() => {
+    if (!amount || parseFloat(amount) <= 0) {
+      return null;
+    }
+
+    const parsedAmount = parseFloat(amount);
+
+    if (activeTab === "borrow") {
+      // Check if exceeds max borrow
+      if (maxBorrow > 0 && parsedAmount > maxBorrow) {
+        return `Exceeds max safe borrow. You can borrow up to ${maxBorrow.toFixed(6)} ${token} based on your collateral and health factor.`;
+      }
+      // Check if no borrowing power
+      if (maxBorrow <= 0 && portfolioData) {
+        const hasCollateral = portfolioData.collaterals.some(
+          (c) => BigInt(c.amount) > 0
+        );
+        if (hasCollateral) {
+          return "No borrowing power available. Please supply more collateral or check your health factor.";
+        } else {
+          return "You need to supply collateral before you can borrow. Please supply assets first.";
+        }
+      }
+      // Check health factor zones (matching BorrowModal)
+      if (simHealthRed) {
+        return "Would make position unhealthy (health factor ≤ 1.2x)";
+      }
+      if (simHealthYellow) {
+        return "Would reduce health factor to warning zone (1.2x - 1.5x)";
+      }
+      // Check LTV warning (matching BorrowModal: healthy && ltv > 0.95)
+      if (isLTVWarning && simLTV > 0) {
+        return `LTV would exceed 95% (${(simLTV * 100).toFixed(1)}%)`;
+      }
+      // Fallback to displayHealthFactor if simulation not available
+      if (displayHealthFactor !== null && displayHealthFactor < 1.0) {
+        return "Would make position unhealthy";
+      }
+    } else if (activeTab === "repay") {
+      // Check if exceeds wallet balance
+      if (balance && parsedAmount > parseFloat(balance)) {
+        return "Exceeds wallet balance";
+      }
+      // Check if exceeds borrowed amount
+      if (parsedAmount > borrowed && borrowed > 0) {
+        return `Exceeds borrowed amount. You have borrowed ${borrowed.toFixed(6)} ${token}`;
+      }
+    }
+
+    return null;
+  }, [
+    amount,
+    activeTab,
+    maxBorrow,
+    token,
+    portfolioData,
+    balance,
+    borrowed,
+    displayHealthFactor,
+    simulatedRiskData,
+    simHealthRed,
+    simHealthYellow,
+    isLTVWarning,
+    simLTV,
+  ]);
+
   const canSubmit = useMemo(() => {
     return (
       ready &&
@@ -415,9 +769,10 @@ export const BorrowCard: React.FC<BorrowCardProps> = ({ walletAddress, asset }) 
       walletAddress &&
       amount &&
       parseFloat(amount) > 0 &&
-      !borrowing
+      !borrowing &&
+      !validationError
     );
-  }, [ready, authenticated, walletAddress, amount, borrowing]);
+  }, [ready, authenticated, walletAddress, amount, borrowing, validationError]);
 
   return (
     <div className="w-full max-w-full sm:max-w-md mx-auto px-2 sm:px-0">
@@ -535,14 +890,16 @@ export const BorrowCard: React.FC<BorrowCardProps> = ({ walletAddress, asset }) 
           <div className="mt-1 flex items-center justify-between">
             <p className="text-xs text-zinc-500 dark:text-zinc-400">
               {activeTab === "borrow" ? "Max borrow" : "Wallet balance"}:{" "}
-              {loadingBalance ? (
+              {loadingBalance || loadingPortfolio ? (
                 <span className="inline-block animate-pulse">Loading...</span>
               ) : activeTab === "borrow" ? (
                 <span className="font-medium text-zinc-700 dark:text-zinc-300">
-                  {maxBorrow.toLocaleString(undefined, {
-                    minimumFractionDigits: 2,
-                    maximumFractionDigits: 6,
-                  })}{" "}
+                  {maxBorrow > 0
+                    ? maxBorrow.toLocaleString(undefined, {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 6,
+                      })
+                    : "0.00"}{" "}
                   {token}
                 </span>
               ) : balance !== null ? (
@@ -582,8 +939,12 @@ export const BorrowCard: React.FC<BorrowCardProps> = ({ walletAddress, asset }) 
                   : "text-zinc-700 dark:text-zinc-300"
               }`}
             >
-              {loadingPortfolio ? (
-                <span className="inline-block animate-pulse">Loading...</span>
+              {loadingPortfolio || loadingSimulation ? (
+                <span className="inline-block animate-pulse">
+                  {loadingSimulation ? "Simulating..." : "Loading..."}
+                </span>
+              ) : displayHealthFactor ? (
+                `${displayHealthFactor.toFixed(2)}x`
               ) : healthFactor ? (
                 `${healthFactor.toFixed(2)}x`
               ) : (
@@ -598,7 +959,14 @@ export const BorrowCard: React.FC<BorrowCardProps> = ({ walletAddress, asset }) 
                   Borrowed
                 </span>
                 <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                  {borrowed} {token}
+                  {loadingPortfolio ? (
+                    <span className="inline-block animate-pulse">Loading...</span>
+                  ) : (
+                    `${borrowed.toLocaleString(undefined, {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 6,
+                    })} ${token}`
+                  )}
                 </span>
               </div>
               <div className="flex justify-between items-center">
@@ -606,7 +974,11 @@ export const BorrowCard: React.FC<BorrowCardProps> = ({ walletAddress, asset }) 
                   Borrow APY
                 </span>
                 <span className="text-sm font-medium text-blue-600 dark:text-blue-400">
-                  {borrowAPY}%
+                  {loadingPortfolio ? (
+                    <span className="inline-block animate-pulse">Loading...</span>
+                  ) : (
+                    `${borrowAPY.toFixed(2)}%`
+                  )}
                 </span>
               </div>
             </>
@@ -617,7 +989,14 @@ export const BorrowCard: React.FC<BorrowCardProps> = ({ walletAddress, asset }) 
                 Borrowed
               </span>
               <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                {borrowed} {token}
+                {loadingPortfolio ? (
+                  <span className="inline-block animate-pulse">Loading...</span>
+                ) : (
+                  `${borrowed.toLocaleString(undefined, {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 6,
+                  })} ${token}`
+                )}
               </span>
             </div>
           )}
@@ -630,6 +1009,53 @@ export const BorrowCard: React.FC<BorrowCardProps> = ({ walletAddress, asset }) 
         >
           {showMore ? "Less" : "More"}
         </button>
+
+        {/* Warning Messages (matching BorrowModal) */}
+        {amount && parseFloat(amount) > 0 && activeTab === "borrow" && (
+          <>
+            {/* Yellow Zone Warning */}
+            {simHealthYellow && !simHealthRed && !isLTVWarning && (
+              <div className="mb-4 p-3 rounded-lg bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 text-sm text-yellow-700 dark:text-yellow-400">
+                ⚠️ Warning: This borrow would reduce your health factor to{" "}
+                {displayHealthFactor?.toFixed(2)}x (warning zone: 1.2x -
+                1.5x). Consider borrowing less to maintain a safer position.
+              </div>
+            )}
+
+            {/* Red Zone Warning */}
+            {simHealthRed && !isLTVWarning && (
+              <div className="mb-4 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-sm text-red-700 dark:text-red-400">
+                🚨 Danger: This borrow would make your position unhealthy
+                (health factor ≤ 1.2x). Your position may be at risk of
+                liquidation. Please reduce the amount.
+              </div>
+            )}
+
+            {/* LTV Warning */}
+            {isLTVWarning && isSimHealthy && simLTV > 0 && (
+              <div className="mb-4 p-3 rounded-lg bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 text-sm text-orange-700 dark:text-orange-400">
+                ⚠️ LTV Warning: This borrow would result in an LTV of{" "}
+                {(simLTV * 100).toFixed(1)}%, which exceeds the recommended
+                95% threshold. Consider borrowing less to maintain a safer
+                position.
+              </div>
+            )}
+
+            {/* Other Validation Errors */}
+            {validationError && !simHealthRed && !simHealthYellow && !isLTVWarning && (
+              <div className="mb-4 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-sm text-red-700 dark:text-red-400">
+                ⚠️ {validationError}
+              </div>
+            )}
+          </>
+        )}
+
+        {/* Validation Error for Repay */}
+        {amount && parseFloat(amount) > 0 && activeTab === "repay" && validationError && (
+          <div className="mb-4 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-sm text-red-700 dark:text-red-400">
+            ⚠️ {validationError}
+          </div>
+        )}
 
         {/* Submission Step */}
         {submissionStep && (
