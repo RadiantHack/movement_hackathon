@@ -7,8 +7,10 @@ import { Sidebar } from "../components/sidebar";
 import { RightSidebar } from "../components/right-sidebar";
 import { ThemeToggle } from "../components/themeToggle";
 import { AuthGuard } from "../components/auth-guard";
-import { TransferForm } from "../components/transfer-form";
-import { SwapCard } from "../components/features/swap/SwapCard";
+
+import TransferModal from "../components/transfer/TransferModal";
+import SwapModal from "../components/swap/SwapModal";
+import BridgeModal from "../components/bridge/BridgeModal";
 import { QRCodeSVG } from "qrcode.react";
 import { getTokenIconUrl } from "../utils/token-icons";
 
@@ -254,7 +256,7 @@ export default function OverviewPage() {
   };
 
   const handleBridgeClick = () => {
-    router.push("/bridge");
+    setShowBridgeModal(true);
   };
 
   const handleSwapClick = () => {
@@ -1000,101 +1002,45 @@ export default function OverviewPage() {
           onClose={() => setIsRightSidebarOpen(false)}
         />
 
-        {/* Transfer Modal */}
         {showTransferModal && walletAddress && (
-          <div
-            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in"
-            onClick={(e) => {
-              if (e.target === e.currentTarget) {
-                setShowTransferModal(false);
-                setSelectedTokenForTransfer(null);
-              }
+          <TransferModal
+            walletAddress={walletAddress}
+            balances={balances}
+            initialToken={selectedTokenForTransfer}
+            onClose={() => {
+              setShowTransferModal(false);
+              setSelectedTokenForTransfer(null);
             }}
-          >
-            <div className="relative w-full max-w-md rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900 shadow-2xl animate-scale-in max-h-[90vh] overflow-y-auto">
-              <button
-                onClick={() => {
-                  setShowTransferModal(false);
-                  setSelectedTokenForTransfer(null);
-                }}
-                className="absolute top-4 right-4 z-10 text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors p-2 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800"
-              >
-                <svg
-                  className="w-6 h-6"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M6 18L18 6M6 6l12 12"
-                  />
-                </svg>
-              </button>
-              <div className="p-6">
-                <TransferForm
-                  walletAddress={walletAddress}
-                  balances={balances}
-                  initialToken={selectedTokenForTransfer}
-                  onTransferComplete={() => {
-                    // Don't close modal automatically - let user see success message and view link
-                    // Refresh balances after a delay
-                    setTimeout(() => {
-                      if (walletAddress) {
-                        fetch(
-                          `/api/balance?address=${encodeURIComponent(walletAddress)}`
-                        )
-                          .then((res) => res.json())
-                          .then((data) => {
-                            if (data.success && data.balances) {
-                              setBalances(data.balances);
-                            }
-                          });
+            onTransferComplete={() => {
+              setTimeout(() => {
+                if (walletAddress) {
+                  fetch(
+                    `/api/balance?address=${encodeURIComponent(walletAddress)}`
+                  )
+                    .then((res) => res.json())
+                    .then((data) => {
+                      if (data.success && data.balances) {
+                        setBalances(data.balances);
                       }
-                    }, 2000);
-                  }}
-                />
-              </div>
-            </div>
-          </div>
+                    });
+                }
+              }, 2000);
+            }}
+          />
         )}
 
-        {/* Swap Modal */}
         {showSwapModal && walletAddress && (
-          <div
-            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-fade-in"
-            onClick={(e) => {
-              if (e.target === e.currentTarget) {
-                setShowSwapModal(false);
-              }
-            }}
-          >
-            <div className="relative w-full max-w-lg rounded-xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900 shadow-2xl animate-scale-in max-h-[90vh] overflow-y-auto">
-              <button
-                onClick={() => setShowSwapModal(false)}
-                className="absolute top-4 right-4 z-10 text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors p-2 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800"
-              >
-                <svg
-                  className="w-6 h-6"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M6 18L18 6M6 6l12 12"
-                  />
-                </svg>
-              </button>
-              <div className="p-6">
-                <SwapCard walletAddress={walletAddress} />
-              </div>
-            </div>
-          </div>
+          <SwapModal
+            walletAddress={walletAddress}
+            onClose={() => setShowSwapModal(false)}
+          />
+        )}
+
+        {showBridgeModal && walletAddress && (
+          <BridgeModal
+            walletAddress={walletAddress}
+            onClose={() => setShowBridgeModal(false)}
+          />
         )}
 
         {/* QR Code Modal */}
