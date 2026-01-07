@@ -629,53 +629,11 @@ export async function executeLendV2(params: LendV2Params): Promise<string> {
   // Get coin decimals for later use
   const coinDecimals = getCoinDecimals(coinSymbol);
 
-  // Safety check: If we detected coin store balance, ensure we're NOT using MOVE-FA broker
-  if (coinSymbol === "MOVE" || coinSymbol === "APT") {
-    const brokerNameLower = brokerName.toLowerCase();
-    const isFABroker =
-      brokerNameLower.includes("move-fa") ||
-      brokerNameLower.includes("move_fa") ||
-      brokerNameLower.includes("movefa");
-
-    // Re-check balances to be sure
-    let finalCoinStoreBalance = BigInt(0);
-    let finalFungibleAssetBalance = BigInt(0);
-    try {
-      const accountResources = await aptos.account.getAccountResources({
-        accountAddress: walletAddress,
-      });
-      const nativeCoinStoreType =
-        "0x1::coin::CoinStore<0x1::aptos_coin::AptosCoin>";
-      const coinStore = accountResources.find(
-        (resource) => resource.type === nativeCoinStoreType
-      );
-      if (coinStore) {
-        finalCoinStoreBalance = BigInt(
-          (coinStore.data as any).coin?.value || "0"
-        );
-      }
-    } catch (e) {
-      console.warn(
-        "[LendV2] Could not re-check coin store in safety check:",
-        e
-      );
-    }
-
-    console.log(`[LendV2] Safety check:`, {
-      brokerName,
-      isFABroker,
-      finalCoinStoreBalance: finalCoinStoreBalance.toString(),
-      finalFungibleAssetBalance: finalFungibleAssetBalance.toString(),
-    });
-
-    if (finalCoinStoreBalance > BigInt(0) && isFABroker) {
-      // This is a critical error - we have coin store balance but selected MOVE-FA broker
-      // This means the broker selection logic failed
-      throw new Error(
-        `CRITICAL: Mismatch detected! You have ${(Number(finalCoinStoreBalance) / Math.pow(10, 8)).toFixed(6)} MOVE in coin store, but MOVE-FA broker (${brokerName}) was selected. This will fail. The broker selection logic did not work correctly. Please check the available brokers.`
-      );
-    }
-  }
+  // NOTE: MovePosition always uses movement-move-fa broker for MOVE transactions
+  // regardless of whether user has coin store or fungible asset balance.
+  // We match this behavior - no safety check needed. If user has coin store balance,
+  // they should convert to fungible asset first (MovePosition shows a conversion banner),
+  // but the broker selection always uses MOVE-FA.
 
   if (onProgress) {
     onProgress("Fetching portfolio state...");
