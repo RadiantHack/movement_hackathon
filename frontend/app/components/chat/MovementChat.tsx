@@ -20,9 +20,9 @@ import { useCopilotChat, useCopilotReadable } from "@copilotkit/react-core";
 import { CopilotChat } from "@copilotkit/react-ui";
 import { QuestManager } from "../quest/QuestManager";
 import { Suggestions } from "./Suggestions";
-import { PlatformSelectionCard } from "../features/lending/PlatformSelectionCard";
-import { LendCard } from "../features/lend/LendCard";
-import { EchelonSupplyModal } from "../echelon-supply-modal";
+import { PlatformSelectionCard } from "../lending";
+import { LendCard } from "../lending/moveposition";
+import { EchelonSupplyModal } from "../lending/echelon";
 import { useChatData } from "./hooks/use-chat-data";
 import { useChatUIState } from "./hooks/use-chat-ui-state";
 import {

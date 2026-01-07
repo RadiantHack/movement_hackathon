@@ -5,7 +5,7 @@
 
 import React from "react";
 import { useCopilotAction } from "@copilotkit/react-core";
-import { TransferCard } from "../../features/transfer/TransferCard";
+import { TransferCard } from "../../transfer";
 import { TransferData } from "../../types";
 
 interface UseTransferActionProps {

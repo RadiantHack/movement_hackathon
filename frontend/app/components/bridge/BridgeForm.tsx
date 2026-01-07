@@ -5,10 +5,10 @@ import { usePrivy } from "@privy-io/react-auth";
 import { useMovementWallet } from "../../hooks/useMovementWallet";
 import { useSignRawHash } from "@privy-io/react-auth/extended-chains";
 import { useMovementConfig } from "../../hooks/useMovementConfig";
-import { AssetIcon } from "../asset-icon";
+import { AssetIcon } from "../shared/ui";
 import { executeBridge, isValidEthereumAddress } from "../../utils/bridge";
 import { createAptosClient } from "../../utils/shared/clients";
-import { TransactionSuccessMessage } from "../shared/TransactionSuccessMessage";
+import { TransactionSuccessMessage } from "../shared/modals";
 
 const MOVEMENT_CHAIN = {
   id: "movement",

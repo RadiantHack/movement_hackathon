@@ -5,7 +5,7 @@
 
 import React from "react";
 import { useCopilotAction } from "@copilotkit/react-core";
-import { PlatformSelectionCard } from "../../features/lending/PlatformSelectionCard";
+import { PlatformSelectionCard } from "../../lending";
 
 interface UseLendingActionProps {
   walletAddress: string | null;

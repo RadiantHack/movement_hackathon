@@ -1,7 +1,7 @@
 "use client";
 
-import { TransferForm } from "../transfer-form";
-import ModalShell from "../modal/ModalShell";
+import { TransferForm } from "./transfer-form";
+import { ModalShell } from "../shared/modals";
 
 interface TransferModalProps {
   walletAddress?: string | null;

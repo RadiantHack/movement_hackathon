@@ -5,8 +5,8 @@
 
 import React from "react";
 import { useCopilotAction } from "@copilotkit/react-core";
-import { LendCard } from "../../features/lend/LendCard";
-import { EchelonSupplyModal } from "../../echelon-supply-modal";
+import { LendCard } from "../../lending/moveposition";
+import { EchelonSupplyModal } from "../../lending/echelon";
 import { EchelonAssetData } from "../hooks/use-chat-data";
 
 interface UseSupplyActionProps {

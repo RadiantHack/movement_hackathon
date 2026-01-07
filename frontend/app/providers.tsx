@@ -4,7 +4,7 @@ import { PrivyProvider } from "@privy-io/react-auth";
 import { CopilotKit } from "@copilotkit/react-core";
 import { ReactNode, useEffect } from "react";
 import { usePathname } from "next/navigation";
-import { MovementWalletModal } from "./components/movement-wallet-modal";
+import { MovementWalletModal } from "./components/shared/ui";
 import {
   Provider as ReduxProvider,
   useDispatch,

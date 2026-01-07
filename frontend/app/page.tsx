@@ -3,7 +3,7 @@
 import { usePrivy } from "@privy-io/react-auth";
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { ThemeToggle } from "./components/themeToggle";
+import { ThemeToggle } from "./components/shared/ui";
 
 export default function Home() {
   const { ready, authenticated, login } = usePrivy();

@@ -5,7 +5,7 @@
 
 import React from "react";
 import { useCopilotAction } from "@copilotkit/react-core";
-import { SwapCard } from "../../features/swap/SwapCard";
+import { SwapCard } from "../../swap";
 import { getAllTokens } from "../../../utils/shared/tokens";
 
 interface UseSwapActionProps {

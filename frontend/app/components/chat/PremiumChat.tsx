@@ -15,7 +15,7 @@ import {
   PaymentRequiredError,
   type MessageSendParams,
 } from "./helper/index";
-import { PaymentModal } from "../payment-modal";
+import { PaymentModal } from "../shared/ui";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { TradingRecommendation } from "./TradingRecommendation";

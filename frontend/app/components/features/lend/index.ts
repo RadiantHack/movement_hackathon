@@ -1,1 +1,0 @@
-export { LendCard } from "./LendCard";
