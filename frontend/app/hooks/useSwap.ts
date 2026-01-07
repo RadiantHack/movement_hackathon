@@ -28,6 +28,7 @@ interface SwapState {
   swapping: boolean;
   error: string | null;
   txHash: string | null;
+  step: string | null;
 }
 
 /**
@@ -50,6 +51,7 @@ export function useSwap({
     swapping: false,
     error: null,
     txHash: null,
+    step: null,
   });
 
   const handleSwap = useCallback(
@@ -135,9 +137,15 @@ export function useSwap({
       }
 
       // Execute swap
-      setState((prev) => ({ ...prev, swapping: true, error: null }));
+      setState((prev) => ({
+        ...prev,
+        swapping: true,
+        error: null,
+        step: "Building transaction...",
+      }));
 
       try {
+        setState((prev) => ({ ...prev, step: "Waiting for signature..." }));
         const hash = await executeSwap({
           aptos,
           movementChainId,
@@ -154,6 +162,7 @@ export function useSwap({
           swapping: false,
           txHash: hash,
           error: null,
+          step: null,
         }));
 
         // Refresh balances after successful swap
@@ -168,6 +177,7 @@ export function useSwap({
           ...prev,
           swapping: false,
           error: errorMessage,
+          step: null,
         }));
         onError?.(errorMessage);
         return false;
@@ -191,6 +201,7 @@ export function useSwap({
       swapping: false,
       error: null,
       txHash: null,
+      step: null,
     });
   }, []);
 

@@ -8,6 +8,7 @@ import { useMovementConfig } from "../../hooks/useMovementConfig";
 import { AssetIcon } from "../asset-icon";
 import { executeBridge, isValidEthereumAddress } from "../../utils/bridge";
 import { createAptosClient } from "../../utils/aptos-client";
+import { TransactionSuccessMessage } from "../shared/TransactionSuccessMessage";
 
 const MOVEMENT_CHAIN = {
   id: "movement",
@@ -43,6 +44,8 @@ export default function BridgeForm({ walletAddress }: BridgeFormProps) {
   const [amount, setAmount] = useState("");
   const [recipientAddress, setRecipientAddress] = useState("");
   const [bridging, setBridging] = useState(false);
+  const [bridgeStep, setBridgeStep] = useState<string | null>(null);
+  const [bridgeTxHash, setBridgeTxHash] = useState<string | null>(null);
   const [showTokenDropdown, setShowTokenDropdown] = useState(false);
   const [balance, setBalance] = useState<string | null>(null);
   const [loadingBalance, setLoadingBalance] = useState(false);
@@ -112,10 +115,12 @@ export default function BridgeForm({ walletAddress }: BridgeFormProps) {
     if (!walletAddress || !movementWallet || !aptos) return;
 
     setBridging(true);
+    setBridgeStep("Building transaction...");
     try {
       const senderAddress = walletAddress;
       const senderPubKeyWithScheme = movementWallet.publicKey as string;
 
+      setBridgeStep("Waiting for signature...");
       // Execute bridge using utility function
       const txHash = await executeBridge({
         aptos: aptos!,
@@ -128,9 +133,11 @@ export default function BridgeForm({ walletAddress }: BridgeFormProps) {
         signRawHash,
       });
 
-      alert(`Bridge transaction successful! Hash: ${txHash}`);
+      setBridgeStep("Transaction submitted...");
+      setBridgeTxHash(txHash);
       setAmount("");
       setRecipientAddress("");
+      setBridgeStep(null);
     } catch (error) {
       console.error("Bridge error:", error);
       const errorMessage =
@@ -138,6 +145,7 @@ export default function BridgeForm({ walletAddress }: BridgeFormProps) {
           ? error.message
           : "Bridge failed. Please try again.";
       alert(`Bridge failed: ${errorMessage}`);
+      setBridgeStep(null);
     } finally {
       setBridging(false);
     }
@@ -379,6 +387,9 @@ export default function BridgeForm({ walletAddress }: BridgeFormProps) {
             </div>
           </div>
 
+          {/* Success Message */}
+          {bridgeTxHash && <TransactionSuccessMessage txHash={bridgeTxHash} />}
+
           {/* Bridge Button */}
           <button
             onClick={handleBridge}
@@ -414,7 +425,7 @@ export default function BridgeForm({ walletAddress }: BridgeFormProps) {
                       d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
                     />
                   </svg>
-                  Bridging...
+                  {bridgeStep || "Bridging..."}
                 </>
               ) : (
                 <>
