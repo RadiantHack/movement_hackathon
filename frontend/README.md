@@ -2,12 +2,12 @@
 
 **AI-Powered Gateway to Movement Network DeFi**
 
-Next.js frontend for Movement Nexus, featuring CopilotKit-powered AI chat interface for interacting with 9 specialized DeFi agents.
+Next.js frontend for Movement Nexus, featuring CopilotKit-powered AI chat interface for interacting with 8 specialized DeFi agents.
 
 ## Features
 
 - 🤖 **AI Chat Interface**: CopilotKit-powered conversational UI
-- 🎯 **Multi-Agent Access**: Interact with 9 specialized agents through natural language
+- 🎯 **Multi-Agent Access**: Interact with 8 specialized agents through natural language
 - 🔐 **Privy Authentication**: Secure wallet connection and user management
 - 🌐 **Movement Network Integration**: Native support for Movement blockchain
 - ⚡ **Real-time Updates**: Live agent responses and status updates
