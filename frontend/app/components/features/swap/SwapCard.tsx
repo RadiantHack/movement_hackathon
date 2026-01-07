@@ -10,10 +10,9 @@ import {
   type MosaicQuoteResponse,
 } from "../../../utils/mosaic-api";
 import { Network } from "@aptos-labs/ts-sdk";
-import { useSignRawHash } from "@privy-io/react-auth/extended-chains";
 import { useMovementConfig } from "@/app/hooks/useMovementConfig";
 import { TokenBalance } from "../../../types";
-import { executeSwap } from "../../../utils/swap";
+import { useSwap } from "../../../hooks/useSwap";
 import { useBalance } from "@/app/hooks/useBalanceContext";
 import { createAptosClient } from "../../../utils/aptos-client";
 
@@ -42,11 +41,9 @@ export const SwapCard: React.FC<SwapCardProps> = ({
   initialFromToken,
   initialToToken,
 }) => {
-  const { ready, authenticated, user } = usePrivy();
-  const { signRawHash } = useSignRawHash();
+  const { ready, authenticated } = usePrivy();
   const config = useMovementConfig();
-  const { refreshBalances, setWalletAddress: setBalanceContextWalletAddress } =
-    useBalance();
+  const { setWalletAddress: setBalanceContextWalletAddress } = useBalance();
 
   // Create Aptos instance using shared utility
   const aptos = useMemo(() => {
@@ -81,9 +78,6 @@ export const SwapCard: React.FC<SwapCardProps> = ({
     }
   }, [initialToToken]);
   const [toAmount, setToAmount] = useState<string>("");
-  const [swapping, setSwapping] = useState(false);
-  const [swapError, setSwapError] = useState<string | null>(null);
-  const [txHash, setTxHash] = useState<string | null>(null);
   const [slippage, setSlippage] = useState<number>(1.0);
   const [fromBalance, setFromBalance] = useState<string | null>(null);
   const [toBalance, setToBalance] = useState<string | null>(null);
@@ -141,6 +135,17 @@ export const SwapCard: React.FC<SwapCardProps> = ({
   }, [toToken]);
 
   const movementWallet = useMovementWallet();
+
+  // Use swap hook for centralized swap logic
+  const swap = useSwap({
+    aptos,
+    movementChainId,
+    onSuccess: () => {
+      setFromAmount("");
+      setToAmount("");
+      setQuote(null);
+    },
+  });
 
   // Fetch balance for fromToken
   useEffect(() => {
@@ -371,77 +376,17 @@ export const SwapCard: React.FC<SwapCardProps> = ({
   };
 
   const handleSwap = async () => {
-    if (!movementWallet) {
-      setSwapError(
-        "Movement wallet not found. Please create a Movement wallet first."
-      );
-      return;
-    }
-
-    if (!ready || !authenticated) {
-      setSwapError("Please authenticate first.");
-      return;
-    }
-
-    if (!fromAmount || parseFloat(fromAmount) <= 0) {
-      setSwapError("Please enter a valid amount.");
-      return;
-    }
-
-    if (fromToken === toToken) {
-      setSwapError("Please select different tokens.");
-      return;
-    }
-
     if (!fromTokenFullInfo || !toTokenFullInfo) {
-      setSwapError("Invalid token selection.");
       return;
     }
 
-    if (!quote) {
-      setSwapError("Please wait for quote to load.");
-      return;
-    }
-
-    setSwapping(true);
-    setSwapError(null);
-    setTxHash(null);
-
-    try {
-      // Use wallet from hook (already validated)
-      if (!movementWallet) {
-        throw new Error("Aptos wallet not found");
-      }
-
-      const senderAddress = movementWallet.address as string;
-      const senderPubKeyWithScheme = movementWallet.publicKey as string;
-
-      // Execute the swap using the utility function
-      const txHash = await executeSwap({
-        aptos: aptos!,
-        movementChainId,
-        senderAddress,
-        senderPubKeyWithScheme,
-        fromToken,
-        toToken,
-        quote,
-        signRawHash,
-      });
-
-      console.log("Swap transaction executed:", txHash);
-      setTxHash(txHash);
-
-      // Refresh balances from the centralized context
-      await refreshBalances();
-    } catch (err: unknown) {
-      console.error("Swap error:", err);
-      setSwapError(
-        (err as Error).message ||
-          "Swap failed. Please check your connection and try again."
-      );
-    } finally {
-      setSwapping(false);
-    }
+    await swap.handleSwap(
+      fromToken,
+      toToken,
+      fromAmount,
+      quote,
+      fromBalance
+    );
   };
 
   const canSwap = useMemo(() => {
@@ -452,7 +397,7 @@ export const SwapCard: React.FC<SwapCardProps> = ({
       fromAmount &&
       parseFloat(fromAmount) > 0 &&
       fromToken !== toToken &&
-      !swapping &&
+      !swap.swapping &&
       !!quote &&
       !loadingQuote
     );
@@ -463,7 +408,7 @@ export const SwapCard: React.FC<SwapCardProps> = ({
     fromAmount,
     fromToken,
     toToken,
-    swapping,
+    swap.swapping,
     quote,
     loadingQuote,
   ]);
@@ -521,13 +466,13 @@ export const SwapCard: React.FC<SwapCardProps> = ({
                 onChange={(e) => handleFromAmountChange(e.target.value)}
                 placeholder="0.0"
                 className="flex-1 min-w-0 bg-transparent text-base sm:text-lg md:text-xl font-bold text-zinc-900 dark:text-zinc-50 placeholder-zinc-400/60 focus:outline-none overflow-hidden"
-                disabled={swapping}
+                disabled={swap.swapping}
               />
               <select
                 value={fromToken}
                 onChange={(e) => setFromToken(e.target.value)}
                 className="flex-shrink-0 w-[85px] sm:w-[95px] md:w-[100px] px-1.5 sm:px-2 py-2 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-50 font-semibold focus:outline-none focus:ring-2 focus:ring-purple-500/50 cursor-pointer text-[10px] sm:text-xs truncate"
-                disabled={swapping}
+                disabled={swap.swapping}
               >
                 {availableTokens.map((token) => (
                   <option key={token} value={token}>
@@ -556,7 +501,7 @@ export const SwapCard: React.FC<SwapCardProps> = ({
                 <button
                   onClick={() => setFromAmount(fromBalance)}
                   className="px-2.5 sm:px-3 py-1 rounded-lg bg-gradient-to-r from-purple-100 to-violet-100 dark:from-purple-900/40 dark:to-violet-900/40 text-purple-700 dark:text-purple-300 text-[10px] sm:text-xs font-bold uppercase tracking-wider hover:from-purple-200 hover:to-violet-200 dark:hover:from-purple-800/50 dark:hover:to-violet-800/50 transition-all duration-200 shadow-sm hover:shadow-md active:scale-95"
-                  disabled={swapping}
+                  disabled={swap.swapping}
                 >
                   Max
                 </button>
@@ -569,7 +514,7 @@ export const SwapCard: React.FC<SwapCardProps> = ({
         <div className="relative flex justify-center py-2 z-10">
           <button
             onClick={handleSwapTokens}
-            disabled={swapping}
+                disabled={swap.swapping}
             className="p-2.5 rounded-xl bg-white/90 dark:bg-zinc-800/90 backdrop-blur-sm border border-zinc-200/80 dark:border-zinc-700/60 shadow-lg hover:shadow-xl text-zinc-600 dark:text-zinc-400 hover:text-purple-600 dark:hover:text-purple-400 transition-all duration-200 hover:scale-110 hover:border-purple-300/60 dark:hover:border-purple-600/60 disabled:opacity-50"
             aria-label="Swap tokens"
           >
@@ -615,7 +560,7 @@ export const SwapCard: React.FC<SwapCardProps> = ({
                 value={toToken}
                 onChange={(e) => setToToken(e.target.value)}
                 className="flex-shrink-0 w-[85px] sm:w-[95px] md:w-[100px] px-2 sm:px-2.5 py-2 rounded-lg border border-zinc-200/80 dark:border-zinc-700/60 bg-white/90 dark:bg-zinc-800/90 backdrop-blur-sm text-zinc-900 dark:text-zinc-50 font-bold focus:outline-none focus:ring-2 focus:ring-purple-500/40 cursor-pointer text-[10px] sm:text-xs truncate hover:border-purple-300/60 dark:hover:border-purple-600/60 transition-all duration-200"
-                disabled={swapping}
+                disabled={swap.swapping}
               >
                 {availableTokens.map((token) => (
                   <option key={token} value={token}>
@@ -675,7 +620,7 @@ export const SwapCard: React.FC<SwapCardProps> = ({
             value={slippage}
             onChange={(e) => setSlippage(parseFloat(e.target.value))}
             className="w-full h-1.5 sm:h-2 bg-zinc-200 dark:bg-zinc-700 rounded-full appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 sm:[&::-webkit-slider-thumb]:w-4 sm:[&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-gradient-to-r [&::-webkit-slider-thumb]:from-purple-500 [&::-webkit-slider-thumb]:to-violet-500 [&::-webkit-slider-thumb]:shadow-lg [&::-webkit-slider-thumb]:shadow-purple-500/30 [&::-webkit-slider-thumb]:cursor-pointer"
-            disabled={swapping}
+                disabled={swap.swapping}
           />
           <div className="flex justify-between text-[10px] sm:text-xs text-zinc-400 mt-1.5 sm:mt-2">
             <span>0.1%</span>
@@ -684,7 +629,7 @@ export const SwapCard: React.FC<SwapCardProps> = ({
         </div>
 
         {/* Error Message */}
-        {swapError && (
+        {swap.error && (
           <div className="relative mb-4 p-3 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800/50 text-xs text-red-700 dark:text-red-400 flex items-center gap-2">
             <svg
               className="w-5 h-5 flex-shrink-0"
@@ -699,12 +644,12 @@ export const SwapCard: React.FC<SwapCardProps> = ({
                 d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
               />
             </svg>
-            {swapError}
+            {swap.error}
           </div>
         )}
 
         {/* Transaction Hash */}
-        {txHash && (
+        {swap.txHash && (
           <div className="relative mb-4 p-3 rounded-xl bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800/50">
             <div className="flex items-center gap-2 mb-1.5">
               <svg
@@ -725,10 +670,10 @@ export const SwapCard: React.FC<SwapCardProps> = ({
               </span>
             </div>
             <p className="text-[10px] font-mono text-green-700 dark:text-green-400 break-all mb-2 bg-green-100 dark:bg-green-900/30 p-1.5 rounded-md">
-              {txHash}
+              {swap.txHash}
             </p>
             <a
-              href={`https://explorer.movementnetwork.xyz/txn/${txHash}?network=mainnet`}
+              href={`https://explorer.movementnetwork.xyz/txn/${swap.txHash}?network=mainnet`}
               target="_blank"
               rel="noopener noreferrer"
               className="text-xs font-semibold text-green-700 dark:text-green-400 hover:underline flex items-center gap-1"
@@ -765,7 +710,7 @@ export const SwapCard: React.FC<SwapCardProps> = ({
             <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/20 to-white/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700" />
           )}
           <span className="relative flex items-center justify-center gap-2">
-            {swapping ? (
+            {swap.swapping ? (
               <>
                 <svg
                   className="w-5 h-5 animate-spin"
@@ -788,7 +733,7 @@ export const SwapCard: React.FC<SwapCardProps> = ({
                 </svg>
                 Swapping...
               </>
-            ) : txHash ? (
+            ) : swap.txHash ? (
               <>
                 <svg
                   className="w-5 h-5"
