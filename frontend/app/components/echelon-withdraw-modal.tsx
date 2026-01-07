@@ -40,13 +40,12 @@ export function EchelonWithdrawModal({
       if (onSuccess) {
         onSuccess();
       }
-      // Reset after showing success
+      // Reset after showing success (250ms)
       setTimeout(() => {
+        setShowSuccessMessage(false);
         setAmount("");
         setPercentage(0);
-        setShowSuccessMessage(false);
-        withdraw.resetState();
-      }, 2500);
+      }, 250);
     },
   });
 
@@ -251,7 +250,7 @@ export function EchelonWithdrawModal({
           )}
 
           {/* Success Message */}
-          {withdraw.txHash && (
+          {withdraw.txHash && showSuccessMessage && (
             <TransactionSuccessMessage txHash={withdraw.txHash} />
           )}
 

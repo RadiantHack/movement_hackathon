@@ -83,6 +83,7 @@ export const SwapCard: React.FC<SwapCardProps> = ({
   const [fromBalance, setFromBalance] = useState<string | null>(null);
   const [toBalance, setToBalance] = useState<string | null>(null);
   const [loadingFromBalance, setLoadingFromBalance] = useState(false);
+  const [showSuccessMessage, setShowSuccessMessage] = useState(false);
   const [loadingToBalance, setLoadingToBalance] = useState(false);
   const [loadingQuote, setLoadingQuote] = useState(false);
   const [quote, setQuote] = useState<MosaicQuoteResponse | null>(null);
@@ -142,9 +143,13 @@ export const SwapCard: React.FC<SwapCardProps> = ({
     aptos,
     movementChainId,
     onSuccess: () => {
-      setFromAmount("");
-      setToAmount("");
-      setQuote(null);
+      setShowSuccessMessage(true);
+      setTimeout(() => {
+        setShowSuccessMessage(false);
+        setFromAmount("");
+        setToAmount("");
+        setQuote(null);
+      }, 250);
     },
   });
 
@@ -645,7 +650,9 @@ export const SwapCard: React.FC<SwapCardProps> = ({
           )}
 
           {/* Success Message */}
-          {swap.txHash && <TransactionSuccessMessage txHash={swap.txHash} />}
+          {swap.txHash && showSuccessMessage && (
+            <TransactionSuccessMessage txHash={swap.txHash} />
+          )}
 
           {/* Swap Button */}
           <button

@@ -36,20 +36,21 @@ export function EchelonRepayModal({
 }: EchelonRepayModalProps) {
   const [amount, setAmount] = useState("");
   const [percentage, setPercentage] = useState(0);
+  const [showSuccessMessage, setShowSuccessMessage] = useState(false);
 
   // Use centralized repay hook
   const repay = useEchelonRepay({
     onSuccess: () => {
+      setShowSuccessMessage(true);
       if (onSuccess) {
         onSuccess();
       }
-      // Close modal after a delay
+      // Hide success message after 250ms
       setTimeout(() => {
-        onClose();
+        setShowSuccessMessage(false);
         setAmount("");
         setPercentage(0);
-        repay.resetState();
-      }, 2000);
+      }, 250);
     },
   });
 
@@ -287,7 +288,9 @@ export function EchelonRepayModal({
           )}
 
           {/* Success Message */}
-          {repay.txHash && <TransactionSuccessMessage txHash={repay.txHash} />}
+          {repay.txHash && showSuccessMessage && (
+            <TransactionSuccessMessage txHash={repay.txHash} />
+          )}
 
           {/* Repay Button */}
           <button
