@@ -73,13 +73,12 @@ export function EchelonSupplyModal({
       if (onSuccess) {
         onSuccess();
       }
-      // Reset after showing success
+      // Reset after showing success (250ms)
       setTimeout(() => {
+        setShowSuccessMessage(false);
         setAmount("");
         setPercentage(0);
-        setShowSuccessMessage(false);
-        supply.resetState();
-      }, 2500);
+      }, 250);
     },
   });
 
@@ -289,7 +288,9 @@ export function EchelonSupplyModal({
         )}
 
         {/* Success Message */}
-        {supply.txHash && <TransactionSuccessMessage txHash={supply.txHash} />}
+        {supply.txHash && showSuccessMessage && (
+          <TransactionSuccessMessage txHash={supply.txHash} />
+        )}
 
         {/* Supply Button */}
         <button

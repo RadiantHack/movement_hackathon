@@ -46,6 +46,7 @@ export default function BridgeForm({ walletAddress }: BridgeFormProps) {
   const [bridging, setBridging] = useState(false);
   const [bridgeStep, setBridgeStep] = useState<string | null>(null);
   const [bridgeTxHash, setBridgeTxHash] = useState<string | null>(null);
+  const [showSuccessMessage, setShowSuccessMessage] = useState(false);
   const [showTokenDropdown, setShowTokenDropdown] = useState(false);
   const [balance, setBalance] = useState<string | null>(null);
   const [loadingBalance, setLoadingBalance] = useState(false);
@@ -135,8 +136,12 @@ export default function BridgeForm({ walletAddress }: BridgeFormProps) {
 
       setBridgeStep("Transaction submitted...");
       setBridgeTxHash(txHash);
-      setAmount("");
-      setRecipientAddress("");
+      setShowSuccessMessage(true);
+      setTimeout(() => {
+        setShowSuccessMessage(false);
+        setAmount("");
+        setRecipientAddress("");
+      }, 250);
       setBridgeStep(null);
     } catch (error) {
       console.error("Bridge error:", error);
@@ -388,7 +393,9 @@ export default function BridgeForm({ walletAddress }: BridgeFormProps) {
           </div>
 
           {/* Success Message */}
-          {bridgeTxHash && <TransactionSuccessMessage txHash={bridgeTxHash} />}
+          {bridgeTxHash && showSuccessMessage && (
+            <TransactionSuccessMessage txHash={bridgeTxHash} />
+          )}
 
           {/* Bridge Button */}
           <button

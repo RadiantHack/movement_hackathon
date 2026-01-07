@@ -70,13 +70,12 @@ export function EchelonBorrowModal({
       if (onSuccess) {
         onSuccess();
       }
-      // Reset after showing success
+      // Reset after showing success (250ms)
       setTimeout(() => {
+        setShowSuccessMessage(false);
         setAmount("");
         setPercentage(0);
-        setShowSuccessMessage(false);
-        borrow.resetState();
-      }, 2500);
+      }, 250);
     },
   });
 
@@ -407,7 +406,9 @@ export function EchelonBorrowModal({
         )}
 
         {/* Success Message */}
-        {borrow.txHash && <TransactionSuccessMessage txHash={borrow.txHash} />}
+        {borrow.txHash && showSuccessMessage && (
+          <TransactionSuccessMessage txHash={borrow.txHash} />
+        )}
 
         {/* Borrow Button */}
         <button

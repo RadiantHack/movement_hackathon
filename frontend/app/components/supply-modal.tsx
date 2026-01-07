@@ -11,6 +11,9 @@ import { executeLendV2, executeRedeemV2 } from "../utils/lend-v2-utils";
 import * as superJsonApiClient from "../../lib/super-json-api-client/src";
 import { getMovementApiBase } from "@/lib/super-aptos-sdk/src/globals";
 import { selectBroker, validateBroker } from "../utils/broker-selection";
+import { useMovePositionSupply } from "../hooks/useMovePositionSupply";
+import { useMovePositionWithdraw } from "../hooks/useMovePositionWithdraw";
+import { TransactionSuccessMessage } from "./shared/TransactionSuccessMessage";
 
 // Utility functions for formatting (matching MovePosition's format.ts)
 function prettyTokenBal(num: number): string {
@@ -189,9 +192,6 @@ export function SupplyModal({
   const [showMore, setShowMore] = useState(false);
   const [balance, setBalance] = useState<string | null>(null);
   const [loadingBalance, setLoadingBalance] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-  const [submitError, setSubmitError] = useState<string | null>(null);
-  const [txHash, setTxHash] = useState<string | null>(null);
   const [portfolioData, setPortfolioData] = useState<PortfolioResponse | null>(
     null
   );
@@ -201,35 +201,103 @@ export function SupplyModal({
   const [simulatedRiskData, setSimulatedRiskData] = useState<any | null>(null);
   const [loadingSimulation, setLoadingSimulation] = useState(false);
   const [loadingPortfolio, setLoadingPortfolio] = useState(false);
-  const [submissionStep, setSubmissionStep] = useState<string>("");
-  const [showTxHashOnButton, setShowTxHashOnButton] = useState(false);
   const [showSuccessMessage, setShowSuccessMessage] = useState(false);
+
+  // Use centralized hooks for supply and withdraw
+  const supply = useMovePositionSupply({
+    onSuccess: () => {
+      setShowSuccessMessage(true);
+      if (walletAddress) {
+        refreshPortfolioData();
+      }
+    },
+    onError: (error) => {
+      console.error("Supply error:", error);
+    },
+  });
+
+  const withdraw = useMovePositionWithdraw({
+    onSuccess: () => {
+      setShowSuccessMessage(true);
+      if (walletAddress) {
+        refreshPortfolioData();
+      }
+    },
+    onError: (error) => {
+      console.error("Withdraw error:", error);
+    },
+  });
+
+  // Local validation error state (for pre-hook validation)
+  const [validationError, setValidationError] = useState<string | null>(null);
+  // Local state to control button "Transaction Complete" display (250ms delay)
+  const [showButtonComplete, setShowButtonComplete] = useState(false);
+
+  // Determine which hook to use based on active tab
+  const currentOperation = activeTab === "supply" ? supply : withdraw;
+  const submitting =
+    activeTab === "supply" ? supply.supplying : withdraw.withdrawing;
+  const submitError = validationError || currentOperation.error;
+  const txHash = currentOperation.txHash;
+  const submissionStep = currentOperation.step;
 
   const movementApiBase = getMovementApiBase();
 
   const movementWallet = useMovementWallet();
+
+  // Refresh portfolio data function
+  const refreshPortfolioData = async () => {
+    if (!walletAddress) return;
+    try {
+      const superClient = new superJsonApiClient.SuperClient({
+        BASE: movementApiBase,
+      });
+      const [portfolioRes, brokersRes] = await Promise.all([
+        superClient.default.getPortfolio(walletAddress),
+        superClient.default.getBrokers(),
+      ]);
+      setPortfolioData(portfolioRes as unknown as PortfolioResponse);
+      setBrokerData(brokersRes as unknown as any[]);
+    } catch (error) {
+      console.error("Error refreshing portfolio:", error);
+    }
+  };
 
   useEffect(() => {
     if (!isOpen) {
       setAmount("");
       setShowMore(false);
       setActiveTab("supply");
-      setSubmitError(null);
-      setTxHash(null);
-      setSubmissionStep("");
+      // Reset hooks will be handled by the hooks themselves
       setSimulatedRiskData(null);
       setShowSuccessMessage(false);
+      setShowButtonComplete(false);
       return;
     }
   }, [isOpen]);
 
+  // Show "Transaction Complete" on button and TransactionSuccessMessage for 250ms, then reset
+  useEffect(() => {
+    if (txHash && !showButtonComplete) {
+      setShowButtonComplete(true);
+      setShowSuccessMessage(true);
+      const timer = setTimeout(() => {
+        setShowButtonComplete(false);
+        setShowSuccessMessage(false);
+        setAmount("");
+        // Note: txHash remains in hook state but UI elements are hidden
+      }, 250);
+
+      return () => clearTimeout(timer);
+    }
+  }, [txHash, showButtonComplete]);
+
   const handleTabSwitch = (tab: "supply" | "withdraw") => {
     setActiveTab(tab);
     setAmount("");
-    setSubmitError(null);
-    setTxHash(null);
-    setSubmissionStep("");
+    // Reset hooks will be handled by the hooks themselves
     setSimulatedRiskData(null);
+    setShowButtonComplete(false);
   };
 
   useEffect(() => {
@@ -1063,40 +1131,43 @@ export function SupplyModal({
   }, [activeTab, balance, userSuppliedAmount]);
 
   const handleSubmit = async () => {
+    // Clear validation errors
+    setValidationError(null);
+
     // Validate Privy wallet connection
     if (!ready || !authenticated) {
-      setSubmitError("Please connect your Privy wallet first");
+      setValidationError("Please connect your Privy wallet first");
       return;
     }
 
     if (!movementWallet || !walletAddress || !asset) {
-      setSubmitError(
+      setValidationError(
         "Privy wallet not connected. Please connect your Movement wallet."
       );
       return;
     }
 
     if (!amount || parseFloat(amount) <= 0) {
-      setSubmitError("Please enter a valid amount");
+      setValidationError("Please enter a valid amount");
       return;
     }
 
     if (activeTab === "supply") {
       if (balance && parseFloat(amount) > parseFloat(balance)) {
-        setSubmitError("Insufficient balance");
+        setValidationError("Insufficient balance");
         return;
       }
 
       // Check deposit limits before submission (matching MovePosition's validation)
       if (overBrokerDepositLimit) {
-        setSubmitError(
+        setValidationError(
           `Amount exceeds max deposit value set for ${asset.symbol} by broker`
         );
         return;
       }
 
       if (poolIsFull) {
-        setSubmitError(
+        setValidationError(
           `${asset.symbol} pool is full. Pool limits are set by the broker and can be adjusted.`
         );
         return;
@@ -1111,11 +1182,11 @@ export function SupplyModal({
           : 0;
 
         if (userSuppliedAmount < availableLiquidity) {
-          setSubmitError(
+          setValidationError(
             `Amount exceeds your supplied balance of ${asset.symbol}`
           );
         } else {
-          setSubmitError(
+          setValidationError(
             `Amount exceeds available liquidity for ${asset.symbol} in broker`
           );
         }
@@ -1125,9 +1196,9 @@ export function SupplyModal({
       // Also check health factor (matching MovePosition's simHealthRed check)
       if (simHealthRed) {
         if (isSimUnhealthy) {
-          setSubmitError("Withdrawal would make your portfolio unhealthy");
+          setValidationError("Withdrawal would make your portfolio unhealthy");
         } else {
-          setSubmitError(
+          setValidationError(
             "Withdrawal would put your position near liquidation threshold"
           );
         }
@@ -1135,97 +1206,14 @@ export function SupplyModal({
       }
     }
 
-    setSubmitting(true);
-    setSubmitError(null);
-    setTxHash(null);
-    setSubmissionStep("Initializing transaction with Privy...");
-
-    try {
-      const senderAddress = movementWallet.address as string;
-      const senderPubKeyWithScheme = (movementWallet as any)
-        .publicKey as string;
-
-      if (!senderPubKeyWithScheme || senderPubKeyWithScheme.length < 2) {
-        throw new Error("Invalid public key format");
-      }
-
-      // Privy public key format: "004a4b8e35..." (starts with "00", not "0x")
-      // Pass it as-is, the utility will handle the formatting
-      const publicKey = senderPubKeyWithScheme;
-
-      // Convert amount to smallest unit using shared utility
-      const decimals = getCoinDecimals(asset.symbol);
-      const rawAmount = convertAmountToRaw(amount, decimals);
-
-      // Execute transaction using the same approach as scripts
-      const txHash = await (
-        activeTab === "supply" ? executeLendV2 : executeRedeemV2
-      )({
-        amount: rawAmount,
-        coinSymbol: asset.symbol,
-        walletAddress: senderAddress,
-        publicKey,
-        signHash: async (hash: string) => {
-          setSubmissionStep("Waiting for Privy wallet signature...");
-          try {
-            const response = await signRawHash({
-              address: senderAddress,
-              chainType: "aptos",
-              hash: hash as `0x${string}`,
-            });
-            setSubmissionStep("Signature received from Privy");
-            return { signature: response.signature };
-          } catch (error: any) {
-            setSubmissionStep("");
-            throw new Error(
-              error.message || "Failed to get signature from Privy wallet"
-            );
-          }
-        },
-        onProgress: (step: string) => {
-          setSubmissionStep(step);
-        },
-      });
-
-      console.log(
-        `${activeTab === "supply" ? "Supply" : "Withdraw"} transaction successful:`,
-        txHash
-      );
-      setTxHash(txHash);
-      setShowSuccessMessage(true);
-
-      // Refresh portfolio data to update supplied amounts
-      if (walletAddress) {
-        try {
-          const superClient = new superJsonApiClient.SuperClient({
-            BASE: "https://api.moveposition.xyz",
-          });
-          const [portfolioRes, brokersRes] = await Promise.all([
-            superClient.default.getPortfolio(walletAddress),
-            superClient.default.getBrokers(),
-          ]);
-          setPortfolioData(portfolioRes as unknown as PortfolioResponse);
-          setBrokerData(brokersRes as unknown as any[]);
-        } catch (error) {
-          console.error("Error refreshing portfolio:", error);
-        }
-      }
-
-      // Show explorer link on button for 250ms, then reset to initial state
-      setTimeout(() => {
-        setShowSuccessMessage(false);
-        setTxHash(null);
-        setAmount("");
-      }, 250);
-    } catch (err: any) {
-      debugger;
-      console.error("Transaction error:", err);
-      setSubmitError(
-        err.message ||
-          "Transaction failed. Please check your connection and try again."
-      );
-    } finally {
-      setSubmitting(false);
+    // Use the appropriate hook based on active tab
+    if (activeTab === "supply") {
+      const balanceNum = balance ? parseFloat(balance) : undefined;
+      await supply.handleSupply(asset, amount, balanceNum);
+    } else {
+      const maxWithdraw =
+        maxWithdrawableAmount > 0 ? maxWithdrawableAmount : undefined;
+      await withdraw.handleWithdraw(asset, amount, maxWithdraw);
     }
   };
 
@@ -1721,10 +1709,16 @@ export function SupplyModal({
           )}
 
           {/* Transaction Error Message */}
+          {/* Error Message */}
           {submitError && (
             <div className="mb-4 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-sm text-red-700 dark:text-red-400">
               {submitError}
             </div>
+          )}
+
+          {/* Success Message */}
+          {txHash && showSuccessMessage && (
+            <TransactionSuccessMessage txHash={txHash} />
           )}
 
           {/* Submit Button */}
@@ -1741,7 +1735,7 @@ export function SupplyModal({
                   : "bg-zinc-300 dark:bg-zinc-700 text-zinc-500 dark:text-zinc-400 cursor-not-allowed"
             }`}
           >
-            {txHash && showSuccessMessage ? (
+            {txHash && showButtonComplete ? (
               <span className="flex items-center justify-center gap-2">
                 <svg
                   className="w-5 h-5"
@@ -1756,29 +1750,7 @@ export function SupplyModal({
                     d="M5 13l4 4L19 7"
                   />
                 </svg>
-                Transaction Submitted!
-                <a
-                  href={`https://explorer.movementnetwork.xyz/txn/${txHash}?network=mainnet`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="ml-2 underline hover:opacity-80 flex items-center gap-1"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  View
-                  <svg
-                    className="w-4 h-4"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
-                    />
-                  </svg>
-                </a>
+                Transaction Complete
               </span>
             ) : submitting ? (
               <span className="flex items-center justify-center gap-2">
@@ -1802,9 +1774,7 @@ export function SupplyModal({
                   ></path>
                 </svg>
                 {submissionStep ||
-                  (activeTab === "supply"
-                    ? "Initiating Supply..."
-                    : "Initiating Withdraw...")}
+                  (activeTab === "supply" ? "Supplying..." : "Withdrawing...")}
               </span>
             ) : activeTab === "supply" ? (
               <span className="flex items-center justify-center gap-2">

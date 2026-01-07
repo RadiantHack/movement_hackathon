@@ -35,6 +35,7 @@ export const TransferForm: React.FC<TransferFormProps> = ({
   const [toAddress, setToAddress] = useState("");
   const [tokenDropdownOpen, setTokenDropdownOpen] = useState(false);
   const [showQRScanner, setShowQRScanner] = useState(false);
+  const [showSuccessMessage, setShowSuccessMessage] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const hasManuallySelectedToken = useRef(false);
 
@@ -63,6 +64,12 @@ export const TransferForm: React.FC<TransferFormProps> = ({
     aptos,
     movementChainId,
     onSuccess: () => {
+      setShowSuccessMessage(true);
+      setTimeout(() => {
+        setShowSuccessMessage(false);
+        setAmount("");
+        setToAddress("");
+      }, 250);
       onTransferComplete?.();
     },
   });
@@ -420,7 +427,9 @@ export const TransferForm: React.FC<TransferFormProps> = ({
           )}
 
           {/* Success Message */}
-          {txHash && <TransactionSuccessMessage txHash={txHash} />}
+          {txHash && showSuccessMessage && (
+            <TransactionSuccessMessage txHash={txHash} />
+          )}
 
           {/* Transfer Button */}
           <button
