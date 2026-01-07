@@ -5,19 +5,10 @@
 export * from "./validation";
 export * from "./broker-selection";
 
-// Export from borrow-v2-utils (excluding PortfolioState to avoid conflict)
-export {
-  type BorrowV2Params,
-  executeBorrowV2,
-  executeRepayV2,
-} from "./borrow-v2-utils";
-
-// Export from lend-v2-utils (excluding PortfolioState to avoid conflict)
-export {
-  type LendV2Params,
-  executeLendV2,
-  executeRedeemV2,
-} from "./lend-v2-utils";
+// Legacy functions removed - use transaction-service.ts instead
+// These exports are kept for type compatibility only (if needed)
+// export { type BorrowV2Params } from "./borrow-v2-utils";
+// export { type LendV2Params } from "./lend-v2-utils";
 
 // Export from lending-transaction
 export {

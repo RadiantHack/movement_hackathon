@@ -6,7 +6,15 @@
 import { useState, useCallback } from "react";
 import { usePrivy } from "@privy-io/react-auth";
 import { useSignRawHash } from "@privy-io/react-auth/extended-chains";
-import { executeRedeemV2 } from "../utils/moveposition";
+import { executeTransaction } from "../services/transaction-service";
+import {
+  getBrokerByAssetName,
+  validateBroker,
+} from "../services/broker-service";
+import {
+  fetchPortfolioWithRisk,
+  buildCurrentPortfolioBasicState,
+} from "../services/portfolio-service";
 import {
   validateMovePositionAmount,
   validateMovePositionWallet,
@@ -121,10 +129,26 @@ export function useMovePositionWithdraw({
         ...prev,
         withdrawing: true,
         error: null,
-        step: "Building transaction...",
+        step: "Fetching broker information...",
       }));
 
       try {
+        // Get broker for the asset
+        const broker = await getBrokerByAssetName(asset.symbol);
+        if (!broker) {
+          throw new Error(`Broker not found for asset: ${asset.symbol}`);
+        }
+        const brokerValidation = validateBroker(broker, "withdraw");
+        if (!brokerValidation.isValid) {
+          throw new Error(brokerValidation.error || "Invalid broker");
+        }
+
+        // Fetch current portfolio state
+        setState((prev) => ({ ...prev, step: "Fetching portfolio state..." }));
+        const portfolioResponse = await fetchPortfolioWithRisk(walletAddress);
+        const currentPortfolioState =
+          buildCurrentPortfolioBasicState(portfolioResponse);
+
         // If exact note token balance is provided (from "Max" button), use it directly
         // This matches MovePosition: maxWithdrawNoteUser is used as txAmount (exact note balance)
         // Otherwise, convert underlying amount to raw format
@@ -139,12 +163,16 @@ export function useMovePositionWithdraw({
           rawAmount = convertAmountToRaw(amount, decimals);
         }
 
-        const result = await executeRedeemV2({
-          amount: rawAmount,
-          coinSymbol: asset.symbol,
-          walletAddress,
+        setState((prev) => ({ ...prev, step: "Building transaction..." }));
+
+        // Execute transaction using unified service
+        const result = await executeTransaction({
+          txType: "withdraw",
+          txAmount: rawAmount,
+          broker,
+          address: walletAddress,
           publicKey,
-          useExactNoteBalance: !!exactNoteTokenBalanceRaw, // Flag to indicate we're using exact balance
+          currentPortfolioState,
           signHash: async (hash: string) => {
             setState((prev) => ({ ...prev, step: "Waiting for signature..." }));
             try {

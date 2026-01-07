@@ -5,7 +5,7 @@
   "movementChainId": 126,
   "movementTestNetChainId": 250,
   "mosaicApiBaseUrl": "https://api.mosaic.ag/v1",
-  "movementLabsUrl": "https://mainnet.movementlabs.xyz",
+  "movementLabsUrl": "https://mainnet.movementnetwork.xyz/v1",
   "movementExplorerUrl": "https://explorer.movementlabs.xyz",
   "movementPositionBrokerUrl": "https://api.moveposition.xyz/brokers"
 }

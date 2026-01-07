@@ -1,12 +1,11 @@
 /**
  * Custom hook for handling MovePosition supply (lend) transactions
- * Consolidates supply logic used across multiple components
+ * Refactored to use unified transaction service matching MovePosition architecture
  */
 
 import { useState, useCallback } from "react";
 import { usePrivy } from "@privy-io/react-auth";
 import { useSignRawHash } from "@privy-io/react-auth/extended-chains";
-import { executeLendV2 } from "../utils/moveposition";
 import {
   validateMovePositionAmount,
   validateMovePositionWallet,
@@ -15,6 +14,17 @@ import {
 import { useBalance } from "./useBalanceContext";
 import { useMovementWallet } from "./useMovementWallet";
 import { getCoinDecimals, convertAmountToRaw } from "../utils/shared/tokens";
+import {
+  getBrokerByAssetName,
+  validateBroker,
+  getBrokerNames,
+  fetchBrokers,
+} from "../services/broker-service";
+import {
+  fetchPortfolioWithRisk,
+  buildCurrentPortfolioBasicState,
+} from "../services/portfolio-service";
+import { executeTransaction } from "../services/transaction-service";
 
 interface UseMovePositionSupplyOptions {
   onSuccess?: () => void;
@@ -53,8 +63,7 @@ export function useMovePositionSupply({
     async (
       asset: { symbol: string; token: any },
       amount: string,
-      availableBalance?: number,
-      brokerName?: string // Optional: broker name to use directly (matching MovePosition)
+      availableBalance?: number
     ): Promise<boolean> => {
       // Reset error state
       setState((prev) => ({ ...prev, error: null, step: null }));
@@ -116,25 +125,49 @@ export function useMovePositionSupply({
         return false;
       }
 
-      // Execute supply
+      // Execute supply using new architecture
       setState((prev) => ({
         ...prev,
         supplying: true,
         error: null,
-        step: "Building transaction...",
+        step: "Loading broker data...",
       }));
 
       try {
+        // Fetch broker using standardized service (matches MovePosition)
+        const broker = await getBrokerByAssetName(asset.symbol);
+
+        if (!broker) {
+          throw new Error(`Broker not found for asset: ${asset.symbol}`);
+        }
+
+        // Validate broker
+        const brokerValidation = validateBroker(broker, "supply");
+        if (!brokerValidation.isValid) {
+          throw new Error(brokerValidation.error || "Invalid broker");
+        }
+
+        setState((prev) => ({ ...prev, step: "Fetching portfolio..." }));
+
+        // Fetch portfolio with risk (matches MovePosition)
+        const freshPortfolio = await fetchPortfolioWithRisk(walletAddress);
+        const currentPortfolioState =
+          buildCurrentPortfolioBasicState(freshPortfolio);
+
         // Convert amount to raw format
         const decimals = getCoinDecimals(asset.symbol);
         const rawAmount = convertAmountToRaw(amount, decimals);
 
-        const result = await executeLendV2({
-          amount: rawAmount,
-          coinSymbol: asset.symbol,
-          walletAddress,
+        setState((prev) => ({ ...prev, step: "Building transaction..." }));
+
+        // Execute transaction using unified service
+        const hash = await executeTransaction({
+          txType: "supply",
+          txAmount: rawAmount,
+          broker,
+          address: walletAddress,
           publicKey,
-          brokerName, // Pass broker name directly (matching MovePosition's approach)
+          currentPortfolioState,
           signHash: async (hash: string) => {
             setState((prev) => ({ ...prev, step: "Waiting for signature..." }));
             try {
@@ -157,14 +190,15 @@ export function useMovePositionSupply({
           },
         });
 
+        // Success - transaction hash returned
         setState((prev) => ({
           ...prev,
           supplying: false,
-          txHash: result ?? null,
+          txHash: hash,
           step: null,
         }));
 
-        // Refresh balances after successful supply
+        // Refresh balances after successful supply (matches MovePosition's postTransactionRefresh)
         await refreshBalances();
 
         onSuccess?.();

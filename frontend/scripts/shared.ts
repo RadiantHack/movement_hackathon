@@ -4,7 +4,7 @@ import * as superSDK from "../lib/super-aptos-sdk/src";
 
 export const MOVEPOSITION_ADDRESS =
   "0xccd2621d2897d407e06d18e6ebe3be0e6d9b61f1e809dd49360522b9105812cf";
-export const RPC_URL = "https://rpc.sentio.xyz/movement/v1";
+export const RPC_URL = "https://mainnet.movementnetwork.xyz/v1";
 export const API_BASE = "https://api.moveposition.xyz";
 
 export interface EntryFunctionPayload {

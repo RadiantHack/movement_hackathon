@@ -10,16 +10,17 @@ import {
   getCoinDecimals,
   convertAmountToRaw,
 } from "../../../utils/shared/tokens";
-import { executeLendV2, executeRedeemV2 } from "../../../utils/moveposition";
 import * as superJsonApiClient from "../../../../lib/super-json-api-client/src";
-import {
-  getMovementApiBase,
-} from "@/lib/super-aptos-sdk/src/globals";
+import { getMovementApiBase } from "@/lib/super-aptos-sdk/src/globals";
 import { selectBroker, validateBroker } from "../../../utils/moveposition";
 import { useMovePositionSupply } from "../../../hooks/useMovePositionSupply";
 import { useMovePositionWithdraw } from "../../../hooks/useMovePositionWithdraw";
 import { TransactionSuccessMessage } from "../../shared/modals";
 import { useTokenBalance } from "../../../hooks/useTokenBalance";
+import {
+  checkCoinStoreBalance,
+  convertCoinStoreToFA,
+} from "../../../utils/moveposition/coin-conversion";
 
 // Utility functions for formatting (matching MovePosition's format.ts)
 function prettyTokenBal(num: number): string {
@@ -232,6 +233,12 @@ export function SupplyModal({
   // Local state to control button "Transaction Complete" display (250ms delay)
   const [showButtonComplete, setShowButtonComplete] = useState(false);
 
+  // Coin store to FA conversion state
+  const [coinStoreBalance, setCoinStoreBalance] = useState<bigint>(BigInt(0));
+  const [hasCoinStoreBalance, setHasCoinStoreBalance] = useState(false);
+  const [converting, setConverting] = useState(false);
+  const [conversionError, setConversionError] = useState<string | null>(null);
+
   // Determine which hook to use based on active tab
   const currentOperation = activeTab === "supply" ? supply : withdraw;
   const submitting =
@@ -305,6 +312,98 @@ export function SupplyModal({
     enabled: isOpen,
     autoRefresh: true,
   });
+
+  // Check for coin store balance (for MOVE/APT only)
+  useEffect(() => {
+    const checkBalance = async () => {
+      if (
+        !isOpen ||
+        !walletAddress ||
+        !movementWallet ||
+        (asset?.symbol !== "MOVE" && asset?.symbol !== "APT")
+      ) {
+        setHasCoinStoreBalance(false);
+        setCoinStoreBalance(BigInt(0));
+        return;
+      }
+
+      try {
+        const result = await checkCoinStoreBalance(
+          walletAddress,
+          "0x1::aptos_coin::AptosCoin"
+        );
+        setHasCoinStoreBalance(result.hasBalance);
+        setCoinStoreBalance(result.balance);
+      } catch (error) {
+        console.warn(
+          "[SupplyModal] Could not check coin store balance:",
+          error
+        );
+        setHasCoinStoreBalance(false);
+        setCoinStoreBalance(BigInt(0));
+      }
+    };
+
+    checkBalance();
+  }, [isOpen, walletAddress, asset?.symbol, movementWallet]);
+
+  // Handle coin store to FA conversion
+  const handleConvertToFA = async () => {
+    if (!movementWallet || !walletAddress) {
+      setConversionError("Wallet not connected");
+      return;
+    }
+
+    setConverting(true);
+    setConversionError(null);
+
+    try {
+      const publicKey = (movementWallet as any).publicKey as string;
+      if (!publicKey) {
+        throw new Error("Public key not available");
+      }
+
+      const hash = await convertCoinStoreToFA({
+        walletAddress,
+        publicKey,
+        coinType: "0x1::aptos_coin::AptosCoin",
+        signHash: async (hash: string) => {
+          try {
+            const response = await signRawHash({
+              address: walletAddress,
+              chainType: "aptos",
+              hash: hash as `0x${string}`,
+            });
+            return { signature: response.signature };
+          } catch (error: any) {
+            throw new Error(
+              error.message || "Failed to get signature from wallet"
+            );
+          }
+        },
+        onProgress: (step: string) => {
+          console.log(`[SupplyModal] Conversion: ${step}`);
+        },
+      });
+
+      console.log(`[SupplyModal] ✅ Conversion successful: ${hash}`);
+
+      // Refresh balances after conversion
+      await fetchBalance();
+      setHasCoinStoreBalance(false);
+      setCoinStoreBalance(BigInt(0));
+
+      // Show success message
+      setDisplayTxHash(hash);
+    } catch (error: any) {
+      console.error("[SupplyModal] Conversion failed:", error);
+      setConversionError(
+        error.message || "Failed to convert coin store to fungible asset"
+      );
+    } finally {
+      setConverting(false);
+    }
+  };
 
   // Refresh portfolio data function
   const refreshPortfolioData = async () => {
@@ -1282,14 +1381,8 @@ export function SupplyModal({
     // Use the appropriate hook based on active tab
     if (activeTab === "supply") {
       const balanceNum = balance ? parseFloat(balance) : undefined;
-      // Pass selectedBroker's name directly (matching MovePosition's approach)
-      // MovePosition uses broker.underlyingAsset.name directly (line 156 in doTx.ts)
-      const brokerName = selectedBroker?.underlyingAsset?.name;
-      if (!brokerName) {
-        setValidationError("Broker not selected. Please try again.");
-        return;
-      }
-      await supply.handleSupply(asset, amount, balanceNum, brokerName);
+      // handleSupply fetches broker internally using asset.symbol
+      await supply.handleSupply(asset, amount, balanceNum);
     } else {
       // For withdraw: pass the exact raw note token balance if user clicked "Max"
       // This matches MovePosition: when "Max" is clicked, use maxWithdrawNoteUser (exact note balance)
@@ -1436,6 +1529,46 @@ export function SupplyModal({
               </button>
             )}
           </div>
+
+          {/* Coin Store to FA Conversion Banner */}
+          {activeTab === "supply" &&
+            hasCoinStoreBalance &&
+            coinStoreBalance > BigInt(0) && (
+              <div className="mt-4 p-4 rounded-xl bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800">
+                <div className="flex items-start gap-3">
+                  <div className="flex-1">
+                    <h3 className="text-sm font-semibold text-yellow-900 dark:text-yellow-100 mb-1">
+                      Convert your {asset.symbol} coins!
+                    </h3>
+                    <p className="text-xs text-yellow-800 dark:text-yellow-200 mb-3">
+                      You have{" "}
+                      <span className="font-medium">
+                        {(Number(coinStoreBalance) / Math.pow(10, 8)).toFixed(
+                          6
+                        )}{" "}
+                        {asset.symbol}
+                      </span>{" "}
+                      in coin store. Please convert to fungible asset (FA) to
+                      supply it to MovePosition.
+                    </p>
+                    {conversionError && (
+                      <p className="text-xs text-red-600 dark:text-red-400 mb-2">
+                        {conversionError}
+                      </p>
+                    )}
+                    <button
+                      onClick={handleConvertToFA}
+                      disabled={converting}
+                      className="px-4 py-2 bg-yellow-500 text-black text-sm font-medium rounded-lg hover:bg-yellow-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {converting
+                        ? "Converting..."
+                        : `Convert All ${asset.symbol} to FA`}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
 
           {/* Available balance hint - different text for supply vs withdraw */}
           {activeTab === "supply" && balance && parseFloat(balance) > 0 && (

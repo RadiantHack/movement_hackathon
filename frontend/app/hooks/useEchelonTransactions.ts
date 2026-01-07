@@ -466,27 +466,96 @@ export async function executeSupplyTransaction(
         ).toString();
       }
     } else {
-      // For coins (MOVE)
+      // For coins (MOVE/APT) - check both coin store and FA balance
       actualDecimals = 8;
       rawAmount = Math.floor(
         numericAmount * Math.pow(10, actualDecimals)
       ).toString();
 
       try {
-        const coinStoreResource = `0x1::coin::CoinStore<${TYPE_ARGUMENTS[asset.symbol]}>`;
+        const coinType = TYPE_ARGUMENTS[asset.symbol];
+        const coinStoreResource = `0x1::coin::CoinStore<${coinType}>`;
+        const faResource = `0x1::fungible_asset::Balance<${coinType}>`;
+
         const resources = await aptos.account.getAccountResources({
           accountAddress: senderAddress,
         });
         const coinStore = resources.find((r) => r.type === coinStoreResource);
 
-        if (!coinStore) {
-          return {
-            success: false,
-            error: `No balance found for ${asset.symbol}. Please ensure you have ${asset.symbol} tokens in your wallet.`,
-          };
+        let coinBalance = BigInt(0);
+
+        // Check coin store balance
+        if (coinStore) {
+          coinBalance = BigInt((coinStore.data as any)?.coin?.value || "0");
         }
 
-        const coinBalance = BigInt((coinStore.data as any)?.coin?.value || "0");
+        // Also check FA balance (for MOVE/APT that have been converted to FA)
+        // Asset type 0xa (0x000000000000000000000000000000000000000000000000000000000000000a) is FA MOVE
+        // Coin type 0x1::aptos_coin::AptosCoin is deprecated coin store but some wallets still have it
+        if (coinType === "0x1::aptos_coin::AptosCoin") {
+          try {
+            // Try to get FA balance using the fungible asset resource type
+            const faRes: any = await aptos.account.getAccountResource({
+              accountAddress: senderAddress,
+              resourceType: faResource as `${string}::${string}::${string}`,
+            });
+            const faBalanceValue = faRes?.data?.balance ?? faRes?.data?.value;
+            const faBalance = BigInt(faBalanceValue || "0");
+            // Add FA balance to coin store balance (user can have both)
+            coinBalance = coinBalance + faBalance;
+            console.log(
+              `[Echelon] Found FA balance for MOVE: ${faBalance.toString()}, total: ${coinBalance.toString()}`
+            );
+          } catch (_) {
+            // FA balance not found via resource, try fetching from balance API (which handles asset type 0xa)
+            try {
+              const balanceResponse = await fetch(
+                `/api/balance?address=${encodeURIComponent(senderAddress)}&token=MOVE`
+              );
+              if (balanceResponse.ok) {
+                const balanceData = await balanceResponse.json();
+                if (
+                  balanceData.success &&
+                  balanceData.balances &&
+                  balanceData.balances.length > 0
+                ) {
+                  // Find MOVE balance (asset type 0xa or symbol MOVE)
+                  const moveBalance = balanceData.balances.find((b: any) => {
+                    const assetType = (b.assetType || "").toLowerCase();
+                    const symbol = (b.metadata?.symbol || "").toUpperCase();
+                    // Check for asset type 0xa (FA MOVE) or symbol MOVE
+                    return (
+                      assetType ===
+                        "0x000000000000000000000000000000000000000000000000000000000000000a" ||
+                      assetType === "0xa" ||
+                      symbol === "MOVE"
+                    );
+                  });
+                  if (moveBalance) {
+                    const faBalance = BigInt(moveBalance.amount || "0");
+                    coinBalance = coinBalance + faBalance;
+                    console.log(
+                      `[Echelon] Found FA balance via API for MOVE: ${faBalance.toString()}, total: ${coinBalance.toString()}`
+                    );
+                  }
+                }
+              }
+            } catch (apiError) {
+              // Balance API failed, continue with coin store balance only
+              console.warn(
+                "[Echelon] Could not fetch FA balance from API:",
+                apiError
+              );
+            }
+          }
+        }
+
+        if (coinBalance === BigInt(0)) {
+          return {
+            success: false,
+            error: `No balance found for ${asset.symbol}. Please ensure you have ${asset.symbol} tokens (coin store or fungible asset) in your wallet.`,
+          };
+        }
         const requestedAmount = BigInt(rawAmount);
 
         if (coinBalance < requestedAmount) {

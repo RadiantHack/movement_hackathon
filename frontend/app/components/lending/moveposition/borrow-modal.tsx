@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { usePrivy } from "@privy-io/react-auth";
 import { useMovementWallet } from "../../../hooks/useMovementWallet";
 import { useSignRawHash } from "@privy-io/react-auth/extended-chains";
@@ -10,10 +10,12 @@ import {
   getCoinDecimals,
   convertAmountToRaw,
 } from "../../../utils/shared/tokens";
-import { executeBorrowV2, executeRepayV2 } from "../../../utils/moveposition";
+// Unified transaction flow via TransactionService
+import { useMovePositionBorrow } from "../../../hooks/useMovePositionBorrow";
 import * as superJsonApiClient from "../../../../lib/super-json-api-client/src";
 import { getMovementApiBase } from "@/lib/super-aptos-sdk/src/globals";
 import { useTokenBalance } from "../../../hooks/useTokenBalance";
+import { TransactionSuccessMessage } from "../../shared/modals";
 
 interface BorrowModalProps {
   isOpen: boolean;
@@ -83,30 +85,8 @@ export function BorrowModal({
   const [activeTab, setActiveTab] = useState<"borrow" | "repay">("borrow");
   const [amount, setAmount] = useState("");
   const [showMore, setShowMore] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-  const [submitError, setSubmitError] = useState<string | null>(null);
-  const [txHash, setTxHash] = useState<string | null>(null);
-  const [portfolioData, setPortfolioData] = useState<PortfolioResponse | null>(
-    null
-  );
-  const [brokerData, setBrokerData] =
-    useState<superJsonApiClient.Broker | null>(null);
-  const [simulatedRiskData, setSimulatedRiskData] = useState<any | null>(null);
-  const [loadingSimulation, setLoadingSimulation] = useState(false);
-  const [loadingPortfolio, setLoadingPortfolio] = useState(false);
-  const [submissionStep, setSubmissionStep] = useState<string>("");
 
-  // Risk simulation state (matching MovePosition)
-  const [simHealthFactor, setSimHealthFactor] = useState<number>(0);
-  const [simHealthYellow, setSimHealthYellow] = useState<boolean>(false);
-  const [simHealthRed, setSimHealthRed] = useState<boolean>(false);
-  const [isSimHealthy, setIsSimHealthy] = useState<boolean>(false);
-  const [isLTVWarning, setIsLTVWarning] = useState<boolean>(false);
-  const [simLTV, setSimLTV] = useState<number>(0);
-
-  const movementWallet = useMovementWallet();
-
-  // Use shared hook for token balance
+  // Use shared hook for token balance (must be before callbacks that use it)
   const {
     balance,
     loading: loadingBalance,
@@ -118,14 +98,99 @@ export function BorrowModal({
     autoRefresh: true,
   });
 
+  // Use ref for fetchBalance to avoid dependency issues
+  const fetchBalanceRef = useRef(fetchBalance);
+  useEffect(() => {
+    fetchBalanceRef.current = fetchBalance;
+  }, [fetchBalance]);
+
+  // Memoize callbacks to prevent infinite re-renders
+  const handleBorrowSuccess = useCallback(() => {
+    // Refresh portfolio and balance after transaction completes
+    setTimeout(async () => {
+      if (walletAddress) {
+        try {
+          const superClient = new superJsonApiClient.SuperClient({
+            BASE: movementApiBase,
+          });
+          const refreshedPortfolio =
+            await superClient.default.getPortfolio(walletAddress);
+          setPortfolioData(refreshedPortfolio as unknown as PortfolioResponse);
+          await fetchBalanceRef.current();
+          console.log(
+            "[BorrowModal] Portfolio and balance refreshed after transaction"
+          );
+        } catch (refreshError) {
+          console.warn(
+            "[BorrowModal] Error refreshing data after transaction:",
+            refreshError
+          );
+        }
+      }
+      // Also bubble up success for parent listeners
+      if (onSuccess) onSuccess();
+    }, 1500);
+  }, [walletAddress, onSuccess, movementApiBase]);
+
+  const handleBorrowError = useCallback((err: string) => {
+    setSubmitError(err);
+  }, []);
+
+  // Derived from unified borrow hook
+  const borrow = useMovePositionBorrow({
+    onSuccess: handleBorrowSuccess,
+    onError: handleBorrowError,
+  });
+
+  const submitting =
+    activeTab === "borrow" ? borrow.borrowing : borrow.repaying;
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [submissionStep, setSubmissionStep] = useState<string>("");
+
+  // Get txHash from hook
+  const txHash = borrow.txHash;
+
+  // Track previous tab to detect tab switches
+  const prevActiveTabRef = useRef<"borrow" | "repay">(activeTab);
+  const [displayTxHash, setDisplayTxHash] = useState<string | null>(null);
+  const [showButtonComplete, setShowButtonComplete] = useState(false);
+  // Track last shown txHash per tab to prevent re-showing
+  const lastShownTxHashRef = useRef<{
+    borrow: string | null;
+    repay: string | null;
+  }>({
+    borrow: null,
+    repay: null,
+  });
+  const [portfolioData, setPortfolioData] = useState<PortfolioResponse | null>(
+    null
+  );
+  const [brokerData, setBrokerData] =
+    useState<superJsonApiClient.Broker | null>(null);
+  const [simulatedRiskData, setSimulatedRiskData] = useState<any | null>(null);
+  const [loadingSimulation, setLoadingSimulation] = useState(false);
+  const [loadingPortfolio, setLoadingPortfolio] = useState(false);
+
+  // Risk simulation state (matching MovePosition)
+  const [simHealthFactor, setSimHealthFactor] = useState<number>(0);
+  const [simHealthYellow, setSimHealthYellow] = useState<boolean>(false);
+  const [simHealthRed, setSimHealthRed] = useState<boolean>(false);
+  const [isSimHealthy, setIsSimHealthy] = useState<boolean>(false);
+  const [isLTVWarning, setIsLTVWarning] = useState<boolean>(false);
+  const [simLTV, setSimLTV] = useState<number>(0);
+
+  const movementWallet = useMovementWallet();
+
   useEffect(() => {
     if (!isOpen) {
       setAmount("");
       setShowMore(false);
       setActiveTab("borrow");
-      setTxHash(null);
       setSubmitError(null);
       setSubmissionStep("");
+      setDisplayTxHash(null);
+      setShowButtonComplete(false);
+      lastShownTxHashRef.current = { borrow: null, repay: null };
       return;
     }
   }, [isOpen]);
@@ -142,13 +207,6 @@ export function BorrowModal({
   }, [isOpen]);
 
   // Balance is automatically fetched by useTokenBalance hook
-
-  // Reset amount input when transaction completes (when txHash appears)
-  useEffect(() => {
-    if (txHash) {
-      setAmount("");
-    }
-  }, [txHash]);
 
   useEffect(() => {
     if (!walletAddress || !isOpen || !asset) {
@@ -196,6 +254,7 @@ export function BorrowModal({
     fetchPortfolioAndBroker();
   }, [walletAddress, isOpen, movementApiBase, asset]);
 
+  // Amount input formatter
   const handleAmountChange = (value: string) => {
     const numericValue = value.replace(/[^0-9.]/g, "");
     const parts = numericValue.split(".");
@@ -206,80 +265,144 @@ export function BorrowModal({
     setAmount(formattedValue);
   };
 
-  /**
-   * Get user's current borrowed amount from portfolio data
-   * Matching MovePosition's calcBorrowData: underlyingTokenBalance = noteBalance * loanNoteExchangeRate
-   */
+  // User's current borrowed amount for the selected asset (in underlying tokens)
+  // Calculated from note token balance * exchange rate
   const userBorrowedAmount = useMemo(() => {
     if (!portfolioData || !asset || !brokerData) return 0;
-
     const brokerName = getBrokerName(asset.symbol);
     const loanNoteName = `${brokerName}-super-aptos-loan-note`;
-
     const liability = portfolioData.liabilities.find(
       (l) => l.instrument.name === loanNoteName
     );
-
     if (!liability) return 0;
-
-    // liability.amount is in raw note tokens
-    // MovePosition: noteBalance = positions.liabilities[loanNoteName] (already scaled down)
-    //               underlyingTokenBalance = noteBalance * broker.loanNoteExchangeRate
     const loanNoteDecimals =
       brokerData.loanNote?.decimals ?? getCoinDecimals(asset.symbol);
     const loanNoteExchangeRate = brokerData.loanNoteExchangeRate || 1;
-
-    // Convert raw note tokens to note tokens (scaled down)
-    const noteBalance =
-      parseFloat(liability.amount) / Math.pow(10, loanNoteDecimals);
-
-    // Convert note tokens to underlying tokens using exchange rate
-    const underlyingTokenBalance = noteBalance * loanNoteExchangeRate;
-
-    return underlyingTokenBalance;
+    // Calculate from raw note token amount to avoid floating point precision issues
+    const noteBalanceRaw = BigInt(liability.amount);
+    const noteBalanceFormatted =
+      Number(noteBalanceRaw) / Math.pow(10, loanNoteDecimals);
+    // Convert to underlying tokens: noteBalance * exchangeRate
+    const underlyingAmount = noteBalanceFormatted * loanNoteExchangeRate;
+    // Floor to 8 decimal places to match MovePosition's precision
+    return Math.floor(underlyingAmount * 1e8) / 1e8;
   }, [portfolioData, asset, brokerData]);
 
-  /**
-   * Get current health factor from portfolio data
-   */
+  // Current health factor from portfolio API or prop
   const currentHealthFactor = useMemo(() => {
     if (portfolioData?.evaluation?.health_ratio) {
       return portfolioData.evaluation.health_ratio;
     }
-    return healthFactor;
+    return healthFactor || 0;
   }, [portfolioData, healthFactor]);
 
-  /**
-   * Get max borrow amount for the selected asset from portfolio API
-   * This is calculated based on user's collateral and health factor
-   *
-   * Note: The API returns maxBorrow values already in underlying token units (scaled),
-   * not in raw units. For example: "0.30358239388513447" for USDC means 0.303582... USDC.
-   */
+  // Max borrow amount from portfolio API for the selected asset
   const maxBorrowFromPortfolio = useMemo(() => {
     if (!portfolioData?.maxBorrow || !asset) return null;
-
     const brokerName = getBrokerName(asset.symbol);
     const loanNoteName = `${brokerName}-super-aptos-loan-note`;
-    const maxBorrowValue = portfolioData.maxBorrow[loanNoteName];
-
+    const maxBorrowValue = (portfolioData.maxBorrow as any)[loanNoteName];
     if (!maxBorrowValue) return null;
-
-    // The API returns maxBorrow already in underlying token units (scaled format)
-    // Just parse it as a number - no conversion needed
     const maxBorrowAmount = parseFloat(maxBorrowValue);
-
-    // Return null if invalid or zero
-    if (isNaN(maxBorrowAmount) || maxBorrowAmount <= 0) {
-      return null;
-    }
-
+    if (isNaN(maxBorrowAmount) || maxBorrowAmount <= 0) return null;
     return maxBorrowAmount;
   }, [portfolioData, asset]);
 
-  /**
-   * Build next portfolio state for risk simulation API
-   */
+  const handleSubmit = async () => {
+    if (!asset || !walletAddress || !movementWallet) {
+      setSubmitError("Missing wallet or asset information");
+      return;
+    }
+    setSubmitError(null);
+
+    // Derive constraints for validation
+    const borrowPower = maxBorrowFromPortfolio ?? null;
+    const availableLiquidity = asset.availableLiquidity ?? null;
+
+    let ok = false;
+    if (activeTab === "borrow") {
+      ok = await borrow.handleBorrow(
+        { symbol: asset.symbol, token: asset.token },
+        amount,
+        borrowPower,
+        availableLiquidity
+      );
+    } else {
+      ok = await borrow.handleRepay(
+        { symbol: asset.symbol, token: asset.token },
+        amount,
+        userBorrowedAmount || null
+      );
+    }
+
+    if (ok) {
+      // Reset form state after successful transaction
+      setAmount("");
+    }
+  };
+
+  // Reflect hook progress state into local submissionStep (in useEffect to avoid infinite renders)
+  useEffect(() => {
+    const hookStep = borrow.step;
+    if (hookStep !== submissionStep) {
+      setSubmissionStep(hookStep || "");
+    }
+  }, [borrow.step, submissionStep]);
+
+  // Clear displayTxHash and button state when switching tabs
+  useEffect(() => {
+    if (prevActiveTabRef.current !== activeTab) {
+      // Tab switched - clear the displayed txHash and button state immediately
+      setDisplayTxHash(null);
+      setShowButtonComplete(false);
+      prevActiveTabRef.current = activeTab;
+    }
+  }, [activeTab]);
+
+  // Show notification when txHash appears - only if it's a new txHash
+  // Also reset amount input when transaction completes
+  useEffect(() => {
+    const currentTxHash = borrow.txHash;
+    if (currentTxHash) {
+      // Only show if this is a new txHash we haven't shown before for this tab
+      const lastShown =
+        activeTab === "borrow"
+          ? lastShownTxHashRef.current.borrow
+          : lastShownTxHashRef.current.repay;
+
+      if (currentTxHash !== lastShown) {
+        setDisplayTxHash(currentTxHash);
+        if (activeTab === "borrow") {
+          lastShownTxHashRef.current.borrow = currentTxHash;
+        } else {
+          lastShownTxHashRef.current.repay = currentTxHash;
+        }
+        // Reset amount input when transaction completes
+        setAmount("");
+      }
+    } else {
+      // Clear displayTxHash when txHash is cleared
+      setDisplayTxHash(null);
+    }
+  }, [activeTab, borrow.txHash]);
+
+  // Manage button complete state - show briefly then clear
+  // This ensures button state clears as soon as notification appears
+  useEffect(() => {
+    if (borrow.txHash && !showButtonComplete) {
+      setShowButtonComplete(true);
+      // Clear button state immediately (notification handles the success display)
+      const timer = setTimeout(() => {
+        setShowButtonComplete(false);
+      }, 100); // Very short delay just for visual feedback
+      return () => clearTimeout(timer);
+    }
+    // Also clear if txHash disappears
+    if (!borrow.txHash && showButtonComplete) {
+      setShowButtonComplete(false);
+    }
+  }, [borrow.txHash, showButtonComplete]);
+  // Build next portfolio state for risk simulation API
   const buildNextPortfolioState = useMemo(() => {
     if (!portfolioData || !amount || !asset || parseFloat(amount) <= 0) {
       return null;
@@ -495,9 +618,15 @@ export function BorrowModal({
 
   /**
    * Calculate max repay amount - minimum of wallet balance and borrowed amount
+   * Always returns underlying token amount (not note tokens)
    */
   const maxRepayAmount = useMemo(() => {
-    if (!balance || parseFloat(balance) <= 0) return 0;
+    if (userBorrowedAmount <= 0) return 0;
+    // If balance is not loaded yet, use borrowed amount (user can still click Max)
+    if (!balance || parseFloat(balance) <= 0) {
+      return userBorrowedAmount;
+    }
+    // Return minimum of wallet balance and borrowed amount (both in underlying tokens)
     return Math.min(parseFloat(balance), userBorrowedAmount);
   }, [balance, userBorrowedAmount]);
 
@@ -509,13 +638,31 @@ export function BorrowModal({
           .toFixed(8)
           .replace(/\.?0+$/, "")
       );
-    } else if (activeTab === "repay" && maxRepayAmount > 0) {
-      // Max repay is min of wallet balance and borrowed amount
-      setAmount(
-        Math.max(0, maxRepayAmount)
-          .toFixed(8)
-          .replace(/\.?0+$/, "")
-      );
+    } else if (activeTab === "repay") {
+      // Max repay: use borrowed amount if available, otherwise use wallet balance
+      // Always display in underlying tokens (not note tokens)
+      if (userBorrowedAmount > 0) {
+        // Calculate max amount (min of balance and borrowed amount)
+        let maxAmount = userBorrowedAmount;
+        if (balance && parseFloat(balance) > 0) {
+          maxAmount = Math.min(parseFloat(balance), userBorrowedAmount);
+        }
+        // Floor to 8 decimal places and ensure it doesn't exceed userBorrowedAmount
+        // This prevents floating point precision issues
+        const flooredAmount = Math.min(
+          Math.floor(maxAmount * 1e8) / 1e8,
+          userBorrowedAmount
+        );
+        setAmount(
+          Math.max(0, flooredAmount)
+            .toFixed(8)
+            .replace(/\.?0+$/, "")
+        );
+      } else if (balance && parseFloat(balance) > 0) {
+        // Fallback to wallet balance if no borrowed amount
+        const flooredBalance = Math.floor(parseFloat(balance) * 1e8) / 1e8;
+        setAmount(flooredBalance.toFixed(8).replace(/\.?0+$/, ""));
+      }
     }
   };
 
@@ -573,12 +720,13 @@ export function BorrowModal({
         return "Would make position unhealthy";
       }
     } else if (activeTab === "repay") {
-      // Check if exceeds wallet balance
-      if (balance && parsedAmount > parseFloat(balance)) {
+      // Check if exceeds wallet balance (with small tolerance for floating point precision)
+      if (balance && parsedAmount > parseFloat(balance) + 0.000001) {
         return "Exceeds wallet balance";
       }
-      // Check if exceeds borrowed amount
-      if (parsedAmount > userBorrowedAmount) {
+      // Check if exceeds borrowed amount (with small tolerance for floating point precision)
+      // Allow tiny differences due to rounding (0.000001 tolerance)
+      if (parsedAmount > userBorrowedAmount + 0.000001) {
         return "Exceeds borrowed amount";
       }
     }
@@ -611,188 +759,6 @@ export function BorrowModal({
     // Check if there are any collaterals with non-zero amount
     return portfolioData.collaterals.some((c) => BigInt(c.amount) > 0);
   }, [portfolioData]);
-
-  const handleSubmit = async () => {
-    if (!movementWallet || !walletAddress || !asset) {
-      setSubmitError("Wallet not connected");
-      return;
-    }
-
-    // Validate amount is present and valid
-    if (!amount || amount.trim() === "") {
-      setSubmitError("Please enter an amount");
-      return;
-    }
-
-    const parsedAmountValue = parseFloat(amount);
-    if (isNaN(parsedAmountValue) || parsedAmountValue <= 0) {
-      setSubmitError("Please enter a valid amount greater than 0");
-      return;
-    }
-
-    // MovePosition validation: Check borrowing power from portfolio API
-    // The portfolio API's maxBorrow is the source of truth - it's null when:
-    // 1. No collateral exists
-    // 2. Insufficient collateral (health factor too low)
-    // 3. Already at max borrow capacity
-    if (activeTab === "borrow") {
-      if (maxBorrowFromPortfolio === null) {
-        // Check if it's because of no collateral or insufficient borrowing power
-        if (!hasCollateral) {
-          setSubmitError(
-            "You need to supply collateral before you can borrow. Please supply assets first."
-          );
-        } else {
-          // Has collateral but no borrowing power - likely health factor issue
-          setSubmitError(
-            "Insufficient borrowing power. Your health factor may be too low or you've reached your borrowing limit. Please supply more assets or repay existing borrows."
-          );
-        }
-        return;
-      }
-
-      // Additional check: if maxBorrow is 0 or very small, user can't borrow
-      if (maxBorrowFromPortfolio <= 0) {
-        setSubmitError(
-          "No borrowing power available. Please supply more collateral or check your health factor."
-        );
-        return;
-      }
-    }
-
-    // Use validation error if present
-    if (validationError) {
-      setSubmitError(validationError);
-      return;
-    }
-
-    setSubmitting(true);
-    setSubmitError(null);
-    setTxHash(null);
-    setSubmissionStep("");
-
-    try {
-      const senderAddress = movementWallet.address as string;
-      const senderPubKeyWithScheme = (movementWallet as any)
-        .publicKey as string;
-
-      if (!senderPubKeyWithScheme || senderPubKeyWithScheme.length < 2) {
-        throw new Error("Invalid public key format");
-      }
-
-      const publicKey = senderPubKeyWithScheme;
-      const decimals = getCoinDecimals(asset.symbol);
-
-      // Validate amount before conversion
-      const parsedAmountValue = parseFloat(amount);
-      if (isNaN(parsedAmountValue) || parsedAmountValue <= 0) {
-        throw new Error(
-          `Invalid amount: ${amount}. Please enter a valid positive number.`
-        );
-      }
-
-      const rawAmount = convertAmountToRaw(amount, decimals);
-
-      // Validate raw amount is not zero
-      if (rawAmount === "0" || BigInt(rawAmount) <= BigInt(0)) {
-        throw new Error(
-          `Amount conversion resulted in zero. Original amount: ${amount}, Decimals: ${decimals}, Raw: ${rawAmount}`
-        );
-      }
-
-      console.log(`[BorrowModal] Amount conversion:`, {
-        originalAmount: amount,
-        parsedAmount: parsedAmountValue,
-        decimals,
-        rawAmount,
-        rawAmountBigInt: BigInt(rawAmount).toString(),
-        coinSymbol: asset.symbol,
-        activeTab,
-        note:
-          activeTab === "repay"
-            ? "Note: For repay, amount will be converted to note tokens in executeRepayV2"
-            : "Note: For borrow, amount is in underlying tokens",
-      });
-
-      const txHash = await (
-        activeTab === "borrow" ? executeBorrowV2 : executeRepayV2
-      )({
-        amount: rawAmount, // Raw underlying tokens (will be converted to note tokens for repay)
-        coinSymbol: asset.symbol,
-        walletAddress: senderAddress,
-        publicKey,
-        signHash: async (hash: string) => {
-          const response = await signRawHash({
-            address: senderAddress,
-            chainType: "aptos",
-            hash: hash as `0x${string}`,
-          });
-          return { signature: response.signature };
-        },
-        onProgress: (step: string) => {
-          setSubmissionStep(step);
-        },
-      });
-
-      setTxHash(txHash);
-
-      // Clear txHash immediately after a short delay to reset button state
-      // The notification will handle displaying success
-      setTimeout(() => {
-        setTxHash(null);
-      }, 100);
-
-      // Refresh portfolio data after successful transaction (matching MovePosition)
-      // MovePosition calls: postTransactionRefresh(address, brokerNames)
-      // which refreshes: portfolio, wallet balances, and broker data
-      // We wait a bit for transaction to be processed before refreshing
-      setTimeout(async () => {
-        if (walletAddress) {
-          try {
-            // Refresh portfolio data
-            const superClient = new superJsonApiClient.SuperClient({
-              BASE: movementApiBase,
-            });
-            const refreshedPortfolio =
-              await superClient.default.getPortfolio(walletAddress);
-            setPortfolioData(
-              refreshedPortfolio as unknown as PortfolioResponse
-            );
-
-            // Refresh wallet balance using the extracted function
-            await fetchBalance();
-
-            console.log(
-              "[BorrowModal] Portfolio and balance refreshed after transaction"
-            );
-          } catch (refreshError) {
-            console.warn(
-              "[BorrowModal] Error refreshing data after transaction:",
-              refreshError
-            );
-            // Don't fail the transaction if refresh fails
-          }
-        }
-
-        // Call onSuccess callback if provided (for parent component refresh)
-        if (onSuccess) {
-          onSuccess();
-        }
-      }, 1500); // Wait 1.5s for transaction to be processed
-
-      // Reset form state after successful transaction
-      setAmount("");
-      // Note: txHash is cleared above in setTimeout
-    } catch (err: any) {
-      console.error("Transaction error:", err);
-      setSubmitError(
-        err.message ||
-          "Transaction failed. Please check your connection and try again."
-      );
-    } finally {
-      setSubmitting(false);
-    }
-  };
 
   if (!isOpen || !asset) {
     return null;
@@ -984,6 +950,17 @@ export function BorrowModal({
             </span>
           </div>
 
+          {activeTab === "repay" && userBorrowedAmount > 0 && (
+            <div className="flex justify-between items-center">
+              <span className="text-zinc-500 dark:text-zinc-400 text-sm">
+                Available to repay
+              </span>
+              <span className="text-sm font-medium text-zinc-900 dark:text-zinc-50">
+                {maxRepayAmount.toFixed(6)} {asset.symbol}
+              </span>
+            </div>
+          )}
+
           {activeTab === "borrow" && maxBorrowFromPortfolio !== null && (
             <div className="flex justify-between items-center">
               <span className="text-zinc-500 dark:text-zinc-400 text-sm">
@@ -1043,19 +1020,32 @@ export function BorrowModal({
           </div>
         )}
 
-        {/* Review Button */}
+        {/* Success Message - Self-managing, shows for 5 seconds then auto-dismisses */}
+        {displayTxHash && (
+          <TransactionSuccessMessage
+            key={displayTxHash}
+            txHash={displayTxHash}
+            onClose={() => {
+              // Clear displayTxHash when notification closes
+              setDisplayTxHash(null);
+              setShowButtonComplete(false);
+            }}
+          />
+        )}
+
+        {/* Submit Button */}
         <button
           onClick={handleSubmit}
-          disabled={(!canReview || submitting) && !txHash}
+          disabled={(!canReview || submitting) && !displayTxHash}
           className={`w-full font-semibold py-3.5 rounded-lg transition-all duration-200 mt-4 shadow-lg ${
-            txHash
+            displayTxHash && showButtonComplete
               ? "bg-green-600 text-white cursor-pointer"
               : canReview && !submitting
                 ? "bg-blue-600 text-white hover:bg-blue-700 hover:shadow-xl active:scale-[0.98] cursor-pointer"
                 : "bg-zinc-300 dark:bg-zinc-700 text-zinc-500 dark:text-zinc-400 cursor-not-allowed"
           }`}
         >
-          {txHash ? (
+          {displayTxHash && showButtonComplete ? (
             <span className="flex items-center justify-center gap-2">
               <svg
                 className="w-5 h-5"
@@ -1070,29 +1060,7 @@ export function BorrowModal({
                   d="M5 13l4 4L19 7"
                 />
               </svg>
-              Transaction Submitted!
-              <a
-                href={`https://explorer.movementnetwork.xyz/txn/${txHash}?network=mainnet`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="ml-2 underline hover:opacity-80 flex items-center gap-1"
-                onClick={(e) => e.stopPropagation()}
-              >
-                View
-                <svg
-                  className="w-4 h-4"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
-                  />
-                </svg>
-              </a>
+              Transaction Complete
             </span>
           ) : submitting ? (
             <span className="flex items-center justify-center gap-2">

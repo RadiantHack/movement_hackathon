@@ -171,28 +171,21 @@ async function checkAPTBalance(
   accountAddress: string,
   onProgress?: (step: string) => void
 ): Promise<void> {
-  if (onProgress) {
-    onProgress("Checking gas balance...");
-  }
+  const { checkGasBalanceWithFA } = require("@/app/utils/shared/balance-utils");
+  const aptos = getAptos();
 
   try {
-    const aptResource = "0x1::coin::CoinStore<0x1::aptos_coin::AptosCoin>";
-    const accountArgs: AccountArgs = {
-      accountAddress,
-    };
-
-    const resources = await getAptos().getAccountResources(accountArgs);
-    const gasToken: any = resources.find((t: any) => t.type === aptResource);
-    const gasBal = gasToken?.data?.coin?.value || 0;
-    const hasGas = gasBal > 0;
-
-    if (!hasGas) {
-      throw new Error(
-        "Use the faucet in your wallet to get Testnet APT tokens. If you have, try refreshing the page."
-      );
-    }
+    await checkGasBalanceWithFA(aptos, accountAddress, onProgress);
   } catch (e: any) {
-    console.error(e);
+    // If it's our custom error, throw it as-is
+    if (
+      e.message.includes("MOVE") ||
+      e.message.includes("gas") ||
+      e.message.includes("balance")
+    ) {
+      throw new Error(`APT not found: ${e.message || "Unknown error"}`);
+    }
+    // Otherwise, wrap in a user-friendly error
     throw new Error(`APT not found: ${e.message || "Unknown error"}`);
   }
 }

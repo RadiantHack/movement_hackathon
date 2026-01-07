@@ -78,7 +78,9 @@ function PrivyProviderWithConfig({
             rpcUrls: {
               default: {
                 http: [
-                  config.movementLabsUrl || "https://mainnet.movementlabs.xyz",
+                  config.movementLabsUrl ||
+                    "https://mainnet.movementnetwork.xyz/v1",
+                  "https://mainnet.movementnetwork.xyz/v1",
                 ],
               },
             },
