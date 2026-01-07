@@ -60,18 +60,3 @@ export const MOVEMENT_TOKENS: Record<string, TokenInfo> = {
     isVerified: true,
   },
 };
-
-/**
- * Get token info by symbol
- */
-export function getTokenInfo(symbol: string): TokenInfo | null {
-  const upperSymbol = symbol.toUpperCase();
-  return MOVEMENT_TOKENS[upperSymbol] || null;
-}
-
-/**
- * Check if token is native MOVE token
- */
-export function isNativeToken(symbol: string): boolean {
-  return symbol.toUpperCase() === "MOVE";
-}
