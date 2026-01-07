@@ -533,3 +533,73 @@ div.copilotKitMessages {
 .animate-shimmer {
   animation: shimmer 2s ease-in-out infinite;
 }
+
+/* Transaction Success Toast Animations */
+@keyframes slide-in-right {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+@keyframes progress-bar {
+  from {
+    width: 100%;
+  }
+  to {
+    width: 0%;
+  }
+}
+
+.animate-slide-in-right {
+  animation: slide-in-right 0.3s ease-out;
+}
+
+/* Progress Bar Animation for Toast Notifications */
+@keyframes progress-bar {
+  from {
+    width: 100%;
+  }
+  to {
+    width: 0%;
+  }
+}
+
+.animate-progress-bar {
+  animation: progress-bar linear forwards;
+}
+
+/* Enhanced Select and Option Styling */
+select {
+  @apply cursor-pointer;
+}
+
+select option {
+  @apply bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-50 py-2 px-3;
+  padding: 0.5rem 0.75rem !important;
+}
+
+select option:hover {
+  @apply bg-purple-50 dark:bg-purple-950/30;
+}
+
+select option:checked,
+select option:focus {
+  @apply bg-gradient-to-r from-purple-100 to-violet-100 dark:from-purple-950/50 dark:to-violet-950/50 text-purple-700 dark:text-purple-300;
+  font-weight: 600;
+}
+
+/* Better select dropdown appearance */
+select::-ms-expand {
+  display: none;
+}
+
+select {
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+}

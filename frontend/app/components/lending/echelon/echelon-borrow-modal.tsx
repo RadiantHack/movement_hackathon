@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { useEchelonBorrow } from "../../../hooks/useEchelonBorrow";
 import { AssetIcon } from "../../shared/ui";
 import { AssetInfo } from "../../../hooks/useEchelonTransactions";
@@ -61,23 +61,42 @@ export function EchelonBorrowModal({
 }: EchelonBorrowModalProps) {
   const [amount, setAmount] = useState("");
   const [percentage, setPercentage] = useState(0);
-  const [showSuccessMessage, setShowSuccessMessage] = useState(false);
+  const [displayTxHash, setDisplayTxHash] = useState<string | null>(null);
+  // Track last shown txHash to prevent re-showing
+  const lastShownTxHashRef = useRef<string | null>(null);
 
   // Use centralized borrow hook
   const borrow = useEchelonBorrow({
     onSuccess: () => {
-      setShowSuccessMessage(true);
+      // Reset form state after successful transaction
+      setAmount("");
+      setPercentage(0);
       if (onSuccess) {
         onSuccess();
       }
-      // Reset after showing success (250ms)
-      setTimeout(() => {
-        setShowSuccessMessage(false);
-        setAmount("");
-        setPercentage(0);
-      }, 250);
     },
   });
+
+  // Show notification when txHash appears - only if it's a new txHash
+  useEffect(() => {
+    if (borrow.txHash && borrow.txHash !== lastShownTxHashRef.current) {
+      // Only show if this is a new txHash we haven't shown before
+      setDisplayTxHash(borrow.txHash);
+      lastShownTxHashRef.current = borrow.txHash;
+      // Reset amount input when transaction completes
+      setAmount("");
+    } else if (!borrow.txHash) {
+      setDisplayTxHash(null);
+    }
+  }, [borrow.txHash]);
+
+  // Clear displayTxHash when modal closes, reset tracking
+  useEffect(() => {
+    if (!isOpen) {
+      setDisplayTxHash(null);
+      lastShownTxHashRef.current = null;
+    }
+  }, [isOpen]);
 
   if (!isOpen || !asset) return null;
 
@@ -406,8 +425,17 @@ export function EchelonBorrowModal({
         )}
 
         {/* Success Message */}
-        {borrow.txHash && showSuccessMessage && (
-          <TransactionSuccessMessage txHash={borrow.txHash} />
+        {/* Success Message - Self-managing, shows for 5 seconds then auto-dismisses */}
+        {displayTxHash && (
+          <TransactionSuccessMessage
+            key={displayTxHash}
+            txHash={displayTxHash}
+            onClose={() => {
+              // Clear displayTxHash immediately when notification closes
+              // This prevents it from showing again - notification is non-persistent
+              setDisplayTxHash(null);
+            }}
+          />
         )}
 
         {/* Borrow Button */}

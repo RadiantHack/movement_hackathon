@@ -1,9 +1,12 @@
 "use client";
 
 import React, { useState, useEffect, useMemo } from "react";
-import { BorrowCard, LendCard } from "./moveposition";
+import { BorrowModal, SupplyModal } from "./moveposition";
 import { EchelonBorrowModal, EchelonSupplyModal } from "./echelon";
+import { getTokenBySymbol } from "../../utils/shared/tokens";
 import { MARKET_TO_SYMBOL } from "../../constants/echelon";
+import * as superJsonApiClient from "../../../lib/super-json-api-client/src";
+import { getMovementApiBase } from "@/lib/super-aptos-sdk/src/globals";
 
 interface PlatformSelectionCardProps {
   action: "borrow" | "lend";
@@ -309,18 +312,177 @@ export const PlatformSelectionCard: React.FC<PlatformSelectionCardProps> = ({
     }
   };
 
+  // Fetch MovePosition asset data and health factor (hooks must be at top level)
+  const assetSymbol = asset ? asset.toUpperCase() : "";
+  const token = assetSymbol ? getTokenBySymbol(assetSymbol) : null;
+  const [movePositionSupplyAsset, setMovePositionSupplyAsset] = useState<{
+    token: any | null;
+    symbol: string;
+    price: number;
+    supplyApy: number;
+    totalSupplied: number;
+  } | null>(null);
+  const [movePositionBorrowAsset, setMovePositionBorrowAsset] = useState<{
+    token: any | null;
+    symbol: string;
+    price: number;
+    borrowApy: number;
+    availableLiquidity: number;
+  } | null>(null);
+  const [healthFactor, setHealthFactor] = useState<number | null>(null);
+  const [isLoadingMovePosition, setIsLoadingMovePosition] = useState(false);
+
+  // Fetch MovePosition data when MovePosition is selected
+  useEffect(() => {
+    if (selectedPlatform === "moveposition" && walletAddress && assetSymbol) {
+      const fetchData = async () => {
+        setIsLoadingMovePosition(true);
+        try {
+          const movementApiBase = getMovementApiBase();
+          const superClient = new superJsonApiClient.SuperClient({
+            BASE: movementApiBase,
+          });
+
+          // Fetch brokers and portfolio in parallel
+          const [brokers, portfolio] = await Promise.all([
+            superClient.default.getBrokers(),
+            superClient.default.getPortfolio(walletAddress),
+          ]);
+
+          // Find the broker for this asset
+          const getSymbolFromName = (name: string): string => {
+            if (!name) return "UNKNOWN";
+            const trimmed = name.replace(/^movement[- ]/i, "");
+            if (trimmed.toLowerCase() === "move-fa") return "MOVE";
+            return trimmed.replace(/-/g, "").toUpperCase();
+          };
+
+          const formatAmount = (value: string, decimals: number): number => {
+            const parsed = Number(value);
+            if (Number.isNaN(parsed)) return 0;
+            return parsed / Math.pow(10, decimals);
+          };
+
+          const broker = (brokers as any[]).find((b: any) => {
+            const symbol = getSymbolFromName(b.underlyingAsset?.name || "");
+            return symbol === assetSymbol;
+          });
+
+          if (broker) {
+            const availableLiquidity = formatAmount(
+              broker.availableLiquidityUnderlying || "0",
+              broker.underlyingAsset?.decimals || 8
+            );
+            const totalBorrowed = formatAmount(
+              broker.totalBorrowedUnderlying || "0",
+              broker.underlyingAsset?.decimals || 8
+            );
+            const totalSupplied = availableLiquidity + totalBorrowed;
+
+            const interestFeeRate = broker.interestFeeRate ?? 0.22;
+            const currentSupplyApy =
+              (broker.utilization || 0) *
+              (broker.interestRate || 0) *
+              (1 - interestFeeRate);
+
+            const price = broker.underlyingAsset?.price || 0;
+            const borrowApy = (broker.interestRate || 0) * 100;
+
+            // Set supply asset data
+            if (action === "lend") {
+              setMovePositionSupplyAsset({
+                token,
+                symbol: assetSymbol,
+                price,
+                supplyApy: currentSupplyApy * 100,
+                totalSupplied,
+              });
+            }
+
+            // Set borrow asset data
+            if (action === "borrow") {
+              setMovePositionBorrowAsset({
+                token,
+                symbol: assetSymbol,
+                price,
+                borrowApy,
+                availableLiquidity,
+              });
+            }
+          }
+
+          // Get health factor from portfolio
+          const hf = (portfolio as any)?.evaluation?.health_ratio || null;
+          setHealthFactor(hf);
+        } catch (error) {
+          console.error("Error fetching MovePosition data:", error);
+        } finally {
+          setIsLoadingMovePosition(false);
+        }
+      };
+
+      fetchData();
+    } else {
+      // Reset when not needed
+      setMovePositionSupplyAsset(null);
+      setMovePositionBorrowAsset(null);
+      setHealthFactor(null);
+      setIsLoadingMovePosition(false);
+    }
+  }, [selectedPlatform, action, walletAddress, assetSymbol, token]);
+
   // If platform is selected, show the appropriate card inline
   if (selectedPlatform === "moveposition") {
     if (action === "borrow") {
+      // Use BorrowModal instead of BorrowCard for consistency
+      if (isLoadingMovePosition || !movePositionBorrowAsset) {
+        return (
+          <div className="my-3 p-4 text-center text-zinc-500">Loading...</div>
+        );
+      }
+
       return (
-        <div className="my-3">
-          <BorrowCard walletAddress={walletAddress} asset={asset} />
+        <div className="my-3 max-w-lg mx-auto">
+          <BorrowModal
+            isOpen={true}
+            onClose={handleCloseModals}
+            inline={true}
+            asset={{
+              token: movePositionBorrowAsset.token,
+              symbol: movePositionBorrowAsset.symbol,
+              price: movePositionBorrowAsset.price,
+              borrowApy: movePositionBorrowAsset.borrowApy,
+              availableLiquidity: movePositionBorrowAsset.availableLiquidity,
+            }}
+            walletAddress={walletAddress}
+            healthFactor={healthFactor}
+          />
         </div>
       );
     } else {
+      // Use SupplyModal instead of LendCard for consistency
+      if (isLoadingMovePosition || !movePositionSupplyAsset) {
+        return (
+          <div className="my-3 p-4 text-center text-zinc-500">Loading...</div>
+        );
+      }
+
       return (
-        <div className="my-3">
-          <LendCard walletAddress={walletAddress} asset={asset} />
+        <div className="my-3 max-w-lg mx-auto">
+          <SupplyModal
+            isOpen={true}
+            onClose={handleCloseModals}
+            inline={true}
+            asset={{
+              token: movePositionSupplyAsset.token,
+              symbol: movePositionSupplyAsset.symbol,
+              price: movePositionSupplyAsset.price,
+              supplyApy: movePositionSupplyAsset.supplyApy,
+              totalSupplied: movePositionSupplyAsset.totalSupplied,
+            }}
+            walletAddress={walletAddress}
+            healthFactor={healthFactor}
+          />
         </div>
       );
     }

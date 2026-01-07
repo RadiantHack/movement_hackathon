@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { useEchelonSupply } from "../../../hooks/useEchelonSupply";
 import { AssetIcon } from "../../shared/ui";
 import { AssetInfo } from "../../../hooks/useEchelonTransactions";
@@ -64,23 +64,42 @@ export function EchelonSupplyModal({
 }: EchelonSupplyModalProps) {
   const [amount, setAmount] = useState("");
   const [percentage, setPercentage] = useState(0);
-  const [showSuccessMessage, setShowSuccessMessage] = useState(false);
+  const [displayTxHash, setDisplayTxHash] = useState<string | null>(null);
+  // Track last shown txHash to prevent re-showing
+  const lastShownTxHashRef = useRef<string | null>(null);
 
   // Use centralized supply hook
   const supply = useEchelonSupply({
     onSuccess: () => {
-      setShowSuccessMessage(true);
+      // Reset form state after successful transaction
+      setAmount("");
+      setPercentage(0);
       if (onSuccess) {
         onSuccess();
       }
-      // Reset after showing success (250ms)
-      setTimeout(() => {
-        setShowSuccessMessage(false);
-        setAmount("");
-        setPercentage(0);
-      }, 250);
     },
   });
+
+  // Show notification when txHash appears - only if it's a new txHash
+  useEffect(() => {
+    if (supply.txHash && supply.txHash !== lastShownTxHashRef.current) {
+      // Only show if this is a new txHash we haven't shown before
+      setDisplayTxHash(supply.txHash);
+      lastShownTxHashRef.current = supply.txHash;
+      // Reset amount input when transaction completes
+      setAmount("");
+    } else if (!supply.txHash) {
+      setDisplayTxHash(null);
+    }
+  }, [supply.txHash]);
+
+  // Clear displayTxHash when modal closes, reset tracking
+  useEffect(() => {
+    if (!isOpen) {
+      setDisplayTxHash(null);
+      lastShownTxHashRef.current = null;
+    }
+  }, [isOpen]);
 
   if (!isOpen || !asset) return null;
 
@@ -288,8 +307,17 @@ export function EchelonSupplyModal({
         )}
 
         {/* Success Message */}
-        {supply.txHash && showSuccessMessage && (
-          <TransactionSuccessMessage txHash={supply.txHash} />
+        {/* Success Message - Self-managing, shows for 5 seconds then auto-dismisses */}
+        {displayTxHash && (
+          <TransactionSuccessMessage
+            key={displayTxHash}
+            txHash={displayTxHash}
+            onClose={() => {
+              // Clear displayTxHash immediately when notification closes
+              // This prevents it from showing again - notification is non-persistent
+              setDisplayTxHash(null);
+            }}
+          />
         )}
 
         {/* Supply Button */}
@@ -307,7 +335,7 @@ export function EchelonSupplyModal({
                 : "bg-zinc-100 dark:bg-zinc-800 text-zinc-400 dark:text-zinc-500 cursor-not-allowed"
           }`}
         >
-          {supply.txHash ? (
+          {displayTxHash ? (
             <span className="flex items-center justify-center gap-2">
               <svg
                 className="w-5 h-5"

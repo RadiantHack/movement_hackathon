@@ -37,21 +37,20 @@ export default function SwapPage() {
 
   return (
     <AuthGuard>
-      <div className="flex h-screen w-full overflow-hidden bg-zinc-50 dark:bg-black">
+      <div className="flex min-h-screen bg-zinc-50 dark:bg-zinc-950">
         <Sidebar
           isOpen={isSidebarOpen}
           onClose={() => setIsSidebarOpen(false)}
         />
 
-        <div className="flex flex-1 flex-col overflow-hidden border-x border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
-          {/* Mobile Header */}
-          <div className="flex items-center justify-between border-b border-zinc-200 bg-white px-4 py-3 dark:border-zinc-800 dark:bg-zinc-900! md:hidden">
+        <main className="flex-1 overflow-auto">
+          <div className="sticky top-0 z-30 flex items-center justify-between border-b border-zinc-200 bg-zinc-50/80 p-4 backdrop-blur-sm dark:border-zinc-800 dark:bg-zinc-950/80 md:hidden">
             <button
               onClick={() => setIsSidebarOpen(true)}
-              className="rounded-md p-2 text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
+              className="rounded-md p-2 text-zinc-500 hover:bg-zinc-200 dark:text-zinc-400 dark:hover:bg-zinc-800"
             >
               <svg
-                className="h-6 w-6"
+                className="h-5 w-5"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -64,15 +63,15 @@ export default function SwapPage() {
                 />
               </svg>
             </button>
-            <span className="font-semibold text-zinc-900 dark:text-zinc-100">
+            <h1 className="text-lg font-semibold text-zinc-950 dark:text-zinc-50">
               Swap
-            </span>
+            </h1>
             <button
               onClick={() => setIsRightSidebarOpen(true)}
-              className="rounded-md p-2 text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800"
+              className="rounded-md p-2 text-zinc-500 hover:bg-zinc-200 dark:text-zinc-400 dark:hover:bg-zinc-800"
             >
               <svg
-                className="h-6 w-6"
+                className="h-5 w-5"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -87,26 +86,30 @@ export default function SwapPage() {
             </button>
           </div>
 
-          {/* Desktop Header */}
-          <div className="hidden shrink-0 border-b flex-row border-zinc-200 bg-white px-6 py-4 dark:border-zinc-800 dark:bg-zinc-900 md:flex">
-            <div className="flex flex-row items-center justify-between w-full">
-              <div>
-                <h1 className="text-xl font-semibold text-zinc-950 dark:text-zinc-50">
-                  Token Swap
-                </h1>
-                <p className="text-sm text-zinc-600 dark:text-zinc-400">
-                  Swap tokens on Movement Network
-                </p>
-              </div>
+          <div className="hidden border-b border-zinc-200 dark:border-zinc-800 md:block">
+            <div className="flex items-center justify-between px-8 py-4">
+              <h1 className="text-xl font-semibold text-zinc-950 dark:text-zinc-50">
+                Token Swap
+              </h1>
               <ThemeToggle />
             </div>
           </div>
 
-          {/* Swap Content */}
-          <div className="flex flex-1 items-center justify-center overflow-y-auto p-4 md:p-8">
-            <SwapCard walletAddress={walletAddress} />
+          <div className="p-4 md:p-8">
+            <div className="mx-auto max-w-lg">
+              <div className="relative rounded-3xl border border-zinc-200/80 dark:border-zinc-700/50 bg-white dark:bg-zinc-900 p-8 shadow-xl shadow-zinc-200/50 dark:shadow-zinc-950/50 overflow-hidden">
+                {/* Background decoration */}
+                <div className="absolute -top-24 -right-24 w-48 h-48 bg-gradient-to-br from-purple-500/10 to-violet-500/10 rounded-full blur-3xl" />
+                <div className="absolute -bottom-24 -left-24 w-48 h-48 bg-gradient-to-tr from-purple-500/10 to-violet-500/10 rounded-full blur-3xl" />
+
+                {/* Swap Card Content */}
+                <div className="relative">
+                  <SwapCard walletAddress={walletAddress} />
+                </div>
+              </div>
+            </div>
           </div>
-        </div>
+        </main>
 
         <RightSidebar
           isOpen={isRightSidebarOpen}

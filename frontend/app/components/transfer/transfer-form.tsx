@@ -35,7 +35,6 @@ export const TransferForm: React.FC<TransferFormProps> = ({
   const [toAddress, setToAddress] = useState("");
   const [tokenDropdownOpen, setTokenDropdownOpen] = useState(false);
   const [showQRScanner, setShowQRScanner] = useState(false);
-  const [showSuccessMessage, setShowSuccessMessage] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
   const hasManuallySelectedToken = useRef(false);
 
@@ -53,6 +52,10 @@ export const TransferForm: React.FC<TransferFormProps> = ({
     return config.movementChainId || 126;
   }, [config.movementChainId]);
 
+  const [displayTxHash, setDisplayTxHash] = useState<string | null>(null);
+  // Track last shown txHash to prevent re-showing
+  const lastShownTxHashRef = useRef<string | null>(null);
+
   // Use transfer hook for centralized transfer logic
   const {
     transferring,
@@ -64,15 +67,25 @@ export const TransferForm: React.FC<TransferFormProps> = ({
     aptos,
     movementChainId,
     onSuccess: () => {
-      setShowSuccessMessage(true);
-      setTimeout(() => {
-        setShowSuccessMessage(false);
-        setAmount("");
-        setToAddress("");
-      }, 250);
+      // Reset form state after successful transaction
+      setAmount("");
+      setToAddress("");
       onTransferComplete?.();
     },
   });
+
+  // Show notification when txHash appears - only if it's a new txHash
+  useEffect(() => {
+    if (txHash && txHash !== lastShownTxHashRef.current) {
+      // Only show if this is a new txHash we haven't shown before
+      setDisplayTxHash(txHash);
+      lastShownTxHashRef.current = txHash;
+      // Reset amount input when transaction completes
+      setAmount("");
+    } else if (!txHash) {
+      setDisplayTxHash(null);
+    }
+  }, [txHash]);
 
   // Initialize token selection - only set if not already selected or when initialToken changes
   useEffect(() => {
@@ -426,9 +439,17 @@ export const TransferForm: React.FC<TransferFormProps> = ({
             </div>
           )}
 
-          {/* Success Message */}
-          {txHash && showSuccessMessage && (
-            <TransactionSuccessMessage txHash={txHash} />
+          {/* Success Message - Self-managing, shows for 5 seconds then auto-dismisses */}
+          {displayTxHash && (
+            <TransactionSuccessMessage
+              key={displayTxHash}
+              txHash={displayTxHash}
+              onClose={() => {
+                // Clear displayTxHash immediately when notification closes
+                // This prevents it from showing again - notification is non-persistent
+                setDisplayTxHash(null);
+              }}
+            />
           )}
 
           {/* Transfer Button */}

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo, useEffect, useRef } from "react";
 import { usePrivy } from "@privy-io/react-auth";
 import { useMovementWallet } from "../../hooks/useMovementWallet";
 import { getTokenBySymbol, getAllTokens } from "../../utils/shared/tokens";
@@ -83,7 +83,6 @@ export const SwapCard: React.FC<SwapCardProps> = ({
   const [fromBalance, setFromBalance] = useState<string | null>(null);
   const [toBalance, setToBalance] = useState<string | null>(null);
   const [loadingFromBalance, setLoadingFromBalance] = useState(false);
-  const [showSuccessMessage, setShowSuccessMessage] = useState(false);
   const [loadingToBalance, setLoadingToBalance] = useState(false);
   const [loadingQuote, setLoadingQuote] = useState(false);
   const [quote, setQuote] = useState<MosaicQuoteResponse | null>(null);
@@ -138,20 +137,32 @@ export const SwapCard: React.FC<SwapCardProps> = ({
 
   const movementWallet = useMovementWallet();
 
+  const [displayTxHash, setDisplayTxHash] = useState<string | null>(null);
+  // Track last shown txHash to prevent re-showing
+  const lastShownTxHashRef = useRef<string | null>(null);
+
   // Use swap hook for centralized swap logic
   const swap = useSwap({
     aptos,
     movementChainId,
     onSuccess: () => {
-      setShowSuccessMessage(true);
-      setTimeout(() => {
-        setShowSuccessMessage(false);
-        setFromAmount("");
-        setToAmount("");
-        setQuote(null);
-      }, 250);
+      // Reset form state after successful transaction
+      setFromAmount("");
+      setToAmount("");
+      setQuote(null);
     },
   });
+
+  // Show notification when txHash appears - only if it's a new txHash
+  useEffect(() => {
+    if (swap.txHash && swap.txHash !== lastShownTxHashRef.current) {
+      // Only show if this is a new txHash we haven't shown before
+      setDisplayTxHash(swap.txHash);
+      lastShownTxHashRef.current = swap.txHash;
+    } else if (!swap.txHash) {
+      setDisplayTxHash(null);
+    }
+  }, [swap.txHash]);
 
   // Fetch balance for fromToken
   useEffect(() => {
@@ -415,7 +426,7 @@ export const SwapCard: React.FC<SwapCardProps> = ({
 
   return (
     <div className="w-full">
-      <div className="relative rounded-2xl overflow-hidden">
+      <div className="relative rounded-xl overflow-hidden">
         {/* Enhanced background decoration */}
         <div className="absolute -top-32 -right-32 w-64 h-64 bg-gradient-to-br from-purple-500/15 via-violet-500/10 to-purple-500/15 rounded-full blur-3xl animate-pulse" />
         <div
@@ -425,12 +436,12 @@ export const SwapCard: React.FC<SwapCardProps> = ({
         {/* Subtle grid pattern */}
         <div className="absolute inset-0 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px] opacity-30" />
 
-        <div className="p-4 sm:p-5 md:p-6">
+        <div className="p-3 sm:p-4">
           {/* Header */}
-          <div className="relative flex items-center gap-2 sm:gap-3 mb-3 sm:mb-5">
-            <div className="flex h-8 w-8 sm:h-10 sm:w-10 items-center justify-center rounded-lg sm:rounded-xl bg-gradient-to-br from-purple-500 to-violet-600 shadow-lg shadow-purple-500/30">
+          <div className="relative flex items-center gap-2 mb-2 sm:mb-3">
+            <div className="flex h-7 w-7 sm:h-8 sm:w-8 items-center justify-center rounded-lg bg-gradient-to-br from-purple-500 to-violet-600 shadow-md shadow-purple-500/30">
               <svg
-                className="w-4 h-4 sm:w-5 sm:h-5 text-white"
+                className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -444,10 +455,10 @@ export const SwapCard: React.FC<SwapCardProps> = ({
               </svg>
             </div>
             <div>
-              <h2 className="text-base sm:text-lg font-bold text-zinc-900 dark:text-zinc-50">
+              <h2 className="text-sm sm:text-base font-bold text-zinc-900 dark:text-zinc-50">
                 Swap Tokens
               </h2>
-              <p className="text-[10px] sm:text-xs text-zinc-500 dark:text-zinc-400">
+              <p className="text-[9px] sm:text-[10px] text-zinc-500 dark:text-zinc-400">
                 Exchange tokens on Movement
               </p>
             </div>
@@ -472,7 +483,7 @@ export const SwapCard: React.FC<SwapCardProps> = ({
                 <select
                   value={fromToken}
                   onChange={(e) => setFromToken(e.target.value)}
-                  className="flex-shrink-0 w-[85px] sm:w-[95px] md:w-[100px] px-1.5 sm:px-2 py-2 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-50 font-semibold focus:outline-none focus:ring-2 focus:ring-purple-500/50 cursor-pointer text-[10px] sm:text-xs truncate"
+                  className="flex-shrink-0 w-[85px] sm:w-[95px] md:w-[100px] px-2 sm:px-2.5 py-2 rounded-xl border border-zinc-300/80 dark:border-zinc-600/60 bg-gradient-to-br from-white to-zinc-50 dark:from-zinc-800 dark:to-zinc-900 text-zinc-900 dark:text-zinc-50 font-semibold focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-400 dark:focus:border-purple-500 cursor-pointer text-[10px] sm:text-xs truncate shadow-sm hover:shadow-md hover:border-purple-300 dark:hover:border-purple-600 transition-all duration-200 appearance-none bg-[url('data:image/svg+xml;charset=UTF-8,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22currentColor%22 stroke-width=%222%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Cpath d=%22M6 9l6 6 6-6%22/%3E%3C/svg%3E')] bg-no-repeat bg-[length:16px_16px] bg-[right_8px_center] pr-7 sm:pr-8"
                   disabled={swap.swapping}
                 >
                   {availableTokens.map((token) => (
@@ -560,7 +571,7 @@ export const SwapCard: React.FC<SwapCardProps> = ({
                 <select
                   value={toToken}
                   onChange={(e) => setToToken(e.target.value)}
-                  className="flex-shrink-0 w-[85px] sm:w-[95px] md:w-[100px] px-2 sm:px-2.5 py-2 rounded-lg border border-zinc-200/80 dark:border-zinc-700/60 bg-white/90 dark:bg-zinc-800/90 backdrop-blur-sm text-zinc-900 dark:text-zinc-50 font-bold focus:outline-none focus:ring-2 focus:ring-purple-500/40 cursor-pointer text-[10px] sm:text-xs truncate hover:border-purple-300/60 dark:hover:border-purple-600/60 transition-all duration-200"
+                  className="flex-shrink-0 w-[85px] sm:w-[95px] md:w-[100px] px-2 sm:px-2.5 py-2 rounded-xl border border-zinc-300/80 dark:border-zinc-600/60 bg-gradient-to-br from-white to-zinc-50 dark:from-zinc-800 dark:to-zinc-900 text-zinc-900 dark:text-zinc-50 font-semibold focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-400 dark:focus:border-purple-500 cursor-pointer text-[10px] sm:text-xs truncate shadow-sm hover:shadow-md hover:border-purple-300 dark:hover:border-purple-600 transition-all duration-200 appearance-none bg-[url('data:image/svg+xml;charset=UTF-8,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 24 24%22 fill=%22none%22 stroke=%22currentColor%22 stroke-width=%222%22 stroke-linecap=%22round%22 stroke-linejoin=%22round%22%3E%3Cpath d=%22M6 9l6 6 6-6%22/%3E%3C/svg%3E')] bg-no-repeat bg-[length:16px_16px] bg-[right_8px_center] pr-7 sm:pr-8"
                   disabled={swap.swapping}
                 >
                   {availableTokens.map((token) => (
@@ -649,9 +660,17 @@ export const SwapCard: React.FC<SwapCardProps> = ({
             </div>
           )}
 
-          {/* Success Message */}
-          {swap.txHash && showSuccessMessage && (
-            <TransactionSuccessMessage txHash={swap.txHash} />
+          {/* Success Message - Self-managing, shows for 5 seconds then auto-dismisses */}
+          {displayTxHash && (
+            <TransactionSuccessMessage
+              key={displayTxHash}
+              txHash={displayTxHash}
+              onClose={() => {
+                // Clear displayTxHash immediately when notification closes
+                // This prevents it from showing again - notification is non-persistent
+                setDisplayTxHash(null);
+              }}
+            />
           )}
 
           {/* Swap Button */}

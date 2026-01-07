@@ -13,6 +13,7 @@ import {
 import { executeBorrowV2, executeRepayV2 } from "../../../utils/moveposition";
 import * as superJsonApiClient from "../../../../lib/super-json-api-client/src";
 import { getMovementApiBase } from "@/lib/super-aptos-sdk/src/globals";
+import { useTokenBalance } from "../../../hooks/useTokenBalance";
 
 interface BorrowModalProps {
   isOpen: boolean;
@@ -27,6 +28,7 @@ interface BorrowModalProps {
   walletAddress: string | null;
   healthFactor: number | null;
   onSuccess?: () => void; // Callback after successful transaction (for portfolio refresh)
+  inline?: boolean; // If true, renders inline without backdrop (for chat)
 }
 
 interface PortfolioResponse {
@@ -64,18 +66,6 @@ interface PortfolioResponse {
   maxBorrow?: Record<string, string>;
 }
 
-interface TokenBalance {
-  assetType: string;
-  amount: string;
-  formattedAmount: string;
-  metadata: {
-    name: string;
-    symbol: string;
-    decimals: number;
-  };
-  isNative: boolean;
-}
-
 export function BorrowModal({
   isOpen,
   onClose,
@@ -83,6 +73,7 @@ export function BorrowModal({
   walletAddress,
   healthFactor,
   onSuccess,
+  inline = false,
 }: BorrowModalProps) {
   const { user, ready, authenticated } = usePrivy();
   const { signRawHash } = useSignRawHash();
@@ -92,8 +83,6 @@ export function BorrowModal({
   const [activeTab, setActiveTab] = useState<"borrow" | "repay">("borrow");
   const [amount, setAmount] = useState("");
   const [showMore, setShowMore] = useState(false);
-  const [balance, setBalance] = useState<string | null>(null);
-  const [loadingBalance, setLoadingBalance] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [txHash, setTxHash] = useState<string | null>(null);
@@ -106,7 +95,6 @@ export function BorrowModal({
   const [loadingSimulation, setLoadingSimulation] = useState(false);
   const [loadingPortfolio, setLoadingPortfolio] = useState(false);
   const [submissionStep, setSubmissionStep] = useState<string>("");
-  const [showSuccessMessage, setShowSuccessMessage] = useState(false);
 
   // Risk simulation state (matching MovePosition)
   const [simHealthFactor, setSimHealthFactor] = useState<number>(0);
@@ -118,13 +106,24 @@ export function BorrowModal({
 
   const movementWallet = useMovementWallet();
 
+  // Use shared hook for token balance
+  const {
+    balance,
+    loading: loadingBalance,
+    refresh: fetchBalance,
+  } = useTokenBalance({
+    walletAddress,
+    tokenSymbol: asset?.symbol || null,
+    enabled: isOpen,
+    autoRefresh: true,
+  });
+
   useEffect(() => {
     if (!isOpen) {
       setAmount("");
       setShowMore(false);
       setActiveTab("borrow");
       setTxHash(null);
-      setShowSuccessMessage(false);
       setSubmitError(null);
       setSubmissionStep("");
       return;
@@ -142,62 +141,14 @@ export function BorrowModal({
     };
   }, [isOpen]);
 
+  // Balance is automatically fetched by useTokenBalance hook
+
+  // Reset amount input when transaction completes (when txHash appears)
   useEffect(() => {
-    if (!walletAddress || !asset?.symbol || !isOpen) {
-      setBalance(null);
-      return;
+    if (txHash) {
+      setAmount("");
     }
-
-    const fetchBalance = async () => {
-      setLoadingBalance(true);
-      try {
-        const response = await fetch(
-          `/api/balance?address=${encodeURIComponent(walletAddress)}`
-        );
-
-        if (!response.ok) {
-          throw new Error("Failed to fetch balance");
-        }
-
-        const data = await response.json();
-
-        if (data.success && data.balances && data.balances.length > 0) {
-          const normalizedToken = asset.symbol
-            .toUpperCase()
-            .replace(/\./g, "")
-            .trim();
-
-          const tokenBalance = data.balances.find((b: TokenBalance) => {
-            const normalizedSymbol = b.metadata.symbol
-              .toUpperCase()
-              .replace(/\./g, "")
-              .trim();
-
-            return (
-              normalizedSymbol === normalizedToken ||
-              normalizedSymbol.startsWith(normalizedToken) ||
-              normalizedToken.startsWith(normalizedSymbol)
-            );
-          });
-
-          if (tokenBalance) {
-            setBalance(tokenBalance.formattedAmount);
-          } else {
-            setBalance("0.000000");
-          }
-        } else {
-          setBalance("0.000000");
-        }
-      } catch (error) {
-        console.error("Error fetching balance:", error);
-        setBalance("0.000000");
-      } finally {
-        setLoadingBalance(false);
-      }
-    };
-
-    fetchBalance();
-  }, [walletAddress, asset?.symbol, isOpen]);
+  }, [txHash]);
 
   useEffect(() => {
     if (!walletAddress || !isOpen || !asset) {
@@ -784,7 +735,12 @@ export function BorrowModal({
       });
 
       setTxHash(txHash);
-      setShowSuccessMessage(true);
+
+      // Clear txHash immediately after a short delay to reset button state
+      // The notification will handle displaying success
+      setTimeout(() => {
+        setTxHash(null);
+      }, 100);
 
       // Refresh portfolio data after successful transaction (matching MovePosition)
       // MovePosition calls: postTransactionRefresh(address, brokerNames)
@@ -803,24 +759,8 @@ export function BorrowModal({
               refreshedPortfolio as unknown as PortfolioResponse
             );
 
-            // Refresh wallet balance
-            if (asset?.symbol) {
-              const balanceResponse = await fetch(
-                `/api/balance?address=${encodeURIComponent(walletAddress)}&token=${encodeURIComponent(asset.symbol)}`
-              );
-              if (balanceResponse.ok) {
-                const balanceData = await balanceResponse.json();
-                if (balanceData.success && balanceData.balances?.length > 0) {
-                  const tokenBalance = balanceData.balances.find((b: any) => {
-                    const symbol = (b.metadata?.symbol || "").toUpperCase();
-                    return symbol === asset.symbol.toUpperCase();
-                  });
-                  if (tokenBalance) {
-                    setBalance(tokenBalance.formattedAmount || "0");
-                  }
-                }
-              }
-            }
+            // Refresh wallet balance using the extracted function
+            await fetchBalance();
 
             console.log(
               "[BorrowModal] Portfolio and balance refreshed after transaction"
@@ -840,12 +780,9 @@ export function BorrowModal({
         }
       }, 1500); // Wait 1.5s for transaction to be processed
 
-      // Show explorer link on button for 250ms, then reset to initial state
-      setTimeout(() => {
-        setShowSuccessMessage(false);
-        setTxHash(null);
-        setAmount("");
-      }, 250);
+      // Reset form state after successful transaction
+      setAmount("");
+      // Note: txHash is cleared above in setTimeout
     } catch (err: any) {
       console.error("Transaction error:", err);
       setSubmitError(
@@ -861,14 +798,18 @@ export function BorrowModal({
     return null;
   }
 
-  return (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80 backdrop-blur-sm">
-      <div className="relative w-full max-w-md rounded-2xl bg-white dark:bg-zinc-900 shadow-2xl">
-        {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-zinc-200 dark:border-zinc-800">
-          <h2 className="text-xl font-semibold text-zinc-950 dark:text-zinc-50">
-            Borrow {asset.symbol}
-          </h2>
+  const baseClasses = inline
+    ? "w-full max-w-md mx-auto rounded-2xl bg-white dark:bg-zinc-900 shadow-lg"
+    : "relative w-full max-w-md rounded-2xl bg-white dark:bg-zinc-900 shadow-2xl";
+
+  const content = (
+    <div className={baseClasses}>
+      {/* Header */}
+      <div className="flex items-center justify-between p-6 border-b border-zinc-200 dark:border-zinc-800">
+        <h2 className="text-xl font-semibold text-zinc-950 dark:text-zinc-50">
+          {activeTab === "borrow" ? "Borrow" : "Repay"} {asset.symbol}
+        </h2>
+        {!inline && (
           <button
             onClick={onClose}
             className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors"
@@ -887,339 +828,344 @@ export function BorrowModal({
               />
             </svg>
           </button>
-        </div>
+        )}
+      </div>
 
-        {/* Tabs */}
-        <div className="flex p-2 gap-2 border-b border-zinc-200 dark:border-zinc-800">
-          <button
-            onClick={() => {
-              setActiveTab("borrow");
-              setAmount("");
-            }}
-            className={`flex-1 py-3 text-sm rounded-md font-medium transition-colors ${
-              activeTab === "borrow"
-                ? "bg-blue-600 text-white"
-                : "bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200"
-            }`}
-          >
-            Borrow
-          </button>
-          <button
-            onClick={() => {
-              setActiveTab("repay");
-              setAmount("");
-            }}
-            className={`flex-1 py-3 text-sm font-medium rounded-md transition-colors ${
-              activeTab === "repay"
-                ? "bg-blue-600 text-white"
-                : "bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200"
-            }`}
-          >
-            Repay
-          </button>
-        </div>
+      {/* Tabs */}
+      <div className="flex p-2 gap-2 border-b border-zinc-200 dark:border-zinc-800">
+        <button
+          onClick={() => {
+            setActiveTab("borrow");
+            setAmount("");
+          }}
+          className={`flex-1 py-3 text-sm rounded-md font-medium transition-colors ${
+            activeTab === "borrow"
+              ? "bg-blue-600 text-white"
+              : "bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200"
+          }`}
+        >
+          Borrow
+        </button>
+        <button
+          onClick={() => {
+            setActiveTab("repay");
+            setAmount("");
+          }}
+          className={`flex-1 py-3 text-sm font-medium rounded-md transition-colors ${
+            activeTab === "repay"
+              ? "bg-blue-600 text-white"
+              : "bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200"
+          }`}
+        >
+          Repay
+        </button>
+      </div>
 
-        {/* Form Content */}
-        <div className="p-6">
-          {/* Amount Input */}
-          <div className="mb-6">
-            <div className="flex items-center gap-3 mb-4">
-              {asset.token?.iconUri ? (
-                <img
-                  src={asset.token.iconUri}
-                  alt={asset.symbol}
-                  className="w-10 h-10 rounded-full"
-                />
-              ) : (
-                <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center">
-                  <span className="text-white font-bold text-sm">
-                    {asset.symbol.charAt(0)}
-                  </span>
-                </div>
-              )}
-              <div className="flex-1">
-                <input
-                  type="text"
-                  value={amount}
-                  onChange={(e) => handleAmountChange(e.target.value)}
-                  placeholder="0"
-                  className="w-full bg-transparent text-4xl text-zinc-500 dark:text-zinc-400 font-light outline-none"
-                />
-                <div className="text-zinc-500 dark:text-zinc-400 text-sm mt-1">
-                  ${usdValue.toFixed(2)}
-                </div>
-              </div>
-              <button
-                onClick={handleMax}
-                className="px-4 py-1 bg-blue-500 text-white text-sm font-medium rounded hover:bg-blue-400 transition-colors"
-              >
-                Max
-              </button>
-            </div>
-          </div>
-
-          {/* Stats */}
-          <div className="space-y-3 mb-4">
-            <div className="flex justify-between items-center">
-              <span className="text-zinc-500 dark:text-zinc-400 text-sm">
-                Health factor
-                {loadingSimulation && (
-                  <span className="ml-2 text-xs text-zinc-400">
-                    (simulating...)
-                  </span>
-                )}
-              </span>
-              <span className="text-sm font-medium flex items-center gap-2">
-                <span className="text-zinc-500 dark:text-zinc-400">
-                  {currentHealthFactor
-                    ? `${currentHealthFactor.toFixed(2)}x`
-                    : "N/A"}
-                </span>
-                {amount && parseFloat(amount) > 0 && (
-                  <>
-                    <span className="text-yellow-500">→</span>
-                    <span
-                      className={`${
-                        // Use zone colors (matching MovePosition)
-                        simHealthRed
-                          ? "text-red-600 dark:text-red-400"
-                          : simHealthYellow
-                            ? "text-yellow-600 dark:text-yellow-400"
-                            : "text-green-600 dark:text-green-400"
-                      }`}
-                    >
-                      {loadingSimulation
-                        ? "--"
-                        : displayHealthFactor
-                          ? `${displayHealthFactor.toFixed(2)}x`
-                          : "N/A"}
-                    </span>
-                  </>
-                )}
-              </span>
-            </div>
-
-            <div className="flex justify-between items-center">
-              <span className="text-zinc-500 dark:text-zinc-400 text-sm">
-                Borrowed
-              </span>
-              <span className="text-sm font-medium flex items-center gap-2">
-                <span className="text-zinc-500 dark:text-zinc-400">
-                  {userBorrowedAmount.toFixed(4)} {asset.symbol}
-                </span>
-                {amount && parseFloat(amount) > 0 && (
-                  <>
-                    <span className="text-yellow-500">→</span>
-                    <span className="text-zinc-900 dark:text-zinc-50">
-                      {Math.max(
-                        0,
-                        activeTab === "borrow"
-                          ? userBorrowedAmount + parseFloat(amount)
-                          : userBorrowedAmount - parseFloat(amount)
-                      ).toFixed(4)}{" "}
-                      {asset.symbol}
-                    </span>
-                  </>
-                )}
-              </span>
-            </div>
-
-            <div className="flex justify-between items-center">
-              <span className="text-zinc-500 dark:text-zinc-400 text-sm">
-                Borrow APY
-              </span>
-              <span className="text-sm font-medium text-red-600 dark:text-red-400">
-                {asset.borrowApy.toFixed(2)}%
-              </span>
-            </div>
-
-            <div className="flex justify-between items-center">
-              <span className="text-zinc-500 dark:text-zinc-400 text-sm">
-                Available Liquidity
-              </span>
-              <span className="text-sm font-medium text-zinc-900 dark:text-zinc-50">
-                {asset.availableLiquidity.toFixed(4)} {asset.symbol}
-              </span>
-            </div>
-
-            {activeTab === "borrow" && maxBorrowFromPortfolio !== null && (
-              <div className="flex justify-between items-center">
-                <span className="text-zinc-500 dark:text-zinc-400 text-sm">
-                  Max Borrow (Your Limit)
-                </span>
-                <span className="text-sm font-medium text-zinc-900 dark:text-zinc-50">
-                  {maxBorrowFromPortfolio.toFixed(4)} {asset.symbol}
+      {/* Form Content */}
+      <div className="p-6">
+        {/* Amount Input */}
+        <div className="mb-6">
+          <div className="flex items-center gap-3 mb-4">
+            {asset.token?.iconUri ? (
+              <img
+                src={asset.token.iconUri}
+                alt={asset.symbol}
+                className="w-10 h-10 rounded-full"
+              />
+            ) : (
+              <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center">
+                <span className="text-white font-bold text-sm">
+                  {asset.symbol.charAt(0)}
                 </span>
               </div>
             )}
+            <div className="flex-1">
+              <input
+                type="text"
+                value={amount}
+                onChange={(e) => handleAmountChange(e.target.value)}
+                placeholder="0"
+                className="w-full bg-transparent text-4xl text-zinc-500 dark:text-zinc-400 font-light outline-none"
+              />
+              <div className="text-zinc-500 dark:text-zinc-400 text-sm mt-1">
+                ${usdValue.toFixed(2)}
+              </div>
+            </div>
+            <button
+              onClick={handleMax}
+              className="px-4 py-1 bg-blue-500 text-white text-sm font-medium rounded hover:bg-blue-400 transition-colors"
+            >
+              Max
+            </button>
+          </div>
+        </div>
+
+        {/* Stats */}
+        <div className="space-y-3 mb-4">
+          <div className="flex justify-between items-center">
+            <span className="text-zinc-500 dark:text-zinc-400 text-sm">
+              Health factor
+              {loadingSimulation && (
+                <span className="ml-2 text-xs text-zinc-400">
+                  (simulating...)
+                </span>
+              )}
+            </span>
+            <span className="text-sm font-medium flex items-center gap-2">
+              <span className="text-zinc-500 dark:text-zinc-400">
+                {currentHealthFactor
+                  ? `${currentHealthFactor.toFixed(2)}x`
+                  : "N/A"}
+              </span>
+              {amount && parseFloat(amount) > 0 && (
+                <>
+                  <span className="text-yellow-500">→</span>
+                  <span
+                    className={`${
+                      // Use zone colors (matching MovePosition)
+                      simHealthRed
+                        ? "text-red-600 dark:text-red-400"
+                        : simHealthYellow
+                          ? "text-yellow-600 dark:text-yellow-400"
+                          : "text-green-600 dark:text-green-400"
+                    }`}
+                  >
+                    {loadingSimulation
+                      ? "--"
+                      : displayHealthFactor
+                        ? `${displayHealthFactor.toFixed(2)}x`
+                        : "N/A"}
+                  </span>
+                </>
+              )}
+            </span>
           </div>
 
-          {/* More Button */}
-          <button
-            onClick={() => setShowMore(!showMore)}
-            className="w-full text-blue-500 dark:text-blue-400 text-sm font-medium py-2 hover:text-blue-600 dark:hover:text-blue-300 transition-colors"
-          >
-            {showMore ? "Less" : "More"}
-          </button>
-
-          {/* Warning Messages (matching MovePosition) */}
-          {amount && parseFloat(amount) > 0 && activeTab === "borrow" && (
-            <>
-              {/* Yellow Zone Warning */}
-              {simHealthYellow && !simHealthRed && !isLTVWarning && (
-                <div className="mb-4 p-3 rounded-lg bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 text-sm text-yellow-700 dark:text-yellow-400">
-                  ⚠️ Warning: This borrow would reduce your health factor to{" "}
-                  {displayHealthFactor?.toFixed(2)}x (warning zone: 1.2x -
-                  1.5x). Consider borrowing less to maintain a safer position.
-                </div>
+          <div className="flex justify-between items-center">
+            <span className="text-zinc-500 dark:text-zinc-400 text-sm">
+              Borrowed
+            </span>
+            <span className="text-sm font-medium flex items-center gap-2">
+              <span className="text-zinc-500 dark:text-zinc-400">
+                {userBorrowedAmount.toFixed(4)} {asset.symbol}
+              </span>
+              {amount && parseFloat(amount) > 0 && (
+                <>
+                  <span className="text-yellow-500">→</span>
+                  <span className="text-zinc-900 dark:text-zinc-50">
+                    {Math.max(
+                      0,
+                      activeTab === "borrow"
+                        ? userBorrowedAmount + parseFloat(amount)
+                        : userBorrowedAmount - parseFloat(amount)
+                    ).toFixed(4)}{" "}
+                    {asset.symbol}
+                  </span>
+                </>
               )}
+            </span>
+          </div>
 
-              {/* Red Zone Warning */}
-              {simHealthRed && !isLTVWarning && (
-                <div className="mb-4 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-sm text-red-700 dark:text-red-400">
-                  🚨 Danger: This borrow would make your position unhealthy
-                  (health factor ≤ 1.2x). Your position may be at risk of
-                  liquidation. Please reduce the amount.
-                </div>
-              )}
+          <div className="flex justify-between items-center">
+            <span className="text-zinc-500 dark:text-zinc-400 text-sm">
+              Borrow APY
+            </span>
+            <span className="text-sm font-medium text-red-600 dark:text-red-400">
+              {asset.borrowApy.toFixed(2)}%
+            </span>
+          </div>
 
-              {/* LTV Warning */}
-              {isLTVWarning && isSimHealthy && simLTV > 0 && (
-                <div className="mb-4 p-3 rounded-lg bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 text-sm text-orange-700 dark:text-orange-400">
-                  ⚠️ LTV Warning: This borrow would result in an LTV of{" "}
-                  {(simLTV * 100).toFixed(1)}%, which exceeds the recommended
-                  95% threshold. Consider borrowing less to maintain a safer
-                  position.
-                </div>
-              )}
-            </>
-          )}
+          <div className="flex justify-between items-center">
+            <span className="text-zinc-500 dark:text-zinc-400 text-sm">
+              Available Liquidity
+            </span>
+            <span className="text-sm font-medium text-zinc-900 dark:text-zinc-50">
+              {asset.availableLiquidity.toFixed(4)} {asset.symbol}
+            </span>
+          </div>
 
-          {/* Error Message */}
-          {submitError && (
-            <div className="mb-4 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-sm text-red-700 dark:text-red-400">
-              {submitError}
+          {activeTab === "borrow" && maxBorrowFromPortfolio !== null && (
+            <div className="flex justify-between items-center">
+              <span className="text-zinc-500 dark:text-zinc-400 text-sm">
+                Max Borrow (Your Limit)
+              </span>
+              <span className="text-sm font-medium text-zinc-900 dark:text-zinc-50">
+                {maxBorrowFromPortfolio.toFixed(4)} {asset.symbol}
+              </span>
             </div>
           )}
+        </div>
 
-          {/* Review Button */}
-          <button
-            onClick={handleSubmit}
-            disabled={(!canReview || submitting) && !txHash}
-            className={`w-full font-semibold py-3.5 rounded-lg transition-all duration-200 mt-4 shadow-lg ${
-              txHash
-                ? "bg-green-600 text-white cursor-pointer"
-                : canReview && !submitting
-                  ? "bg-blue-600 text-white hover:bg-blue-700 hover:shadow-xl active:scale-[0.98] cursor-pointer"
-                  : "bg-zinc-300 dark:bg-zinc-700 text-zinc-500 dark:text-zinc-400 cursor-not-allowed"
-            }`}
-          >
-            {txHash && showSuccessMessage ? (
-              <span className="flex items-center justify-center gap-2">
+        {/* More Button */}
+        <button
+          onClick={() => setShowMore(!showMore)}
+          className="w-full text-blue-500 dark:text-blue-400 text-sm font-medium py-2 hover:text-blue-600 dark:hover:text-blue-300 transition-colors"
+        >
+          {showMore ? "Less" : "More"}
+        </button>
+
+        {/* Warning Messages (matching MovePosition) */}
+        {amount && parseFloat(amount) > 0 && activeTab === "borrow" && (
+          <>
+            {/* Yellow Zone Warning */}
+            {simHealthYellow && !simHealthRed && !isLTVWarning && (
+              <div className="mb-4 p-3 rounded-lg bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 text-sm text-yellow-700 dark:text-yellow-400">
+                ⚠️ Warning: This borrow would reduce your health factor to{" "}
+                {displayHealthFactor?.toFixed(2)}x (warning zone: 1.2x - 1.5x).
+                Consider borrowing less to maintain a safer position.
+              </div>
+            )}
+
+            {/* Red Zone Warning */}
+            {simHealthRed && !isLTVWarning && (
+              <div className="mb-4 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-sm text-red-700 dark:text-red-400">
+                🚨 Danger: This borrow would make your position unhealthy
+                (health factor ≤ 1.2x). Your position may be at risk of
+                liquidation. Please reduce the amount.
+              </div>
+            )}
+
+            {/* LTV Warning */}
+            {isLTVWarning && isSimHealthy && simLTV > 0 && (
+              <div className="mb-4 p-3 rounded-lg bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 text-sm text-orange-700 dark:text-orange-400">
+                ⚠️ LTV Warning: This borrow would result in an LTV of{" "}
+                {(simLTV * 100).toFixed(1)}%, which exceeds the recommended 95%
+                threshold. Consider borrowing less to maintain a safer position.
+              </div>
+            )}
+          </>
+        )}
+
+        {/* Error Message */}
+        {submitError && (
+          <div className="mb-4 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-sm text-red-700 dark:text-red-400">
+            {submitError}
+          </div>
+        )}
+
+        {/* Review Button */}
+        <button
+          onClick={handleSubmit}
+          disabled={(!canReview || submitting) && !txHash}
+          className={`w-full font-semibold py-3.5 rounded-lg transition-all duration-200 mt-4 shadow-lg ${
+            txHash
+              ? "bg-green-600 text-white cursor-pointer"
+              : canReview && !submitting
+                ? "bg-blue-600 text-white hover:bg-blue-700 hover:shadow-xl active:scale-[0.98] cursor-pointer"
+                : "bg-zinc-300 dark:bg-zinc-700 text-zinc-500 dark:text-zinc-400 cursor-not-allowed"
+          }`}
+        >
+          {txHash ? (
+            <span className="flex items-center justify-center gap-2">
+              <svg
+                className="w-5 h-5"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M5 13l4 4L19 7"
+                />
+              </svg>
+              Transaction Submitted!
+              <a
+                href={`https://explorer.movementnetwork.xyz/txn/${txHash}?network=mainnet`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="ml-2 underline hover:opacity-80 flex items-center gap-1"
+                onClick={(e) => e.stopPropagation()}
+              >
+                View
                 <svg
-                  className="w-5 h-5"
+                  className="w-4 h-4"
                   fill="none"
-                  viewBox="0 0 24 24"
                   stroke="currentColor"
+                  viewBox="0 0 24 24"
                 >
                   <path
                     strokeLinecap="round"
                     strokeLinejoin="round"
                     strokeWidth={2}
-                    d="M5 13l4 4L19 7"
+                    d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
                   />
                 </svg>
-                Transaction Submitted!
-                <a
-                  href={`https://explorer.movementnetwork.xyz/txn/${txHash}?network=mainnet`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="ml-2 underline hover:opacity-80 flex items-center gap-1"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  View
-                  <svg
-                    className="w-4 h-4"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
-                    />
-                  </svg>
-                </a>
-              </span>
-            ) : submitting ? (
-              <span className="flex items-center justify-center gap-2">
-                <svg
-                  className="w-5 h-5 animate-spin"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                >
-                  <circle
-                    className="opacity-25"
-                    cx="12"
-                    cy="12"
-                    r="10"
-                    stroke="currentColor"
-                    strokeWidth="4"
-                  ></circle>
-                  <path
-                    className="opacity-75"
-                    fill="currentColor"
-                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                  ></path>
-                </svg>
-                {submissionStep ||
-                  (activeTab === "borrow" ? "Borrowing..." : "Repaying...")}
-              </span>
-            ) : validationError ? (
-              validationError
-            ) : parsedAmount <= 0 ? (
-              "Enter amount"
-            ) : (
-              `${activeTab === "borrow" ? "Borrow" : "Repay"} ${asset.symbol}`
-            )}
-          </button>
+              </a>
+            </span>
+          ) : submitting ? (
+            <span className="flex items-center justify-center gap-2">
+              <svg
+                className="w-5 h-5 animate-spin"
+                fill="none"
+                viewBox="0 0 24 24"
+              >
+                <circle
+                  className="opacity-25"
+                  cx="12"
+                  cy="12"
+                  r="10"
+                  stroke="currentColor"
+                  strokeWidth="4"
+                ></circle>
+                <path
+                  className="opacity-75"
+                  fill="currentColor"
+                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                ></path>
+              </svg>
+              {submissionStep ||
+                (activeTab === "borrow" ? "Borrowing..." : "Repaying...")}
+            </span>
+          ) : validationError ? (
+            validationError
+          ) : parsedAmount <= 0 ? (
+            "Enter amount"
+          ) : (
+            `${activeTab === "borrow" ? "Borrow" : "Repay"} ${asset.symbol}`
+          )}
+        </button>
 
-          {/* Wallet Balance */}
-          <div className="flex justify-between items-center mt-4 pt-4 border-t border-zinc-200 dark:border-zinc-800">
-            <span className="text-zinc-500 dark:text-zinc-400 text-sm">
-              Wallet balance
-            </span>
-            <span className="text-sm font-medium flex items-center gap-2">
-              {loadingBalance ? (
-                <span className="text-zinc-400">Loading...</span>
-              ) : balance ? (
-                <>
-                  <span className="text-zinc-500 dark:text-zinc-400">
-                    {parseFloat(balance).toFixed(4)} {asset.symbol}
-                  </span>
-                  {amount &&
-                    parseFloat(amount) > 0 &&
-                    activeTab === "repay" && (
-                      <>
-                        <span className="text-yellow-500">→</span>
-                        <span className="text-zinc-900 dark:text-zinc-50">
-                          {(parseFloat(balance) - parseFloat(amount)).toFixed(
-                            4
-                          )}{" "}
-                          {asset.symbol}
-                        </span>
-                      </>
-                    )}
-                </>
-              ) : (
-                "0.0000"
-              )}
-            </span>
-          </div>
+        {/* Wallet Balance */}
+        <div className="flex justify-between items-center mt-4 pt-4 border-t border-zinc-200 dark:border-zinc-800">
+          <span className="text-zinc-500 dark:text-zinc-400 text-sm">
+            Wallet balance
+          </span>
+          <span className="text-sm font-medium flex items-center gap-2">
+            {loadingBalance ? (
+              <span className="text-zinc-400">Loading...</span>
+            ) : balance ? (
+              <>
+                <span className="text-zinc-500 dark:text-zinc-400">
+                  {parseFloat(balance).toFixed(4)} {asset.symbol}
+                </span>
+                {amount && parseFloat(amount) > 0 && activeTab === "repay" && (
+                  <>
+                    <span className="text-yellow-500">→</span>
+                    <span className="text-zinc-900 dark:text-zinc-50">
+                      {(parseFloat(balance) - parseFloat(amount)).toFixed(4)}{" "}
+                      {asset.symbol}
+                    </span>
+                  </>
+                )}
+              </>
+            ) : (
+              "0.0000"
+            )}
+          </span>
         </div>
       </div>
+    </div>
+  );
+
+  if (inline) {
+    return content;
+  }
+
+  return (
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80 backdrop-blur-sm">
+      {content}
     </div>
   );
 }

@@ -21,7 +21,6 @@ import { CopilotChat } from "@copilotkit/react-ui";
 import { QuestManager } from "../quest/QuestManager";
 import { Suggestions } from "./Suggestions";
 import { PlatformSelectionCard } from "../lending";
-import { LendCard } from "../lending/moveposition";
 import { EchelonSupplyModal } from "../lending/echelon";
 import { useChatData } from "./hooks/use-chat-data";
 import { useChatUIState } from "./hooks/use-chat-ui-state";
@@ -45,8 +44,13 @@ const ChatInner = ({ walletAddress }: MovementChatProps) => {
   const { visibleMessages, appendMessage } = useCopilotChat();
 
   // Custom hooks for data and UI state
-  const { echelonAssets, availableBalances, refreshBalances } =
-    useChatData(walletAddress);
+  const {
+    echelonAssets,
+    movePositionAssets,
+    availableBalances,
+    healthFactor,
+    refreshBalances,
+  } = useChatData(walletAddress);
   const {
     hasScrolled,
     suggestionSubmitted,
@@ -80,6 +84,8 @@ const ChatInner = ({ walletAddress }: MovementChatProps) => {
   useSupplyAction({
     walletAddress,
     echelonAssets,
+    movePositionAssets,
+    healthFactor,
     availableBalances,
     onSupplySuccess: refreshBalances,
   });
@@ -153,10 +159,7 @@ const ChatInner = ({ walletAddress }: MovementChatProps) => {
           <>
             {supplyConfirmation.protocol === "moveposition" ? (
               <div className="my-3">
-                <LendCard
-                  walletAddress={walletAddress}
-                  asset={supplyConfirmation.asset}
-                />
+                {/* SupplyModal will be rendered by useSupplyAction */}
               </div>
             ) : (
               (() => {

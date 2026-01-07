@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { usePrivy } from "@privy-io/react-auth";
 import { useMovementWallet } from "../../../hooks/useMovementWallet";
 import { useSignRawHash } from "@privy-io/react-auth/extended-chains";
@@ -17,6 +17,7 @@ import { selectBroker, validateBroker } from "../../../utils/moveposition";
 import { useMovePositionSupply } from "../../../hooks/useMovePositionSupply";
 import { useMovePositionWithdraw } from "../../../hooks/useMovePositionWithdraw";
 import { TransactionSuccessMessage } from "../../shared/modals";
+import { useTokenBalance } from "../../../hooks/useTokenBalance";
 
 // Utility functions for formatting (matching MovePosition's format.ts)
 function prettyTokenBal(num: number): string {
@@ -121,6 +122,7 @@ interface SupplyModalProps {
   } | null;
   walletAddress: string | null;
   healthFactor: number | null;
+  inline?: boolean; // If true, renders inline without backdrop (for chat)
 }
 
 interface PortfolioResponse {
@@ -169,32 +171,19 @@ interface RiskSimulation {
   calculationSteps: string[];
 }
 
-interface TokenBalance {
-  assetType: string;
-  amount: string;
-  formattedAmount: string;
-  metadata: {
-    name: string;
-    symbol: string;
-    decimals: number;
-  };
-  isNative: boolean;
-}
-
 export function SupplyModal({
   isOpen,
   onClose,
   asset,
   walletAddress,
   healthFactor,
+  inline = false,
 }: SupplyModalProps) {
   const { user, ready, authenticated } = usePrivy();
   const { signRawHash } = useSignRawHash();
   const [activeTab, setActiveTab] = useState<"supply" | "withdraw">("supply");
   const [amount, setAmount] = useState("");
   const [showMore, setShowMore] = useState(false);
-  const [balance, setBalance] = useState<string | null>(null);
-  const [loadingBalance, setLoadingBalance] = useState(false);
   const [portfolioData, setPortfolioData] = useState<PortfolioResponse | null>(
     null
   );
@@ -204,14 +193,16 @@ export function SupplyModal({
   const [simulatedRiskData, setSimulatedRiskData] = useState<any | null>(null);
   const [loadingSimulation, setLoadingSimulation] = useState(false);
   const [loadingPortfolio, setLoadingPortfolio] = useState(false);
-  const [showSuccessMessage, setShowSuccessMessage] = useState(false);
 
   // Use centralized hooks for supply and withdraw
   const supply = useMovePositionSupply({
     onSuccess: () => {
-      setShowSuccessMessage(true);
       if (walletAddress) {
         refreshPortfolioData();
+        // Refresh balance after successful transaction
+        setTimeout(() => {
+          fetchBalance();
+        }, 1500); // Wait for transaction to be processed
       }
     },
     onError: (error) => {
@@ -221,9 +212,12 @@ export function SupplyModal({
 
   const withdraw = useMovePositionWithdraw({
     onSuccess: () => {
-      setShowSuccessMessage(true);
       if (walletAddress) {
         refreshPortfolioData();
+        // Refresh balance after successful transaction
+        setTimeout(() => {
+          fetchBalance();
+        }, 1500); // Wait for transaction to be processed
       }
     },
     onError: (error) => {
@@ -244,9 +238,71 @@ export function SupplyModal({
   const txHash = currentOperation.txHash;
   const submissionStep = currentOperation.step;
 
+  // Track previous tab to detect tab switches
+  const prevActiveTabRef = useRef<"supply" | "withdraw">(activeTab);
+  const [displayTxHash, setDisplayTxHash] = useState<string | null>(null);
+  // Track last shown txHash per tab to prevent re-showing
+  const lastShownTxHashRef = useRef<{
+    supply: string | null;
+    withdraw: string | null;
+  }>({
+    supply: null,
+    withdraw: null,
+  });
+
+  // Clear txHash display and button state when switching tabs
+  useEffect(() => {
+    if (prevActiveTabRef.current !== activeTab) {
+      // Tab switched - clear the displayed txHash and button state immediately
+      setDisplayTxHash(null);
+      setShowButtonComplete(false);
+      prevActiveTabRef.current = activeTab;
+    }
+  }, [activeTab]);
+
+  // Show notification when txHash appears on current tab - only if it's a new txHash
+  // Also reset amount input when transaction completes
+  useEffect(() => {
+    if (activeTab === "supply" && supply.txHash) {
+      // Only show if this is a new txHash we haven't shown before
+      if (supply.txHash !== lastShownTxHashRef.current.supply) {
+        setDisplayTxHash(supply.txHash);
+        lastShownTxHashRef.current.supply = supply.txHash;
+        // Reset amount input when transaction completes
+        setAmount("");
+      }
+    } else if (activeTab === "withdraw" && withdraw.txHash) {
+      // Only show if this is a new txHash we haven't shown before
+      if (withdraw.txHash !== lastShownTxHashRef.current.withdraw) {
+        setDisplayTxHash(withdraw.txHash);
+        lastShownTxHashRef.current.withdraw = withdraw.txHash;
+        // Reset amount input when transaction completes
+        setAmount("");
+      }
+    } else if (
+      (activeTab === "supply" && !supply.txHash) ||
+      (activeTab === "withdraw" && !withdraw.txHash)
+    ) {
+      // Clear displayTxHash when current tab's txHash is cleared
+      setDisplayTxHash(null);
+    }
+  }, [activeTab, supply.txHash, withdraw.txHash]);
+
   const movementApiBase = getMovementApiBase();
 
   const movementWallet = useMovementWallet();
+
+  // Use shared hook for token balance
+  const {
+    balance,
+    loading: loadingBalance,
+    refresh: fetchBalance,
+  } = useTokenBalance({
+    walletAddress,
+    tokenSymbol: asset?.symbol || null,
+    enabled: isOpen,
+    autoRefresh: true,
+  });
 
   // Refresh portfolio data function
   const refreshPortfolioData = async () => {
@@ -273,25 +329,26 @@ export function SupplyModal({
       setActiveTab("supply");
       // Reset hooks will be handled by the hooks themselves
       setSimulatedRiskData(null);
-      setShowSuccessMessage(false);
       setShowButtonComplete(false);
       return;
     }
   }, [isOpen]);
 
-  // Show "Transaction Complete" on button and TransactionSuccessMessage for 250ms, then reset
+  // Show "Transaction Complete" on button briefly, then clear immediately
+  // This ensures button state clears as soon as notification appears
   useEffect(() => {
     if (txHash && !showButtonComplete) {
       setShowButtonComplete(true);
-      setShowSuccessMessage(true);
+      // Clear button state immediately (notification handles the success display)
       const timer = setTimeout(() => {
         setShowButtonComplete(false);
-        setShowSuccessMessage(false);
-        setAmount("");
-        // Note: txHash remains in hook state but UI elements are hidden
-      }, 250);
+      }, 100); // Very short delay just for visual feedback
 
       return () => clearTimeout(timer);
+    }
+    // Also clear if txHash disappears
+    if (!txHash && showButtonComplete) {
+      setShowButtonComplete(false);
     }
   }, [txHash, showButtonComplete]);
 
@@ -314,62 +371,7 @@ export function SupplyModal({
     };
   }, [isOpen]);
 
-  useEffect(() => {
-    if (!walletAddress || !asset?.symbol || !isOpen) {
-      setBalance(null);
-      return;
-    }
-
-    const fetchBalance = async () => {
-      setLoadingBalance(true);
-      try {
-        const response = await fetch(
-          `/api/balance?address=${encodeURIComponent(walletAddress)}`
-        );
-
-        if (!response.ok) {
-          throw new Error("Failed to fetch balance");
-        }
-
-        const data = await response.json();
-
-        if (data.success && data.balances && data.balances.length > 0) {
-          const normalizedToken = asset.symbol
-            .toUpperCase()
-            .replace(/\./g, "")
-            .trim();
-
-          const tokenBalance = data.balances.find((b: TokenBalance) => {
-            const normalizedSymbol = b.metadata.symbol
-              .toUpperCase()
-              .replace(/\./g, "")
-              .trim();
-
-            return (
-              normalizedSymbol === normalizedToken ||
-              normalizedSymbol.startsWith(normalizedToken) ||
-              normalizedToken.startsWith(normalizedSymbol)
-            );
-          });
-
-          if (tokenBalance) {
-            setBalance(tokenBalance.formattedAmount);
-          } else {
-            setBalance("0.000000");
-          }
-        } else {
-          setBalance("0.000000");
-        }
-      } catch (error) {
-        console.error("Error fetching balance:", error);
-        setBalance("0.000000");
-      } finally {
-        setLoadingBalance(false);
-      }
-    };
-
-    fetchBalance();
-  }, [walletAddress, asset?.symbol, isOpen]);
+  // Balance is automatically fetched by useTokenBalance hook
 
   // Fetch portfolio data for risk simulation and select broker
   useEffect(() => {
@@ -1224,21 +1226,25 @@ export function SupplyModal({
     return null;
   }
 
-  return (
-    <div className="fixed inset-0 z-9999 flex items-center justify-center bg-black/80 backdrop-blur-sm">
-      <div className="relative w-full max-w-md rounded-2xl bg-white dark:bg-zinc-900 shadow-2xl">
-        {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-zinc-200 dark:border-zinc-800">
-          <div>
-            <h2 className="text-xl font-semibold text-zinc-950 dark:text-zinc-50">
-              {activeTab === "supply" ? "Lend" : "Withdraw"} {asset.symbol}
-            </h2>
-            <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">
-              {activeTab === "supply"
-                ? "Supply tokens to earn interest"
-                : "Withdraw your supplied tokens"}
-            </p>
-          </div>
+  const baseClasses = inline
+    ? "w-full max-w-md mx-auto rounded-2xl bg-white dark:bg-zinc-900 shadow-lg"
+    : "relative w-full max-w-md rounded-2xl bg-white dark:bg-zinc-900 shadow-2xl";
+
+  const content = (
+    <div className={baseClasses}>
+      {/* Header */}
+      <div className="flex items-center justify-between p-6 border-b border-zinc-200 dark:border-zinc-800">
+        <div>
+          <h2 className="text-xl font-semibold text-zinc-950 dark:text-zinc-50">
+            {activeTab === "supply" ? "Lend" : "Withdraw"} {asset.symbol}
+          </h2>
+          <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">
+            {activeTab === "supply"
+              ? "Supply tokens to earn interest"
+              : "Withdraw your supplied tokens"}
+          </p>
+        </div>
+        {!inline && (
           <button
             onClick={onClose}
             className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors"
@@ -1257,605 +1263,621 @@ export function SupplyModal({
               />
             </svg>
           </button>
-        </div>
+        )}
+      </div>
 
-        {/* Tabs */}
-        <div className="flex p-2 gap-2 border-b border-zinc-200 dark:border-zinc-800">
-          <button
-            onClick={() => {
-              handleTabSwitch("supply");
-              // setActiveTab("supply");
-              // setAmount("");
-            }}
-            className={`flex-1 py-3 text-sm rounded-md font-medium transition-colors ${
-              activeTab === "supply"
-                ? "bg-green-600 text-white"
-                : "bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200"
-            }`}
-          >
-            Supply
-          </button>
-          <button
-            onClick={() => {
-              handleTabSwitch("withdraw");
-              // setActiveTab("withdraw");
-              // setAmount("");
-            }}
-            className={`flex-1 py-3 text-sm font-medium rounded-md transition-colors ${
-              activeTab === "withdraw"
-                ? "bg-green-600 text-white"
-                : "bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200"
-            }`}
-          >
-            Withdraw
-          </button>
-        </div>
+      {/* Tabs */}
+      <div className="flex p-2 gap-2 border-b border-zinc-200 dark:border-zinc-800">
+        <button
+          onClick={() => {
+            handleTabSwitch("supply");
+            // setActiveTab("supply");
+            // setAmount("");
+          }}
+          className={`flex-1 py-3 text-sm rounded-md font-medium transition-colors ${
+            activeTab === "supply"
+              ? "bg-green-600 text-white"
+              : "bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200"
+          }`}
+        >
+          Supply
+        </button>
+        <button
+          onClick={() => {
+            handleTabSwitch("withdraw");
+            // setActiveTab("withdraw");
+            // setAmount("");
+          }}
+          className={`flex-1 py-3 text-sm font-medium rounded-md transition-colors ${
+            activeTab === "withdraw"
+              ? "bg-green-600 text-white"
+              : "bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200"
+          }`}
+        >
+          Withdraw
+        </button>
+      </div>
 
-        {/* Form Content */}
-        <div className="p-6">
-          {/* Amount Input */}
-          <div className="mb-6">
-            <div className="flex items-center gap-3 mb-4">
-              {asset.token?.iconUri ? (
-                <img
-                  src={asset.token.iconUri}
-                  alt={asset.symbol}
-                  className="w-10 h-10 rounded-full"
-                />
-              ) : (
-                <div className="w-10 h-10 bg-yellow-500 rounded-full flex items-center justify-center">
-                  <span className="text-black font-bold text-sm">
-                    {asset.symbol.charAt(0)}
-                  </span>
-                </div>
-              )}
-              <div className="flex-1">
-                <input
-                  type="text"
-                  value={amount}
-                  onChange={(e) => handleAmountChange(e.target.value)}
-                  placeholder="0"
-                  className="w-full bg-transparent text-4xl text-zinc-500 dark:text-zinc-400 font-light outline-none"
-                />
-                <div className="text-zinc-500 dark:text-zinc-400 text-sm mt-1">
-                  ${usdValue.toFixed(2)}
-                </div>
-              </div>
-              {/* Single Max button - works for both supply and withdraw */}
-              {showMaxButton && (
-                <button
-                  onClick={handleMax}
-                  className="px-4 py-1 bg-yellow-500 text-black text-sm font-medium rounded hover:bg-yellow-400 transition-colors"
-                >
-                  Max
-                </button>
-              )}
-            </div>
-
-            {/* Available balance hint - different text for supply vs withdraw */}
-            {activeTab === "supply" && balance && parseFloat(balance) > 0 && (
-              <div className="text-xs text-zinc-500 dark:text-zinc-400 mt-2">
-                Available to supply:{" "}
-                <span className="text-zinc-700 dark:text-zinc-300 font-medium">
-                  {parseFloat(balance).toFixed(6)} {asset.symbol}
+      {/* Form Content */}
+      <div className="p-6">
+        {/* Amount Input */}
+        <div className="mb-6">
+          <div className="flex items-center gap-3 mb-4">
+            {asset.token?.iconUri ? (
+              <img
+                src={asset.token.iconUri}
+                alt={asset.symbol}
+                className="w-10 h-10 rounded-full"
+              />
+            ) : (
+              <div className="w-10 h-10 bg-yellow-500 rounded-full flex items-center justify-center">
+                <span className="text-black font-bold text-sm">
+                  {asset.symbol.charAt(0)}
                 </span>
               </div>
             )}
-            {activeTab === "withdraw" && userSuppliedAmount > 0 && (
-              <div className="text-xs text-zinc-500 dark:text-zinc-400 mt-2">
-                Available to withdraw:{" "}
-                {loadingPortfolio ? (
-                  <span className="text-zinc-400">Loading...</span>
-                ) : (
-                  <span className="text-zinc-700 dark:text-zinc-300 font-medium">
-                    {userSuppliedAmount.toFixed(6)} {asset.symbol}
-                  </span>
-                )}
+            <div className="flex-1">
+              <input
+                type="text"
+                value={amount}
+                onChange={(e) => handleAmountChange(e.target.value)}
+                placeholder="0"
+                className="w-full bg-transparent text-4xl text-zinc-500 dark:text-zinc-400 font-light outline-none"
+              />
+              <div className="text-zinc-500 dark:text-zinc-400 text-sm mt-1">
+                ${usdValue.toFixed(2)}
               </div>
+            </div>
+            {/* Single Max button - works for both supply and withdraw */}
+            {showMaxButton && (
+              <button
+                onClick={handleMax}
+                className="px-4 py-1 bg-yellow-500 text-black text-sm font-medium rounded hover:bg-yellow-400 transition-colors"
+              >
+                Max
+              </button>
             )}
           </div>
 
-          {/* Stats - Always show previously supplied and health factor */}
-          <div className="mb-4 p-4 rounded-xl bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-700 space-y-3">
-            {/* Health Factor - Prominently displayed */}
-            <div className="flex justify-between items-center">
-              <div className="flex items-center gap-2">
-                <svg
-                  className="w-4 h-4 text-zinc-500 dark:text-zinc-400"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"
-                  />
-                </svg>
-                <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                  Health Factor
-                  {loadingSimulation && (
-                    <span className="ml-2 text-xs text-zinc-400">
-                      (simulating...)
-                    </span>
-                  )}
+          {/* Available balance hint - different text for supply vs withdraw */}
+          {activeTab === "supply" && balance && parseFloat(balance) > 0 && (
+            <div className="text-xs text-zinc-500 dark:text-zinc-400 mt-2">
+              Available to supply:{" "}
+              <span className="text-zinc-700 dark:text-zinc-300 font-medium">
+                {parseFloat(balance).toFixed(6)} {asset.symbol}
+              </span>
+            </div>
+          )}
+          {activeTab === "withdraw" && userSuppliedAmount > 0 && (
+            <div className="text-xs text-zinc-500 dark:text-zinc-400 mt-2">
+              Available to withdraw:{" "}
+              {loadingPortfolio ? (
+                <span className="text-zinc-400">Loading...</span>
+              ) : (
+                <span className="text-zinc-700 dark:text-zinc-300 font-medium">
+                  {userSuppliedAmount.toFixed(6)} {asset.symbol}
                 </span>
-              </div>
-              <span className="text-sm font-bold flex items-center gap-2">
-                {loadingPortfolio ? (
-                  <span className="text-zinc-400">Loading...</span>
-                ) : (
-                  <span
-                    className={`${
-                      currentHealthFactor && currentHealthFactor >= 1.2
-                        ? "text-green-600 dark:text-green-400"
-                        : currentHealthFactor && currentHealthFactor >= 1.0
-                          ? "text-yellow-600 dark:text-yellow-400"
-                          : "text-red-600 dark:text-red-400"
-                    }`}
-                  >
-                    {formatHealthFactor(currentHealthFactor)}
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Stats - Always show previously supplied and health factor */}
+        <div className="mb-4 p-4 rounded-xl bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-700 space-y-3">
+          {/* Health Factor - Prominently displayed */}
+          <div className="flex justify-between items-center">
+            <div className="flex items-center gap-2">
+              <svg
+                className="w-4 h-4 text-zinc-500 dark:text-zinc-400"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"
+                />
+              </svg>
+              <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                Health Factor
+                {loadingSimulation && (
+                  <span className="ml-2 text-xs text-zinc-400">
+                    (simulating...)
                   </span>
                 )}
-                {amount &&
-                  parseFloat(amount) > 0 &&
-                  displayHealthFactor !== null && (
-                    <>
-                      <span className="text-zinc-400">→</span>
-                      <span
-                        className={`${
-                          displayHealthFactor && displayHealthFactor >= 1.2
-                            ? "text-green-600 dark:text-green-400"
-                            : displayHealthFactor && displayHealthFactor >= 1.0
-                              ? "text-yellow-600 dark:text-yellow-400"
-                              : "text-red-600 dark:text-red-400"
-                        }`}
-                      >
-                        {loadingSimulation
-                          ? "--"
-                          : formatHealthFactor(displayHealthFactor)}
-                      </span>
-                    </>
-                  )}
               </span>
             </div>
-
-            {/* Previously Supplied - Prominently displayed */}
-            <div className="flex justify-between items-center">
-              <div className="flex items-center gap-2">
-                <svg
-                  className="w-4 h-4 text-zinc-500 dark:text-zinc-400"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
+            <span className="text-sm font-bold flex items-center gap-2">
+              {loadingPortfolio ? (
+                <span className="text-zinc-400">Loading...</span>
+              ) : (
+                <span
+                  className={`${
+                    currentHealthFactor && currentHealthFactor >= 1.2
+                      ? "text-green-600 dark:text-green-400"
+                      : currentHealthFactor && currentHealthFactor >= 1.0
+                        ? "text-yellow-600 dark:text-yellow-400"
+                        : "text-red-600 dark:text-red-400"
+                  }`}
                 >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                  />
-                </svg>
-                <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
-                  {activeTab === "supply"
-                    ? "Previously Supplied"
-                    : "Available to Withdraw"}
-                  {loadingPortfolio && (
-                    <span className="ml-2 text-xs text-zinc-400">
-                      (loading...)
-                    </span>
-                  )}
+                  {formatHealthFactor(currentHealthFactor)}
                 </span>
-              </div>
-              <span className="text-sm font-bold flex items-center gap-2">
-                {loadingPortfolio ? (
-                  <span className="text-zinc-400">Loading...</span>
-                ) : (
-                  <>
-                    <span className="text-zinc-900 dark:text-zinc-50">
-                      {userSuppliedAmount.toFixed(4)} {asset.symbol}
-                    </span>
-                    {amount && parseFloat(amount) > 0 && (
-                      <>
-                        <span className="text-zinc-400">→</span>
-                        <span className="text-zinc-900 dark:text-zinc-50">
-                          {(activeTab === "supply"
-                            ? userSuppliedAmount + parseFloat(amount)
-                            : Math.max(
-                                0,
-                                userSuppliedAmount - parseFloat(amount)
-                              )
-                          ).toFixed(4)}{" "}
-                          {asset.symbol}
-                        </span>
-                      </>
-                    )}
-                  </>
-                )}
-              </span>
-            </div>
-
-            {/* Supply APY with next value (matching MovePosition) */}
-            <div className="flex justify-between items-center">
-              <span className="text-sm text-zinc-500 dark:text-zinc-400">
-                Supply APY
-              </span>
-              <span className="text-sm font-medium text-green-600 dark:text-green-400 flex items-center gap-2">
-                {formatPercentage(supplyAPY.current)}
-                {supplyAPY.next !== null && supplyAPY.next < 1 && (
+              )}
+              {amount &&
+                parseFloat(amount) > 0 &&
+                displayHealthFactor !== null && (
                   <>
                     <span className="text-zinc-400">→</span>
-                    <span className="text-zinc-600 dark:text-zinc-400">
-                      {formatPercentage(supplyAPY.next)}
+                    <span
+                      className={`${
+                        displayHealthFactor && displayHealthFactor >= 1.2
+                          ? "text-green-600 dark:text-green-400"
+                          : displayHealthFactor && displayHealthFactor >= 1.0
+                            ? "text-yellow-600 dark:text-yellow-400"
+                            : "text-red-600 dark:text-red-400"
+                      }`}
+                    >
+                      {loadingSimulation
+                        ? "--"
+                        : formatHealthFactor(displayHealthFactor)}
                     </span>
                   </>
                 )}
-              </span>
-            </div>
+            </span>
           </div>
 
-          {/* More/Less Button (matching MovePosition's ParamList) */}
-          {brokerStats && (
-            <div className="flex items-center gap-3 my-4">
-              <div className="flex-1 h-px bg-zinc-200 dark:bg-zinc-700"></div>
-              <button
-                onClick={() => setShowMore(!showMore)}
-                className="text-yellow-500 dark:text-yellow-400 text-sm font-medium px-4 py-2 hover:text-yellow-600 dark:hover:text-yellow-300 transition-colors"
+          {/* Previously Supplied - Prominently displayed */}
+          <div className="flex justify-between items-center">
+            <div className="flex items-center gap-2">
+              <svg
+                className="w-4 h-4 text-zinc-500 dark:text-zinc-400"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
               >
-                {showMore ? "Less" : "More"}
-              </button>
-              <div className="flex-1 h-px bg-zinc-200 dark:bg-zinc-700"></div>
-            </div>
-          )}
-
-          {/* Broker Stats Section (matching MovePosition's brokerStats) - Only shown when showMore is true */}
-          {brokerStats && showMore && (
-            <div className="mb-4 p-4 rounded-xl bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-700 space-y-3">
-              <div className="text-xs font-semibold text-zinc-600 dark:text-zinc-400 uppercase tracking-wide mb-2">
-                Broker Statistics
-              </div>
-
-              {/* Total Available In Broker */}
-              <div className="flex justify-between items-center">
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-zinc-500 dark:text-zinc-400">
-                    Total Available In Broker
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                />
+              </svg>
+              <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+                {activeTab === "supply"
+                  ? "Previously Supplied"
+                  : "Available to Withdraw"}
+                {loadingPortfolio && (
+                  <span className="ml-2 text-xs text-zinc-400">
+                    (loading...)
                   </span>
-                  <div className="group relative">
-                    <svg
-                      className="w-3 h-3 text-zinc-400 cursor-help"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                      />
-                    </svg>
-                    <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-zinc-800 dark:bg-zinc-900 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-10">
-                      Liquidity available for borrowing or withdrawal in tokens
-                    </div>
-                  </div>
-                </div>
-                <span className="text-sm font-medium text-zinc-900 dark:text-zinc-50 flex items-center gap-2">
-                  {prettyTokenBal(brokerStats.totalAvailable)} {asset.symbol}
-                  {brokerStats.nextAvailable !== null && (
-                    <>
-                      <span className="text-zinc-400">→</span>
-                      <span className="text-zinc-600 dark:text-zinc-400">
-                        {prettyTokenBal(brokerStats.nextAvailable)}{" "}
-                        {asset.symbol}
-                      </span>
-                    </>
-                  )}
-                </span>
-              </div>
-
-              {/* Total Loaned By Broker */}
-              <div className="flex justify-between items-center">
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-zinc-500 dark:text-zinc-400">
-                    Total Loaned By Broker
-                  </span>
-                  <div className="group relative">
-                    <svg
-                      className="w-3 h-3 text-zinc-400 cursor-help"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                      />
-                    </svg>
-                    <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-zinc-800 dark:bg-zinc-900 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-10">
-                      Liquidity currently loaned to borrowers in tokens
-                    </div>
-                  </div>
-                </div>
-                <span className="text-sm font-medium text-zinc-900 dark:text-zinc-50 flex items-center gap-2">
-                  {prettyTokenBal(brokerStats.totalLoaned)} {asset.symbol}
-                  {brokerStats.nextTotalLoaned !== null && (
-                    <>
-                      <span className="text-zinc-400">→</span>
-                      <span className="text-zinc-600 dark:text-zinc-400">
-                        {prettyTokenBal(brokerStats.nextTotalLoaned)}{" "}
-                        {asset.symbol}
-                      </span>
-                    </>
-                  )}
-                </span>
-              </div>
-
-              {/* Total Supplied In Broker */}
-              <div className="flex justify-between items-center">
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-zinc-500 dark:text-zinc-400">
-                    Total Supplied In Broker
-                  </span>
-                  <div className="group relative">
-                    <svg
-                      className="w-3 h-3 text-zinc-400 cursor-help"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                      />
-                    </svg>
-                    <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-zinc-800 dark:bg-zinc-900 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-10">
-                      Liquidity supplied in tokens
-                    </div>
-                  </div>
-                </div>
-                <span className="text-sm font-medium text-zinc-900 dark:text-zinc-50 flex items-center gap-2">
-                  {prettyTokenBal(brokerStats.totalSupplied)} {asset.symbol}
-                  {brokerStats.nextTotalSupplied !== null && (
-                    <>
-                      <span className="text-zinc-400">→</span>
-                      <span className="text-zinc-600 dark:text-zinc-400">
-                        {prettyTokenBal(brokerStats.nextTotalSupplied)}{" "}
-                        {asset.symbol}
-                      </span>
-                    </>
-                  )}
-                </span>
-              </div>
-
-              {/* Pool Max Limit (shown for supply/withdraw tabs) */}
-              <div className="flex justify-between items-center">
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-zinc-500 dark:text-zinc-400">
-                    Pool Max Limit
-                  </span>
-                  <div className="group relative">
-                    <svg
-                      className="w-3 h-3 text-zinc-400 cursor-help"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                      />
-                    </svg>
-                    <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-zinc-800 dark:bg-zinc-900 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-10">
-                      Maximum liquidity that can be supplied to the pool
-                    </div>
-                  </div>
-                </div>
-                <span className="text-sm font-medium text-zinc-900 dark:text-zinc-50">
-                  {prettyTokenBal(brokerStats.poolMaxLimit)} {asset.symbol}
-                </span>
-              </div>
-
-              {/* Utilization */}
-              <div className="flex justify-between items-center">
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-zinc-500 dark:text-zinc-400">
-                    Utilization
-                  </span>
-                  <div className="group relative">
-                    <svg
-                      className="w-3 h-3 text-zinc-400 cursor-help"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                      />
-                    </svg>
-                    <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-zinc-800 dark:bg-zinc-900 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-10">
-                      Ratio of debt / collateral. High utilization increases
-                      interest
-                    </div>
-                  </div>
-                </div>
-                <span className="text-sm font-medium text-zinc-900 dark:text-zinc-50 flex items-center gap-2">
-                  {formatPercentage(brokerStats.utilization)}
-                  {brokerStats.nextUtilization !== null && (
-                    <>
-                      <span className="text-zinc-400">→</span>
-                      <span className="text-zinc-600 dark:text-zinc-400">
-                        {formatPercentage(brokerStats.nextUtilization)}
-                      </span>
-                    </>
-                  )}
-                </span>
-              </div>
-            </div>
-          )}
-
-          {/* Error Message - Show over limit errors before submission */}
-          {overLimitErrorMessage && (
-            <div className="mb-4 p-3 rounded-lg bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 text-sm text-yellow-700 dark:text-yellow-400">
-              {overLimitErrorMessage}
-            </div>
-          )}
-
-          {/* Transaction Error Message */}
-          {/* Error Message */}
-          {submitError && (
-            <div className="mb-4 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-sm text-red-700 dark:text-red-400">
-              {submitError}
-            </div>
-          )}
-
-          {/* Success Message */}
-          {txHash && showSuccessMessage && (
-            <TransactionSuccessMessage txHash={txHash} />
-          )}
-
-          {/* Submit Button */}
-          <button
-            onClick={handleSubmit}
-            disabled={(!canReview || submitting) && !txHash}
-            className={`w-full font-semibold py-3.5 rounded-lg transition-all duration-200 mt-4 shadow-lg ${
-              txHash
-                ? "bg-green-600 text-white cursor-pointer"
-                : canReview && !submitting
-                  ? activeTab === "supply"
-                    ? "bg-green-600 text-white hover:bg-green-700 hover:shadow-xl active:scale-[0.98] cursor-pointer"
-                    : "bg-yellow-500 text-black hover:bg-yellow-400 hover:shadow-xl active:scale-[0.98] cursor-pointer"
-                  : "bg-zinc-300 dark:bg-zinc-700 text-zinc-500 dark:text-zinc-400 cursor-not-allowed"
-            }`}
-          >
-            {txHash && showButtonComplete ? (
-              <span className="flex items-center justify-center gap-2">
-                <svg
-                  className="w-5 h-5"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M5 13l4 4L19 7"
-                  />
-                </svg>
-                Transaction Complete
+                )}
               </span>
-            ) : submitting ? (
-              <span className="flex items-center justify-center gap-2">
-                <svg
-                  className="w-5 h-5 animate-spin"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                >
-                  <circle
-                    className="opacity-25"
-                    cx="12"
-                    cy="12"
-                    r="10"
-                    stroke="currentColor"
-                    strokeWidth="4"
-                  ></circle>
-                  <path
-                    className="opacity-75"
-                    fill="currentColor"
-                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                  ></path>
-                </svg>
-                {submissionStep ||
-                  (activeTab === "supply" ? "Supplying..." : "Withdrawing...")}
-              </span>
-            ) : activeTab === "supply" ? (
-              <span className="flex items-center justify-center gap-2">
-                <svg
-                  className="w-5 h-5"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
-                  />
-                </svg>
-                Supply {asset.symbol}
-              </span>
-            ) : (
-              <span className="flex items-center justify-center gap-2">
-                <svg
-                  className="w-5 h-5"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
-                  />
-                </svg>
-                Withdraw {asset.symbol}
-              </span>
-            )}
-          </button>
-
-          {!walletAddress && (
-            <p className="mt-3 text-xs text-center text-zinc-500 dark:text-zinc-400">
-              Connect your Privy wallet to{" "}
-              {activeTab === "supply" ? "supply" : "withdraw"} tokens
-            </p>
-          )}
-
-          {/* Wallet Balance */}
-          <div className="flex justify-between items-center mt-4 pt-4 border-t border-zinc-200 dark:border-zinc-800">
-            <span className="text-zinc-500 dark:text-zinc-400 text-sm">
-              Wallet balance
-            </span>
-            <span className="text-sm font-medium flex items-center gap-2">
-              {loadingBalance ? (
+            </div>
+            <span className="text-sm font-bold flex items-center gap-2">
+              {loadingPortfolio ? (
                 <span className="text-zinc-400">Loading...</span>
-              ) : balance ? (
+              ) : (
                 <>
-                  <span className="text-zinc-500 dark:text-zinc-400">
-                    {parseFloat(balance).toFixed(4)} {asset.symbol}
+                  <span className="text-zinc-900 dark:text-zinc-50">
+                    {userSuppliedAmount.toFixed(4)} {asset.symbol}
                   </span>
                   {amount && parseFloat(amount) > 0 && (
                     <>
-                      <span className="text-yellow-500">→</span>
+                      <span className="text-zinc-400">→</span>
                       <span className="text-zinc-900 dark:text-zinc-50">
                         {(activeTab === "supply"
-                          ? parseFloat(balance) - parseFloat(amount)
-                          : parseFloat(balance) + parseFloat(amount)
+                          ? userSuppliedAmount + parseFloat(amount)
+                          : Math.max(0, userSuppliedAmount - parseFloat(amount))
                         ).toFixed(4)}{" "}
                         {asset.symbol}
                       </span>
                     </>
                   )}
                 </>
-              ) : (
-                "0.0000"
+              )}
+            </span>
+          </div>
+
+          {/* Supply APY with next value (matching MovePosition) */}
+          <div className="flex justify-between items-center">
+            <span className="text-sm text-zinc-500 dark:text-zinc-400">
+              Supply APY
+            </span>
+            <span className="text-sm font-medium text-green-600 dark:text-green-400 flex items-center gap-2">
+              {formatPercentage(supplyAPY.current)}
+              {supplyAPY.next !== null && supplyAPY.next < 1 && (
+                <>
+                  <span className="text-zinc-400">→</span>
+                  <span className="text-zinc-600 dark:text-zinc-400">
+                    {formatPercentage(supplyAPY.next)}
+                  </span>
+                </>
               )}
             </span>
           </div>
         </div>
+
+        {/* More/Less Button (matching MovePosition's ParamList) */}
+        {brokerStats && (
+          <div className="flex items-center gap-3 my-4">
+            <div className="flex-1 h-px bg-zinc-200 dark:bg-zinc-700"></div>
+            <button
+              onClick={() => setShowMore(!showMore)}
+              className="text-yellow-500 dark:text-yellow-400 text-sm font-medium px-4 py-2 hover:text-yellow-600 dark:hover:text-yellow-300 transition-colors"
+            >
+              {showMore ? "Less" : "More"}
+            </button>
+            <div className="flex-1 h-px bg-zinc-200 dark:bg-zinc-700"></div>
+          </div>
+        )}
+
+        {/* Broker Stats Section (matching MovePosition's brokerStats) - Only shown when showMore is true */}
+        {brokerStats && showMore && (
+          <div className="mb-4 p-4 rounded-xl bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-700 space-y-3">
+            <div className="text-xs font-semibold text-zinc-600 dark:text-zinc-400 uppercase tracking-wide mb-2">
+              Broker Statistics
+            </div>
+
+            {/* Total Available In Broker */}
+            <div className="flex justify-between items-center">
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-zinc-500 dark:text-zinc-400">
+                  Total Available In Broker
+                </span>
+                <div className="group relative">
+                  <svg
+                    className="w-3 h-3 text-zinc-400 cursor-help"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                    />
+                  </svg>
+                  <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-zinc-800 dark:bg-zinc-900 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-10">
+                    Liquidity available for borrowing or withdrawal in tokens
+                  </div>
+                </div>
+              </div>
+              <span className="text-sm font-medium text-zinc-900 dark:text-zinc-50 flex items-center gap-2">
+                {prettyTokenBal(brokerStats.totalAvailable)} {asset.symbol}
+                {brokerStats.nextAvailable !== null && (
+                  <>
+                    <span className="text-zinc-400">→</span>
+                    <span className="text-zinc-600 dark:text-zinc-400">
+                      {prettyTokenBal(brokerStats.nextAvailable)} {asset.symbol}
+                    </span>
+                  </>
+                )}
+              </span>
+            </div>
+
+            {/* Total Loaned By Broker */}
+            <div className="flex justify-between items-center">
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-zinc-500 dark:text-zinc-400">
+                  Total Loaned By Broker
+                </span>
+                <div className="group relative">
+                  <svg
+                    className="w-3 h-3 text-zinc-400 cursor-help"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                    />
+                  </svg>
+                  <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-zinc-800 dark:bg-zinc-900 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-10">
+                    Liquidity currently loaned to borrowers in tokens
+                  </div>
+                </div>
+              </div>
+              <span className="text-sm font-medium text-zinc-900 dark:text-zinc-50 flex items-center gap-2">
+                {prettyTokenBal(brokerStats.totalLoaned)} {asset.symbol}
+                {brokerStats.nextTotalLoaned !== null && (
+                  <>
+                    <span className="text-zinc-400">→</span>
+                    <span className="text-zinc-600 dark:text-zinc-400">
+                      {prettyTokenBal(brokerStats.nextTotalLoaned)}{" "}
+                      {asset.symbol}
+                    </span>
+                  </>
+                )}
+              </span>
+            </div>
+
+            {/* Total Supplied In Broker */}
+            <div className="flex justify-between items-center">
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-zinc-500 dark:text-zinc-400">
+                  Total Supplied In Broker
+                </span>
+                <div className="group relative">
+                  <svg
+                    className="w-3 h-3 text-zinc-400 cursor-help"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                    />
+                  </svg>
+                  <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-zinc-800 dark:bg-zinc-900 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-10">
+                    Liquidity supplied in tokens
+                  </div>
+                </div>
+              </div>
+              <span className="text-sm font-medium text-zinc-900 dark:text-zinc-50 flex items-center gap-2">
+                {prettyTokenBal(brokerStats.totalSupplied)} {asset.symbol}
+                {brokerStats.nextTotalSupplied !== null && (
+                  <>
+                    <span className="text-zinc-400">→</span>
+                    <span className="text-zinc-600 dark:text-zinc-400">
+                      {prettyTokenBal(brokerStats.nextTotalSupplied)}{" "}
+                      {asset.symbol}
+                    </span>
+                  </>
+                )}
+              </span>
+            </div>
+
+            {/* Pool Max Limit (shown for supply/withdraw tabs) */}
+            <div className="flex justify-between items-center">
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-zinc-500 dark:text-zinc-400">
+                  Pool Max Limit
+                </span>
+                <div className="group relative">
+                  <svg
+                    className="w-3 h-3 text-zinc-400 cursor-help"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                    />
+                  </svg>
+                  <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-zinc-800 dark:bg-zinc-900 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-10">
+                    Maximum liquidity that can be supplied to the pool
+                  </div>
+                </div>
+              </div>
+              <span className="text-sm font-medium text-zinc-900 dark:text-zinc-50">
+                {prettyTokenBal(brokerStats.poolMaxLimit)} {asset.symbol}
+              </span>
+            </div>
+
+            {/* Utilization */}
+            <div className="flex justify-between items-center">
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-zinc-500 dark:text-zinc-400">
+                  Utilization
+                </span>
+                <div className="group relative">
+                  <svg
+                    className="w-3 h-3 text-zinc-400 cursor-help"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                    />
+                  </svg>
+                  <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-zinc-800 dark:bg-zinc-900 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-10">
+                    Ratio of debt / collateral. High utilization increases
+                    interest
+                  </div>
+                </div>
+              </div>
+              <span className="text-sm font-medium text-zinc-900 dark:text-zinc-50 flex items-center gap-2">
+                {formatPercentage(brokerStats.utilization)}
+                {brokerStats.nextUtilization !== null && (
+                  <>
+                    <span className="text-zinc-400">→</span>
+                    <span className="text-zinc-600 dark:text-zinc-400">
+                      {formatPercentage(brokerStats.nextUtilization)}
+                    </span>
+                  </>
+                )}
+              </span>
+            </div>
+          </div>
+        )}
+
+        {/* Error Message - Show over limit errors before submission */}
+        {overLimitErrorMessage && (
+          <div className="mb-4 p-3 rounded-lg bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 text-sm text-yellow-700 dark:text-yellow-400">
+            {overLimitErrorMessage}
+          </div>
+        )}
+
+        {/* Transaction Error Message */}
+        {/* Error Message */}
+        {submitError && (
+          <div className="mb-4 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-sm text-red-700 dark:text-red-400">
+            {submitError}
+          </div>
+        )}
+
+        {/* Success Message - Self-managing, shows for 5 seconds then auto-dismisses */}
+        {/* Key ensures component unmounts completely when displayTxHash changes */}
+        {displayTxHash && (
+          <TransactionSuccessMessage
+            key={displayTxHash}
+            txHash={displayTxHash}
+            onClose={() => {
+              // Clear displayTxHash when notification closes
+              // The lastShownTxHashRef prevents it from showing again
+              setDisplayTxHash(null);
+              setShowButtonComplete(false);
+            }}
+          />
+        )}
+
+        {/* Submit Button */}
+        <button
+          onClick={handleSubmit}
+          disabled={(!canReview || submitting) && !txHash}
+          className={`w-full font-semibold py-3.5 rounded-lg transition-all duration-200 mt-4 shadow-lg ${
+            txHash
+              ? "bg-green-600 text-white cursor-pointer"
+              : canReview && !submitting
+                ? activeTab === "supply"
+                  ? "bg-green-600 text-white hover:bg-green-700 hover:shadow-xl active:scale-[0.98] cursor-pointer"
+                  : "bg-yellow-500 text-black hover:bg-yellow-400 hover:shadow-xl active:scale-[0.98] cursor-pointer"
+                : "bg-zinc-300 dark:bg-zinc-700 text-zinc-500 dark:text-zinc-400 cursor-not-allowed"
+          }`}
+        >
+          {displayTxHash && showButtonComplete ? (
+            <span className="flex items-center justify-center gap-2">
+              <svg
+                className="w-5 h-5"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M5 13l4 4L19 7"
+                />
+              </svg>
+              Transaction Complete
+            </span>
+          ) : submitting ? (
+            <span className="flex items-center justify-center gap-2">
+              <svg
+                className="w-5 h-5 animate-spin"
+                fill="none"
+                viewBox="0 0 24 24"
+              >
+                <circle
+                  className="opacity-25"
+                  cx="12"
+                  cy="12"
+                  r="10"
+                  stroke="currentColor"
+                  strokeWidth="4"
+                ></circle>
+                <path
+                  className="opacity-75"
+                  fill="currentColor"
+                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                ></path>
+              </svg>
+              {submissionStep ||
+                (activeTab === "supply" ? "Supplying..." : "Withdrawing...")}
+            </span>
+          ) : activeTab === "supply" ? (
+            <span className="flex items-center justify-center gap-2">
+              <svg
+                className="w-5 h-5"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                />
+              </svg>
+              Supply {asset.symbol}
+            </span>
+          ) : (
+            <span className="flex items-center justify-center gap-2">
+              <svg
+                className="w-5 h-5"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
+                />
+              </svg>
+              Withdraw {asset.symbol}
+            </span>
+          )}
+        </button>
+
+        {!walletAddress && (
+          <p className="mt-3 text-xs text-center text-zinc-500 dark:text-zinc-400">
+            Connect your Privy wallet to{" "}
+            {activeTab === "supply" ? "supply" : "withdraw"} tokens
+          </p>
+        )}
+
+        {/* Wallet Balance */}
+        <div className="flex justify-between items-center mt-4 pt-4 border-t border-zinc-200 dark:border-zinc-800">
+          <span className="text-zinc-500 dark:text-zinc-400 text-sm">
+            Wallet balance
+          </span>
+          <span className="text-sm font-medium flex items-center gap-2">
+            {loadingBalance ? (
+              <span className="text-zinc-400">Loading...</span>
+            ) : balance ? (
+              <>
+                <span className="text-zinc-500 dark:text-zinc-400">
+                  {parseFloat(balance).toFixed(4)} {asset.symbol}
+                </span>
+                {amount && parseFloat(amount) > 0 && (
+                  <>
+                    <span className="text-yellow-500">→</span>
+                    <span className="text-zinc-900 dark:text-zinc-50">
+                      {(activeTab === "supply"
+                        ? parseFloat(balance) - parseFloat(amount)
+                        : parseFloat(balance) + parseFloat(amount)
+                      ).toFixed(4)}{" "}
+                      {asset.symbol}
+                    </span>
+                  </>
+                )}
+              </>
+            ) : (
+              "0.0000"
+            )}
+          </span>
+        </div>
       </div>
+    </div>
+  );
+
+  if (inline) {
+    return content;
+  }
+
+  return (
+    <div className="fixed inset-0 z-9999 flex items-center justify-center bg-black/80 backdrop-blur-sm">
+      {content}
     </div>
   );
 }

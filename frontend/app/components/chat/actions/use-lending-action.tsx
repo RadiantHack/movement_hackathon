@@ -22,7 +22,7 @@ export function useLendingAction({
   useCopilotAction({
     name: "show_lending_platform_selection",
     description:
-      "Show platform selection UI after comparing lending/borrowing rates between Echelon and MovePosition. Use this when a lending comparison has been completed and the user needs to choose a platform.",
+      "MANDATORY: After comparing lending/borrowing rates between Echelon and MovePosition, you MUST call this action to show the platform selection UI. This action should be called immediately after providing rate comparisons (e.g., 'MovePosition offers 9.08% APY, Echelon offers 7.42% APY'). The user needs to see and select a platform before proceeding. Always call this action when you have compared rates for any asset.",
     parameters: [
       {
         name: "action",

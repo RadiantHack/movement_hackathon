@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { useEchelonRepay } from "../../../hooks/useEchelonRepay";
 import { AssetIcon } from "../../shared/ui";
 import { AssetInfo } from "../../../hooks/useEchelonTransactions";
@@ -36,23 +36,42 @@ export function EchelonRepayModal({
 }: EchelonRepayModalProps) {
   const [amount, setAmount] = useState("");
   const [percentage, setPercentage] = useState(0);
-  const [showSuccessMessage, setShowSuccessMessage] = useState(false);
+  const [displayTxHash, setDisplayTxHash] = useState<string | null>(null);
+  // Track last shown txHash to prevent re-showing
+  const lastShownTxHashRef = useRef<string | null>(null);
 
   // Use centralized repay hook
   const repay = useEchelonRepay({
     onSuccess: () => {
-      setShowSuccessMessage(true);
+      // Reset form state after successful transaction
+      setAmount("");
+      setPercentage(0);
       if (onSuccess) {
         onSuccess();
       }
-      // Hide success message after 250ms
-      setTimeout(() => {
-        setShowSuccessMessage(false);
-        setAmount("");
-        setPercentage(0);
-      }, 250);
     },
   });
+
+  // Show notification when txHash appears - only if it's a new txHash
+  useEffect(() => {
+    if (repay.txHash && repay.txHash !== lastShownTxHashRef.current) {
+      // Only show if this is a new txHash we haven't shown before
+      setDisplayTxHash(repay.txHash);
+      lastShownTxHashRef.current = repay.txHash;
+      // Reset amount input when transaction completes
+      setAmount("");
+    } else if (!repay.txHash) {
+      setDisplayTxHash(null);
+    }
+  }, [repay.txHash]);
+
+  // Clear displayTxHash when modal closes, reset tracking
+  useEffect(() => {
+    if (!isOpen) {
+      setDisplayTxHash(null);
+      lastShownTxHashRef.current = null;
+    }
+  }, [isOpen]);
 
   if (!isOpen || !asset) return null;
 
@@ -288,8 +307,17 @@ export function EchelonRepayModal({
           )}
 
           {/* Success Message */}
-          {repay.txHash && showSuccessMessage && (
-            <TransactionSuccessMessage txHash={repay.txHash} />
+          {/* Success Message - Self-managing, shows for 5 seconds then auto-dismisses */}
+          {displayTxHash && (
+            <TransactionSuccessMessage
+              key={displayTxHash}
+              txHash={displayTxHash}
+              onClose={() => {
+                // Clear displayTxHash immediately when notification closes
+                // This prevents it from showing again - notification is non-persistent
+                setDisplayTxHash(null);
+              }}
+            />
           )}
 
           {/* Repay Button */}
