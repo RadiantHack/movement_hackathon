@@ -14,10 +14,8 @@ import { executeLendV2, executeRedeemV2 } from "../../../utils/moveposition";
 import * as superJsonApiClient from "../../../../lib/super-json-api-client/src";
 import {
   getMovementApiBase,
-  requireMovementRpc,
 } from "@/lib/super-aptos-sdk/src/globals";
 import { selectBroker, validateBroker } from "../../../utils/moveposition";
-import { Aptos, AptosConfig, Network } from "@aptos-labs/ts-sdk";
 import { useMovePositionSupply } from "../../../hooks/useMovePositionSupply";
 import { useMovePositionWithdraw } from "../../../hooks/useMovePositionWithdraw";
 import { TransactionSuccessMessage } from "../../shared/modals";
@@ -400,81 +398,15 @@ export function SupplyModal({
         setPortfolioData(portfolioRes as unknown as PortfolioResponse);
         setBrokerData(brokersRes as unknown as any[]);
 
-        // For MOVE, check coin store balance first to select correct broker (matching MovePosition)
-        let coinStoreBalance: bigint | undefined;
-        let fungibleAssetBalance: bigint | undefined;
-
-        if (asset.symbol === "MOVE" || asset.symbol === "APT") {
-          try {
-            const movementRpc = requireMovementRpc();
-            const aptos = new Aptos(
-              new AptosConfig({
-                network: Network.MAINNET,
-                fullnode: movementRpc,
-              })
-            );
-            const accountResources = await aptos.account.getAccountResources({
-              accountAddress: walletAddress,
-            });
-            const nativeCoinStoreType =
-              "0x1::coin::CoinStore<0x1::aptos_coin::AptosCoin>";
-            const coinStore = accountResources.find(
-              (resource) => resource.type === nativeCoinStoreType
-            );
-            if (coinStore) {
-              coinStoreBalance = BigInt(
-                (coinStore.data as any).coin?.value || "0"
-              );
-            }
-
-            // Check fungible asset balance via API
-            try {
-              const balanceResponse = await fetch(
-                `/api/balance?address=${encodeURIComponent(walletAddress)}&token=${encodeURIComponent(asset.symbol)}`
-              );
-              if (balanceResponse.ok) {
-                const balanceData = await balanceResponse.json();
-                if (balanceData.success && balanceData.balances?.length > 0) {
-                  const tokenBalance = balanceData.balances.find((b: any) => {
-                    const symbol = (b.metadata?.symbol || "").toUpperCase();
-                    return symbol === asset.symbol.toUpperCase();
-                  });
-                  if (tokenBalance) {
-                    fungibleAssetBalance = BigInt(tokenBalance.amount || "0");
-                  }
-                }
-              }
-            } catch (e) {
-              console.warn(
-                "[SupplyModal] Could not check fungible asset balance:",
-                e
-              );
-            }
-
-            console.log(
-              "[SupplyModal] MOVE balance check for broker selection:",
-              {
-                coinStoreBalance: coinStoreBalance?.toString() || "0",
-                fungibleAssetBalance: fungibleAssetBalance?.toString() || "0",
-              }
-            );
-          } catch (e) {
-            console.warn(
-              "[SupplyModal] Could not check coin store balance:",
-              e
-            );
-          }
-        }
-
-        // Select broker using robust selection logic (matching MovePosition)
-        // Pass balance info to ensure correct broker selection for MOVE
+        // MovePosition ALWAYS uses movement-move-fa broker for MOVE transactions
+        // regardless of balance type. We match this behavior.
         const broker = selectBroker({
           symbol: asset.symbol,
           brokers: brokersRes as unknown as superJsonApiClient.Broker[],
           walletAddress,
           preferFungibleAsset: true,
-          coinStoreBalance,
-          fungibleAssetBalance,
+          // Note: We don't pass coinStoreBalance/fungibleAssetBalance anymore
+          // because MovePosition always uses movement-move-fa regardless of balance
         });
 
         if (validateBroker(broker)) {
