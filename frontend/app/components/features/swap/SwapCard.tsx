@@ -380,13 +380,7 @@ export const SwapCard: React.FC<SwapCardProps> = ({
       return;
     }
 
-    await swap.handleSwap(
-      fromToken,
-      toToken,
-      fromAmount,
-      quote,
-      fromBalance
-    );
+    await swap.handleSwap(fromToken, toToken, fromAmount, quote, fromBalance);
   };
 
   const canSwap = useMemo(() => {
@@ -514,7 +508,7 @@ export const SwapCard: React.FC<SwapCardProps> = ({
         <div className="relative flex justify-center py-2 z-10">
           <button
             onClick={handleSwapTokens}
-                disabled={swap.swapping}
+            disabled={swap.swapping}
             className="p-2.5 rounded-xl bg-white/90 dark:bg-zinc-800/90 backdrop-blur-sm border border-zinc-200/80 dark:border-zinc-700/60 shadow-lg hover:shadow-xl text-zinc-600 dark:text-zinc-400 hover:text-purple-600 dark:hover:text-purple-400 transition-all duration-200 hover:scale-110 hover:border-purple-300/60 dark:hover:border-purple-600/60 disabled:opacity-50"
             aria-label="Swap tokens"
           >
@@ -620,7 +614,7 @@ export const SwapCard: React.FC<SwapCardProps> = ({
             value={slippage}
             onChange={(e) => setSlippage(parseFloat(e.target.value))}
             className="w-full h-1.5 sm:h-2 bg-zinc-200 dark:bg-zinc-700 rounded-full appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 sm:[&::-webkit-slider-thumb]:w-4 sm:[&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-gradient-to-r [&::-webkit-slider-thumb]:from-purple-500 [&::-webkit-slider-thumb]:to-violet-500 [&::-webkit-slider-thumb]:shadow-lg [&::-webkit-slider-thumb]:shadow-purple-500/30 [&::-webkit-slider-thumb]:cursor-pointer"
-                disabled={swap.swapping}
+            disabled={swap.swapping}
           />
           <div className="flex justify-between text-[10px] sm:text-xs text-zinc-400 mt-1.5 sm:mt-2">
             <span>0.1%</span>
