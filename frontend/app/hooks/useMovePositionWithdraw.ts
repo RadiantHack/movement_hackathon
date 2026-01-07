@@ -6,7 +6,7 @@
 import { useState, useCallback } from "react";
 import { usePrivy } from "@privy-io/react-auth";
 import { useSignRawHash } from "@privy-io/react-auth/extended-chains";
-import { executeRedeemV2 } from "../utils/lend-v2-utils";
+import { executeRedeemV2 } from "../utils/moveposition";
 import {
   validateMovePositionAmount,
   validateMovePositionWallet,
@@ -14,7 +14,7 @@ import {
 } from "../utils/moveposition/validation";
 import { useBalance } from "./useBalanceContext";
 import { useMovementWallet } from "./useMovementWallet";
-import { getCoinDecimals, convertAmountToRaw } from "../utils/token-utils";
+import { getCoinDecimals, convertAmountToRaw } from "../utils/shared/tokens";
 
 interface UseMovePositionWithdrawOptions {
   onSuccess?: () => void;

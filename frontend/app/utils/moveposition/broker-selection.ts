@@ -3,9 +3,9 @@
  * Handles robust broker selection from symbol/asset information
  */
 
-import * as superJsonApiClient from "../../lib/super-json-api-client/src";
+import * as superJsonApiClient from "../../../lib/super-json-api-client/src";
 import { getBrokerName } from "./lending-transaction";
-import { getCoinType } from "./token-utils";
+import { getCoinType } from "../shared/tokens";
 
 export interface BrokerSelectionOptions {
   symbol: string;

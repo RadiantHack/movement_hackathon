@@ -4,12 +4,12 @@ import React, { useState, useMemo, useEffect } from "react";
 import { usePrivy } from "@privy-io/react-auth";
 import { useMovementWallet } from "../../../hooks/useMovementWallet";
 import { useSignRawHash } from "@privy-io/react-auth/extended-chains";
-import { executeLendV2, executeRedeemV2 } from "../../../utils/lend-v2-utils";
+import { executeLendV2, executeRedeemV2 } from "../../../utils/moveposition";
 import {
   getCoinDecimals,
   convertAmountToRaw,
-} from "../../../utils/token-utils";
-import { getBrokerName } from "../../../utils/lending-transaction";
+} from "../../../utils/shared/tokens";
+import { getBrokerName } from "../../../utils/moveposition";
 import { getMovementApiBase } from "@/lib/super-aptos-sdk/src/globals";
 import * as superJsonApiClient from "../../../../lib/super-json-api-client/src";
 

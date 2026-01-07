@@ -1,4 +1,4 @@
-import { ALL_TOKENS, getTokenBySymbol } from "./token-constants";
+import { ALL_TOKENS, getTokenBySymbol } from "../tokens/token-constants";
 
 /**
  * Get token icon URL from various sources

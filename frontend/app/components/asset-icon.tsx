@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { getAssetIconUrl } from "../utils/asset-icon";
+import { getAssetIconUrl } from "../utils/shared/icons";
 
 interface AssetIconProps {
   symbol: string;

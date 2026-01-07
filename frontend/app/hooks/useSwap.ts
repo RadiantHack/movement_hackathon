@@ -7,7 +7,7 @@ import { useState, useCallback } from "react";
 import { usePrivy } from "@privy-io/react-auth";
 import { useSignRawHash } from "@privy-io/react-auth/extended-chains";
 import { Aptos } from "@aptos-labs/ts-sdk";
-import type { MosaicQuoteResponse } from "../utils/mosaic-api";
+import type { MosaicQuoteResponse } from "../utils/swap";
 import {
   executeSwap,
   getSwapErrorMessage,

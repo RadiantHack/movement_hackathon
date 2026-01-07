@@ -18,7 +18,7 @@ import {
 import { HttpAgent } from "@ag-ui/client";
 import { A2AMiddlewareAgent } from "../helper.ts";
 import { NextRequest, NextResponse } from "next/server";
-import { isRailwayDeployment } from "../../utils/deployment";
+import { isRailwayDeployment } from "../../utils/shared/deployment";
 
 // Handle CORS preflight requests
 export async function OPTIONS(request: NextRequest) {

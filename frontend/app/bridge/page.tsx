@@ -11,7 +11,7 @@ import { AssetIcon } from "../components/asset-icon";
 import { useSignRawHash } from "@privy-io/react-auth/extended-chains";
 import { useMovementConfig } from "../hooks/useMovementConfig";
 import { executeBridge, isValidEthereumAddress } from "../utils/bridge";
-import { createAptosClient } from "../utils/aptos-client";
+import { createAptosClient } from "../utils/shared/clients";
 import { useMovementWallet } from "../hooks/useMovementWallet";
 
 const MOVEMENT_CHAIN = {

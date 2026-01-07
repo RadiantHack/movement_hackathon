@@ -10,8 +10,8 @@ import {
   Hex,
 } from "@aptos-labs/ts-sdk";
 import { toHex } from "viem";
-import * as superJsonApiClient from "../../lib/super-json-api-client/src";
-import { store } from "../../store";
+import * as superJsonApiClient from "../../../lib/super-json-api-client/src";
+import { store } from "../../../store";
 
 // Movement Network configuration via runtime Redux config
 const MOVEMENT_NETWORK = Network.MAINNET;

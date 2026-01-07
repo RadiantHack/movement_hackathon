@@ -14,10 +14,10 @@ import React, { useMemo, useState } from "react";
 import { TransferData } from "../../types";
 import { TokenBalance } from "../../../types";
 import { useMovementConfig } from "../../../hooks/useMovementConfig";
-import { createAptosClient } from "../../../utils/aptos-client";
+import { createAptosClient } from "../../../utils/shared/clients";
 import { useTransfer } from "../../../hooks/useTransfer";
 import { useMovementWallet } from "../../../hooks/useMovementWallet";
-import { getTokenBySymbol } from "../../../utils/token-constants";
+import { getTokenBySymbol } from "../../../utils/shared/tokens";
 
 interface TransferCardProps {
   data: TransferData;

@@ -3,18 +3,18 @@
 import React, { useState, useMemo, useEffect } from "react";
 import { usePrivy } from "@privy-io/react-auth";
 import { useMovementWallet } from "../../../hooks/useMovementWallet";
-import { getTokenBySymbol, getAllTokens } from "../../../utils/token-constants";
+import { getTokenBySymbol, getAllTokens } from "../../../utils/shared/tokens";
 import {
   getQuote,
   getMosaicAssetFormat,
   type MosaicQuoteResponse,
-} from "../../../utils/mosaic-api";
+} from "../../../utils/swap";
 import { Network } from "@aptos-labs/ts-sdk";
 import { useMovementConfig } from "@/app/hooks/useMovementConfig";
 import { TokenBalance } from "../../../types";
 import { useSwap } from "../../../hooks/useSwap";
 import { useBalance } from "@/app/hooks/useBalanceContext";
-import { createAptosClient } from "../../../utils/aptos-client";
+import { createAptosClient } from "../../../utils/shared/clients";
 import { TransactionSuccessMessage } from "../../shared/TransactionSuccessMessage";
 
 // Mosaic API is used for quotes and routing - no hardcoded routes needed

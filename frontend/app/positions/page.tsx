@@ -10,9 +10,9 @@ import { ThemeToggle } from "../components/themeToggle";
 import { AuthGuard } from "../components/auth-guard";
 import { SupplyModal } from "../components/supply-modal";
 import { BorrowModal } from "../components/borrow-modal";
-import { getTokenBySymbol, getVerifiedTokens } from "../utils/token-constants";
+import { getTokenBySymbol, getVerifiedTokens } from "../utils/shared/tokens";
 import { AssetIcon } from "../components/asset-icon";
-import { type TokenInfo } from "../utils/tokens";
+import { type TokenInfo } from "../utils/shared/tokens";
 import * as superJsonApiClient from "../../lib/super-json-api-client/src";
 import { getMovementApiBase } from "@/lib/super-aptos-sdk/src/globals";
 

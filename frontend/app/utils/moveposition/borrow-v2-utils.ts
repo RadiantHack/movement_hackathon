@@ -3,8 +3,8 @@
  * Uses SuperpositionAptosSDK and SuperClient API
  */
 
-import * as superSDK from "../../lib/super-aptos-sdk/src";
-import * as superJsonApiClient from "../../lib/super-json-api-client/src";
+import * as superSDK from "../../../lib/super-aptos-sdk/src";
+import * as superJsonApiClient from "../../../lib/super-json-api-client/src";
 import {
   Aptos,
   AptosConfig,
@@ -21,7 +21,7 @@ import {
   getCoinType,
   getBrokerAddress,
   getCoinDecimals,
-} from "./token-utils";
+} from "../shared/tokens";
 import {
   requireMovementChainId,
   requireMovementApiBase,

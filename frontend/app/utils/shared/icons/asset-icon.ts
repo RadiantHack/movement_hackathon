@@ -1,5 +1,5 @@
 import { getTokenIconUrl } from "./token-icons";
-import { getTokenBySymbol } from "./token-constants";
+import { getTokenBySymbol } from "../tokens/token-constants";
 
 /**
  * Centralized asset icon utility

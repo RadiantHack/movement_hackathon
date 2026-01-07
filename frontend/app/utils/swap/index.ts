@@ -7,7 +7,7 @@ import {
   ChainId,
 } from "@aptos-labs/ts-sdk";
 import { toHex } from "viem";
-import type { MosaicQuoteResponse } from "../mosaic-api";
+import type { MosaicQuoteResponse } from "./mosaic-api";
 
 // Re-export validation functions
 export {
@@ -15,6 +15,9 @@ export {
   validateTokenPair,
   type SwapValidationResult,
 } from "./validation";
+
+// Re-export mosaic API
+export * from "./mosaic-api";
 
 interface ExecuteSwapParams {
   aptos: Aptos;
