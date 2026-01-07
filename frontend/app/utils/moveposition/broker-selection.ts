@@ -41,8 +41,10 @@ export function selectBroker(
       // If user has coin store balance, MUST use regular MOVE broker (NOT MOVE-FA)
       if (options.coinStoreBalance !== undefined) {
         const hasCoinBalance = options.coinStoreBalance > BigInt(0);
-        const hasNoFABalance = options.fungibleAssetBalance === undefined || options.fungibleAssetBalance === BigInt(0);
-        
+        const hasNoFABalance =
+          options.fungibleAssetBalance === undefined ||
+          options.fungibleAssetBalance === BigInt(0);
+
         if (hasCoinBalance) {
           // User has coin store balance - MUST use regular MOVE broker (NOT MOVE-FA)
           const regularMoveBroker = matchingBrokers.find((b) => {
@@ -65,7 +67,10 @@ export function selectBroker(
               `[BrokerSelection] Coin store balance exists but no regular MOVE broker found. Available: ${matchingBrokers.map((b) => b.underlyingAsset.name).join(", ")}`
             );
           }
-        } else if (options.fungibleAssetBalance !== undefined && options.fungibleAssetBalance > BigInt(0)) {
+        } else if (
+          options.fungibleAssetBalance !== undefined &&
+          options.fungibleAssetBalance > BigInt(0)
+        ) {
           // User has fungible asset balance - use MOVE-FA broker
           const moveFABroker = matchingBrokers.find((b) => {
             const assetName = (b.underlyingAsset?.name || "").toLowerCase();

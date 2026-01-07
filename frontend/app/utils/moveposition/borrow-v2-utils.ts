@@ -267,7 +267,11 @@ export async function executeBorrowV2(params: BorrowV2Params): Promise<string> {
   // Use superBorrowV2Ix exactly like MovePosition (line 214 in doTx.ts)
   // MovePosition: ix = superAptosSDK.superBorrowV2Ix(ar, broker.underlyingAsset.networkAddress, address)
   // superBorrowV2Ix converts Uint8Array to Array internally and includes sender
-  const transactionData = sdk.superBorrowV2Ix(ticketUintArray, coinTypeFromBroker, walletAddress);
+  const transactionData = sdk.superBorrowV2Ix(
+    ticketUintArray,
+    coinTypeFromBroker,
+    walletAddress
+  );
 
   // Extract function and arguments from transactionData (same pattern as superLendV2Ix)
   const txData = transactionData.data as any;
@@ -645,7 +649,11 @@ export async function executeRepayV2(params: BorrowV2Params): Promise<string> {
   // Use superRepayV2Ix exactly like MovePosition (line 217 in doTx.ts)
   // MovePosition: ix = superAptosSDK.superRepayV2Ix(ar, broker.underlyingAsset.networkAddress, address)
   // superRepayV2Ix converts Uint8Array to Array internally and includes sender
-  const transactionData = sdk.superRepayV2Ix(ticketUintArray, coinTypeFromBroker, walletAddress);
+  const transactionData = sdk.superRepayV2Ix(
+    ticketUintArray,
+    coinTypeFromBroker,
+    walletAddress
+  );
 
   // Extract function and arguments from transactionData (same pattern as superLendV2Ix)
   const txData = transactionData.data as any;

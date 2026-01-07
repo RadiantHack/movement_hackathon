@@ -12,7 +12,10 @@ import {
 } from "../../../utils/shared/tokens";
 import { executeLendV2, executeRedeemV2 } from "../../../utils/moveposition";
 import * as superJsonApiClient from "../../../../lib/super-json-api-client/src";
-import { getMovementApiBase, requireMovementRpc } from "@/lib/super-aptos-sdk/src/globals";
+import {
+  getMovementApiBase,
+  requireMovementRpc,
+} from "@/lib/super-aptos-sdk/src/globals";
 import { selectBroker, validateBroker } from "../../../utils/moveposition";
 import { Aptos, AptosConfig, Network } from "@aptos-labs/ts-sdk";
 import { useMovePositionSupply } from "../../../hooks/useMovePositionSupply";
@@ -400,7 +403,7 @@ export function SupplyModal({
         // For MOVE, check coin store balance first to select correct broker (matching MovePosition)
         let coinStoreBalance: bigint | undefined;
         let fungibleAssetBalance: bigint | undefined;
-        
+
         if (asset.symbol === "MOVE" || asset.symbol === "APT") {
           try {
             const movementRpc = requireMovementRpc();
@@ -419,9 +422,11 @@ export function SupplyModal({
               (resource) => resource.type === nativeCoinStoreType
             );
             if (coinStore) {
-              coinStoreBalance = BigInt((coinStore.data as any).coin?.value || "0");
+              coinStoreBalance = BigInt(
+                (coinStore.data as any).coin?.value || "0"
+              );
             }
-            
+
             // Check fungible asset balance via API
             try {
               const balanceResponse = await fetch(
@@ -440,15 +445,24 @@ export function SupplyModal({
                 }
               }
             } catch (e) {
-              console.warn("[SupplyModal] Could not check fungible asset balance:", e);
+              console.warn(
+                "[SupplyModal] Could not check fungible asset balance:",
+                e
+              );
             }
-            
-            console.log("[SupplyModal] MOVE balance check for broker selection:", {
-              coinStoreBalance: coinStoreBalance?.toString() || "0",
-              fungibleAssetBalance: fungibleAssetBalance?.toString() || "0",
-            });
+
+            console.log(
+              "[SupplyModal] MOVE balance check for broker selection:",
+              {
+                coinStoreBalance: coinStoreBalance?.toString() || "0",
+                fungibleAssetBalance: fungibleAssetBalance?.toString() || "0",
+              }
+            );
           } catch (e) {
-            console.warn("[SupplyModal] Could not check coin store balance:", e);
+            console.warn(
+              "[SupplyModal] Could not check coin store balance:",
+              e
+            );
           }
         }
 
@@ -503,7 +517,7 @@ export function SupplyModal({
   // DUST_LIMIT matching MovePosition (line 469 in tokens.ts)
   // Amounts below this are treated as zero (no position)
   const DUST_LIMIT = 0.00000001;
-  
+
   // MIN_DISPLAY_AMOUNT: Hide very small amounts from UI even if above DUST_LIMIT
   // This prevents showing amounts like 0.000001 that can't be successfully withdrawn
   const MIN_DISPLAY_AMOUNT = 0.00001; // 0.00001 tokens minimum to display
@@ -532,8 +546,9 @@ export function SupplyModal({
 
     // scaledAmount × depositNoteExchangeRate = actual underlying amount
     // Matching MovePosition's calcSupplyData: underlyingTokenBalance = noteBalance * exchangeRate
-    const underlyingTokenBalance = parseFloat(collateral.scaledAmount) * exchangeRate;
-    
+    const underlyingTokenBalance =
+      parseFloat(collateral.scaledAmount) * exchangeRate;
+
     // Match MovePosition: hasSupply = underlyingTokenBalance >= DUST_LIMIT (line 124)
     // If below dust limit, treat as zero (no position)
     return underlyingTokenBalance >= DUST_LIMIT ? underlyingTokenBalance : 0;
@@ -754,7 +769,7 @@ export function SupplyModal({
 
     // Get exact note token balance (in scaled format)
     const noteTokenBalance = parseFloat(collateral.scaledAmount || "0");
-    
+
     // Convert note tokens to underlying tokens using exchange rate
     // This matches MovePosition's calcSupplyData: underlyingTokenBalance = noteBalance * exchangeRate
     const exchangeRate = selectedBroker.depositNoteExchangeRate || 1;
@@ -781,7 +796,8 @@ export function SupplyModal({
   // This is the EXACT raw note token balance that will be sent to API when "Max" is clicked
   // This ensures we withdraw exactly what the user has, leaving zero balance
   const maxWithdrawNoteTokenBalanceRaw = useMemo(() => {
-    if (activeTab !== "withdraw" || !selectedBroker || !portfolioData) return null;
+    if (activeTab !== "withdraw" || !selectedBroker || !portfolioData)
+      return null;
 
     const depositNoteName = selectedBroker.depositNote?.name;
     if (!depositNoteName) return null;
@@ -1348,20 +1364,24 @@ export function SupplyModal({
       // This ensures we withdraw exactly what user has, leaving zero balance
       const maxWithdraw =
         maxWithdrawableAmount > 0 ? maxWithdrawableAmount : undefined;
-      
+
       // Check if user is withdrawing max amount (within small tolerance for floating point)
-      const isMaxWithdraw = maxWithdrawNoteTokenBalanceRaw && maxWithdrawableAmount > 0 &&
+      const isMaxWithdraw =
+        maxWithdrawNoteTokenBalanceRaw &&
+        maxWithdrawableAmount > 0 &&
         Math.abs(parseFloat(amount) - maxWithdrawableAmount) < 0.00000001;
-      
+
       // For very small amounts (dust), always use exact note balance to avoid conversion errors
       // This handles cases where 0.000001 USDC shows but conversion fails
       // If amount is very small (< 0.00001), use exact note balance
-      const isSmallAmount = parseFloat(amount) < 0.00001 && parseFloat(amount) > 0;
-      const shouldUseExactBalance = isMaxWithdraw || (isSmallAmount && maxWithdrawNoteTokenBalanceRaw);
-      
+      const isSmallAmount =
+        parseFloat(amount) < 0.00001 && parseFloat(amount) > 0;
+      const shouldUseExactBalance =
+        isMaxWithdraw || (isSmallAmount && maxWithdrawNoteTokenBalanceRaw);
+
       await withdraw.handleWithdraw(
-        asset, 
-        amount, 
+        asset,
+        amount,
         maxWithdraw,
         shouldUseExactBalance ? maxWithdrawNoteTokenBalanceRaw : undefined
       );
@@ -1494,18 +1514,19 @@ export function SupplyModal({
               </span>
             </div>
           )}
-          {activeTab === "withdraw" && maxWithdrawableAmount >= MIN_DISPLAY_AMOUNT && (
-            <div className="text-xs text-zinc-500 dark:text-zinc-400 mt-2">
-              Available to withdraw:{" "}
-              {loadingPortfolio ? (
-                <span className="text-zinc-400">Loading...</span>
-              ) : (
-                <span className="text-zinc-700 dark:text-zinc-300 font-medium">
-                  {maxWithdrawableAmount.toFixed(6)} {asset.symbol}
-                </span>
-              )}
-            </div>
-          )}
+          {activeTab === "withdraw" &&
+            maxWithdrawableAmount >= MIN_DISPLAY_AMOUNT && (
+              <div className="text-xs text-zinc-500 dark:text-zinc-400 mt-2">
+                Available to withdraw:{" "}
+                {loadingPortfolio ? (
+                  <span className="text-zinc-400">Loading...</span>
+                ) : (
+                  <span className="text-zinc-700 dark:text-zinc-300 font-medium">
+                    {maxWithdrawableAmount.toFixed(6)} {asset.symbol}
+                  </span>
+                )}
+              </div>
+            )}
         </div>
 
         {/* Stats - Always show previously supplied and health factor */}
