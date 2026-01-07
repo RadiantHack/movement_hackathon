@@ -1,7 +1,8 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { usePrivy, WalletWithMetadata } from "@privy-io/react-auth";
+import { usePrivy } from "@privy-io/react-auth";
+import { useMovementWallet } from "../hooks/useMovementWallet";
 import { useCreateWallet as useCreateExtendedWallet } from "@privy-io/react-auth/extended-chains";
 import { useState, useEffect } from "react";
 
@@ -51,14 +52,7 @@ export function RightSidebar({
     setPendingAction("Movement");
   };
 
-  /**
-   * Get Movement wallet from user's linked accounts
-   * Backend returns chainType as "aptos" for Movement wallets
-   */
-  const movementWallet = user?.linkedAccounts.find(
-    (account): account is WalletWithMetadata =>
-      account.type === "wallet" && account.chainType === "aptos"
-  );
+  const movementWallet = useMovementWallet();
 
   // Mock recent transactions - replace with actual data
   const recentTransactions = [

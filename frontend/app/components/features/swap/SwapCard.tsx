@@ -1,7 +1,8 @@
 "use client";
 
 import React, { useState, useMemo, useEffect } from "react";
-import { usePrivy, WalletWithMetadata } from "@privy-io/react-auth";
+import { usePrivy } from "@privy-io/react-auth";
+import { useMovementWallet } from "../../../hooks/useMovementWallet";
 import { getTokenBySymbol, getAllTokens } from "../../../utils/token-constants";
 import {
   getQuote,
@@ -139,18 +140,7 @@ export const SwapCard: React.FC<SwapCardProps> = ({
     return getTokenBySymbol(normalized);
   }, [toToken]);
 
-  // Get Movement wallet from user's linked accounts
-  const movementWallet = useMemo(() => {
-    if (!ready || !authenticated || !user?.linkedAccounts) {
-      return null;
-    }
-    return (
-      user.linkedAccounts.find(
-        (account): account is WalletWithMetadata =>
-          account.type === "wallet" && account.chainType === "aptos"
-      ) || null
-    );
-  }, [user, ready, authenticated]);
+  const movementWallet = useMovementWallet();
 
   // Fetch balance for fromToken
   useEffect(() => {
@@ -418,17 +408,13 @@ export const SwapCard: React.FC<SwapCardProps> = ({
     setTxHash(null);
 
     try {
-      // Get Aptos wallet from user's linked accounts
-      const aptosWallet = user?.linkedAccounts?.find(
-        (a) => a.type === "wallet" && a.chainType === "aptos"
-      ) as WalletWithMetadata | undefined;
-
-      if (!aptosWallet) {
+      // Use wallet from hook (already validated)
+      if (!movementWallet) {
         throw new Error("Aptos wallet not found");
       }
 
-      const senderAddress = aptosWallet.address as string;
-      const senderPubKeyWithScheme = aptosWallet.publicKey as string;
+      const senderAddress = movementWallet.address as string;
+      const senderPubKeyWithScheme = movementWallet.publicKey as string;
 
       // Execute the swap using the utility function
       const txHash = await executeSwap({
@@ -484,10 +470,15 @@ export const SwapCard: React.FC<SwapCardProps> = ({
 
   return (
     <div className="w-full max-w-full sm:max-w-[440px] mx-auto px-2 sm:px-3 md:px-4">
-      <div className="relative rounded-2xl p-3 sm:p-4 md:p-5 lg:p-6 bg-white dark:bg-zinc-900 border border-zinc-200/80 dark:border-zinc-700/50 shadow-xl shadow-zinc-200/50 dark:shadow-zinc-950/50 overflow-hidden">
-        {/* Background decoration */}
-        <div className="absolute -top-24 -right-24 w-48 h-48 bg-gradient-to-br from-purple-500/10 to-violet-500/10 rounded-full blur-3xl" />
-        <div className="absolute -bottom-24 -left-24 w-48 h-48 bg-gradient-to-tr from-purple-500/10 to-violet-500/10 rounded-full blur-3xl" />
+      <div className="relative rounded-3xl p-4 sm:p-5 md:p-6 lg:p-7 bg-white/95 dark:bg-zinc-900/95 backdrop-blur-xl border border-zinc-200/60 dark:border-zinc-700/40 shadow-2xl shadow-zinc-900/5 dark:shadow-zinc-950/50 overflow-hidden">
+        {/* Enhanced background decoration */}
+        <div className="absolute -top-32 -right-32 w-64 h-64 bg-gradient-to-br from-purple-500/15 via-violet-500/10 to-purple-500/15 rounded-full blur-3xl animate-pulse" />
+        <div
+          className="absolute -bottom-32 -left-32 w-64 h-64 bg-gradient-to-tr from-violet-500/15 via-purple-500/10 to-violet-500/15 rounded-full blur-3xl animate-pulse"
+          style={{ animationDuration: "3s" }}
+        />
+        {/* Subtle grid pattern */}
+        <div className="absolute inset-0 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px] opacity-30" />
 
         {/* Header */}
         <div className="relative flex items-center gap-2 sm:gap-3 mb-3 sm:mb-5">
@@ -518,10 +509,10 @@ export const SwapCard: React.FC<SwapCardProps> = ({
 
         {/* From Token */}
         <div className="relative mb-1">
-          <label className="block text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400 mb-1.5 sm:mb-2">
+          <label className="block text-[10px] sm:text-xs font-bold uppercase tracking-widest text-zinc-500 dark:text-zinc-400 mb-2.5 sm:mb-3">
             You Pay
           </label>
-          <div className="rounded-lg sm:rounded-xl border border-zinc-200 dark:border-zinc-700/50 bg-zinc-50/50 dark:bg-zinc-800/50 p-2 sm:p-3">
+          <div className="rounded-xl border border-zinc-200/80 dark:border-zinc-700/60 bg-gradient-to-br from-zinc-50/80 to-white dark:from-zinc-800/60 dark:to-zinc-900/80 backdrop-blur-sm p-3 sm:p-4 hover:border-purple-300/60 dark:hover:border-purple-600/60 hover:shadow-md hover:shadow-purple-500/10 transition-all duration-200">
             <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
               <input
                 type="text"
@@ -529,7 +520,7 @@ export const SwapCard: React.FC<SwapCardProps> = ({
                 value={fromAmount}
                 onChange={(e) => handleFromAmountChange(e.target.value)}
                 placeholder="0.0"
-                className="flex-1 min-w-0 bg-transparent text-base sm:text-lg md:text-xl font-semibold text-zinc-900 dark:text-zinc-50 placeholder-zinc-400 focus:outline-none overflow-hidden"
+                className="flex-1 min-w-0 bg-transparent text-base sm:text-lg md:text-xl font-bold text-zinc-900 dark:text-zinc-50 placeholder-zinc-400/60 focus:outline-none overflow-hidden"
                 disabled={swapping}
               />
               <select
@@ -564,7 +555,7 @@ export const SwapCard: React.FC<SwapCardProps> = ({
               {fromBalance !== null && parseFloat(fromBalance) > 0 && (
                 <button
                   onClick={() => setFromAmount(fromBalance)}
-                  className="px-1.5 sm:px-2 py-0.5 rounded-md bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 text-[10px] sm:text-xs font-bold uppercase tracking-wider hover:bg-purple-200 dark:hover:bg-purple-900/50 transition-colors"
+                  className="px-2.5 sm:px-3 py-1 rounded-lg bg-gradient-to-r from-purple-100 to-violet-100 dark:from-purple-900/40 dark:to-violet-900/40 text-purple-700 dark:text-purple-300 text-[10px] sm:text-xs font-bold uppercase tracking-wider hover:from-purple-200 hover:to-violet-200 dark:hover:from-purple-800/50 dark:hover:to-violet-800/50 transition-all duration-200 shadow-sm hover:shadow-md active:scale-95"
                   disabled={swapping}
                 >
                   Max
@@ -575,11 +566,11 @@ export const SwapCard: React.FC<SwapCardProps> = ({
         </div>
 
         {/* Swap Direction Button */}
-        <div className="relative flex justify-center py-1 z-10">
+        <div className="relative flex justify-center py-2 z-10">
           <button
             onClick={handleSwapTokens}
             disabled={swapping}
-            className="p-2 rounded-lg bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 shadow-md hover:shadow-lg text-zinc-600 dark:text-zinc-400 hover:text-purple-600 dark:hover:text-purple-400 transition-all duration-200 hover:scale-110 disabled:opacity-50"
+            className="p-2.5 rounded-xl bg-white/90 dark:bg-zinc-800/90 backdrop-blur-sm border border-zinc-200/80 dark:border-zinc-700/60 shadow-lg hover:shadow-xl text-zinc-600 dark:text-zinc-400 hover:text-purple-600 dark:hover:text-purple-400 transition-all duration-200 hover:scale-110 hover:border-purple-300/60 dark:hover:border-purple-600/60 disabled:opacity-50"
             aria-label="Swap tokens"
           >
             <svg
@@ -600,10 +591,10 @@ export const SwapCard: React.FC<SwapCardProps> = ({
 
         {/* To Token */}
         <div className="relative mb-3 sm:mb-4">
-          <label className="block text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400 mb-1.5 sm:mb-2">
+          <label className="block text-[10px] sm:text-xs font-bold uppercase tracking-widest text-zinc-500 dark:text-zinc-400 mb-2.5 sm:mb-3">
             You Receive
           </label>
-          <div className="rounded-lg sm:rounded-xl border border-zinc-200 dark:border-zinc-700/50 bg-zinc-50/50 dark:bg-zinc-800/50 p-2 sm:p-3">
+          <div className="rounded-xl border border-zinc-200/80 dark:border-zinc-700/60 bg-gradient-to-br from-zinc-50/80 to-white dark:from-zinc-800/60 dark:to-zinc-900/80 backdrop-blur-sm p-3 sm:p-4 hover:border-purple-300/60 dark:hover:border-purple-600/60 hover:shadow-md hover:shadow-purple-500/10 transition-all duration-200">
             <div className="flex items-center gap-2 min-w-0">
               <div className="flex-1 min-w-0 relative">
                 <input
@@ -623,7 +614,7 @@ export const SwapCard: React.FC<SwapCardProps> = ({
               <select
                 value={toToken}
                 onChange={(e) => setToToken(e.target.value)}
-                className="flex-shrink-0 w-[85px] sm:w-[95px] md:w-[100px] px-1.5 sm:px-2 py-2 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-50 font-semibold focus:outline-none focus:ring-2 focus:ring-purple-500/50 cursor-pointer text-[10px] sm:text-xs truncate"
+                className="flex-shrink-0 w-[85px] sm:w-[95px] md:w-[100px] px-2 sm:px-2.5 py-2 rounded-lg border border-zinc-200/80 dark:border-zinc-700/60 bg-white/90 dark:bg-zinc-800/90 backdrop-blur-sm text-zinc-900 dark:text-zinc-50 font-bold focus:outline-none focus:ring-2 focus:ring-purple-500/40 cursor-pointer text-[10px] sm:text-xs truncate hover:border-purple-300/60 dark:hover:border-purple-600/60 transition-all duration-200"
                 disabled={swapping}
               >
                 {availableTokens.map((token) => (
@@ -764,14 +755,14 @@ export const SwapCard: React.FC<SwapCardProps> = ({
         <button
           onClick={handleSwap}
           disabled={!canSwap}
-          className={`w-full py-2.5 sm:py-3.5 rounded-lg sm:rounded-xl text-sm sm:text-base font-semibold transition-all duration-200 shadow-md cursor-pointer ${
+          className={`relative w-full py-4 rounded-xl text-base font-bold transition-all duration-300 overflow-hidden group ${
             canSwap
-              ? "bg-gradient-to-r from-purple-600 to-violet-600 text-white shadow-xl shadow-purple-500/30 hover:shadow-2xl hover:shadow-purple-500/40 hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
-              : "bg-zinc-100 dark:bg-zinc-800 text-zinc-400 dark:text-zinc-500 cursor-not-allowed"
+              ? "bg-gradient-to-r from-purple-600 via-violet-600 to-purple-600 text-white shadow-lg shadow-purple-500/30 hover:shadow-xl hover:shadow-purple-500/40 hover:scale-[1.02] active:scale-[0.98]"
+              : "bg-zinc-200 dark:bg-zinc-800 text-zinc-400 dark:text-zinc-600 cursor-not-allowed"
           }`}
         >
           {canSwap && (
-            <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/20 to-white/0 translate-x-[-100%] hover:translate-x-[100%] transition-transform duration-700" />
+            <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/20 to-white/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700" />
           )}
           <span className="relative flex items-center justify-center gap-2">
             {swapping ? (

@@ -10,17 +10,14 @@
  * https://docs.privy.io/recipes/use-tier-2#movement
  */
 
-import React, { useState, useMemo } from "react";
-import { usePrivy, WalletWithMetadata } from "@privy-io/react-auth";
+import React, { useMemo, useState } from "react";
 import { TransferData } from "../../types";
 import { TokenBalance } from "../../../types";
-import { useSignRawHash } from "@privy-io/react-auth/extended-chains";
 import { useMovementConfig } from "../../../hooks/useMovementConfig";
-import {
-  executeTransfer,
-  getTransferErrorMessage,
-} from "../../../utils/transfer";
 import { createAptosClient } from "../../../utils/aptos-client";
+import { useTransfer } from "../../../hooks/useTransfer";
+import { useMovementWallet } from "../../../hooks/useMovementWallet";
+import { getTokenBySymbol } from "../../../utils/token-constants";
 
 interface TransferCardProps {
   data: TransferData;
@@ -31,11 +28,10 @@ export const TransferCard: React.FC<TransferCardProps> = ({
   data,
   onTransferInitiate,
 }) => {
-  const { signRawHash } = useSignRawHash();
   const { amount, token, tokenSymbol, toAddress, fromAddress, network, error } =
     data;
-  const { user, ready, authenticated } = usePrivy();
   const config = useMovementConfig();
+  const movementWallet = useMovementWallet();
 
   // Create Aptos instance using shared utility
   const aptos = useMemo(() => {
@@ -48,87 +44,37 @@ export const TransferCard: React.FC<TransferCardProps> = ({
     return config.movementChainId || 126;
   }, [config.movementChainId]);
 
-  const [transferring, setTransferring] = useState(false);
-  const [transferError, setTransferError] = useState<string | null>(null);
-  const [txHash, setTxHash] = useState<string | null>(null);
+  // Use transfer hook for centralized transfer logic
+  const transfer = useTransfer({
+    aptos,
+    movementChainId,
+    onSuccess: () => {
+      onTransferInitiate?.();
+    },
+  });
 
-  // Get Movement wallet from user's linked accounts
-  const movementWallet = useMemo(() => {
-    if (!ready || !authenticated || !user?.linkedAccounts) {
-      return null;
-    }
-    return (
-      user.linkedAccounts.find(
-        (account): account is WalletWithMetadata =>
-          account.type === "wallet" && account.chainType === "aptos"
-      ) || null
-    );
-  }, [user, ready, authenticated]);
+  // Local state for TransferCard-specific validation errors
+  const [cardError, setCardError] = useState<string | null>(null);
+
+  // Look up token information from token constants
+  const tokenInfo = useMemo(() => {
+    const symbol = (tokenSymbol || token || "").toUpperCase();
+    if (!symbol) return null;
+    return getTokenBySymbol(symbol);
+  }, [tokenSymbol, token]);
 
   const handleTransfer = async () => {
-    if (!movementWallet) {
-      setTransferError(
-        "Movement wallet not found. Please create a Movement wallet first."
-      );
-      return;
-    }
+    // Reset card-specific error
+    setCardError(null);
 
-    if (!ready || !authenticated) {
-      setTransferError("Please authenticate first.");
-      return;
-    }
+    const symbol = (tokenSymbol || token || "").toUpperCase();
 
-    setTransferring(true);
-    setTransferError(null);
-    setTxHash(null);
+    // If token info not found, try to create TokenBalance for native MOVE
+    let selectedToken: TokenBalance;
 
-    try {
-      if (!aptos) {
-        throw new Error("Aptos client not initialized");
-      }
-
-      // Get Aptos wallet from user's linked accounts
-      const aptosWallet = user?.linkedAccounts?.find((a: unknown) => {
-        const account = a as Record<string, unknown>;
-        return account.type === "wallet" && account.chainType === "aptos";
-      }) as WalletWithMetadata | undefined;
-
-      if (!aptosWallet) {
-        throw new Error("Aptos wallet not found");
-      }
-
-      const senderAddress = aptosWallet.address as string;
-      const publicKey = aptosWallet.publicKey as string;
-
-      if (!publicKey) {
-        throw new Error("Public key not found");
-      }
-
-      // Validate recipient address
-      if (
-        !toAddress ||
-        !toAddress.startsWith("0x") ||
-        toAddress.length !== 66
-      ) {
-        throw new Error(
-          "Invalid recipient address. Must be 66 characters and start with 0x."
-        );
-      }
-
-      // Determine if this is native MOVE token
-      const isNativeMove =
-        (tokenSymbol || token || "").toUpperCase() === "MOVE";
-
-      if (!isNativeMove) {
-        throw new Error(
-          `Transfer of ${tokenSymbol || token} requires assetType information. ` +
-            `Please use the transfer page for non-native tokens or provide assetType in TransferData.`
-        );
-      }
-
-      // Create minimal TokenBalance object for MOVE token
-      // TransferCard only supports MOVE transfers currently
-      const selectedToken: TokenBalance = {
+    if (symbol === "MOVE" || symbol === "APT") {
+      // Native MOVE token
+      selectedToken = {
         assetType: "0x1::aptos_coin::AptosCoin",
         amount: amount,
         formattedAmount: amount,
@@ -139,48 +85,47 @@ export const TransferCard: React.FC<TransferCardProps> = ({
         },
         isNative: true,
       };
+    } else if (tokenInfo) {
+      // Token found in token constants
+      // Determine assetType based on token type
+      let assetType: string;
+      if (tokenInfo.type === "coin" && tokenInfo.coinType) {
+        // For coin type tokens, use coinType
+        assetType = tokenInfo.coinType;
+      } else if (tokenInfo.faAddress) {
+        // For fungible assets, use faAddress
+        assetType = tokenInfo.faAddress;
+      } else if (tokenInfo.id) {
+        // Fallback to id
+        assetType = tokenInfo.id;
+      } else {
+        setCardError(
+          `Cannot determine asset type for token ${symbol}. Please check token configuration.`
+        );
+        return;
+      }
 
-      // Execute transfer using utility function
-      const txHash = await executeTransfer({
-        aptos: aptos!,
-        movementChainId,
-        senderAddress,
-        senderPubKeyWithScheme: publicKey,
-        selectedToken,
-        toAddress,
-        amount,
-        signRawHash,
-      });
-
-      setTxHash(txHash);
-      onTransferInitiate?.();
-    } catch (err: unknown) {
-      console.error("Transfer error:", err);
-
-      // Create a minimal TokenBalance for error message (only used if we have token info)
-      const isNativeMove =
-        (tokenSymbol || token || "").toUpperCase() === "MOVE";
-      const selectedToken: TokenBalance = {
-        assetType: isNativeMove ? "0x1::aptos_coin::AptosCoin" : "",
+      selectedToken = {
+        assetType: assetType,
         amount: amount,
         formattedAmount: amount,
         metadata: {
-          name: tokenSymbol || token || "Unknown",
-          symbol: tokenSymbol || token || "UNKNOWN",
-          decimals: 8,
+          name: tokenInfo.name,
+          symbol: tokenInfo.symbol,
+          decimals: tokenInfo.decimals,
         },
-        isNative: isNativeMove,
+        isNative: false,
       };
-
-      const errorMessage = getTransferErrorMessage(
-        err,
-        toAddress,
-        selectedToken
+    } else {
+      // Token not found in constants
+      setCardError(
+        `Token ${symbol} not found. Please ensure the token is supported or use the transfer page for custom tokens.`
       );
-      setTransferError(errorMessage);
-    } finally {
-      setTransferring(false);
+      return;
     }
+
+    // Execute transfer using hook
+    await transfer.handleTransfer(selectedToken, toAddress, amount);
   };
 
   const DetailRow = ({
@@ -244,14 +189,14 @@ export const TransferCard: React.FC<TransferCardProps> = ({
         <DetailRow label="Network" value={network} mono />
       </div>
 
-      {txHash && (
+      {transfer.txHash && (
         <div className="mb-5 p-4 bg-green-100/60 border border-green-200 rounded-lg shadow-sm">
           <p className="text-xs text-green-800 font-medium">Transaction Hash</p>
           <p className="text-xs text-green-900 font-mono break-all mt-1 mb-2">
-            {txHash}
+            {transfer.txHash}
           </p>
           <a
-            href={`${config.movementExplorerUrl || "https://explorer.movementlabs.xyz"}/txn/${txHash}`}
+            href={`${config.movementExplorerUrl || "https://explorer.movementlabs.xyz"}/txn/${transfer.txHash}`}
             target="_blank"
             rel="noopener noreferrer"
             className="text-xs font-medium text-green-700 hover:text-green-900 underline"
@@ -261,25 +206,25 @@ export const TransferCard: React.FC<TransferCardProps> = ({
         </div>
       )}
 
-      {transferError && (
+      {(transfer.error || cardError) && (
         <div className="mb-5 p-4 bg-red-100/60 border border-red-200 rounded-lg shadow-sm text-sm text-red-700">
-          {transferError}
+          {transfer.error || cardError}
         </div>
       )}
 
       <button
         onClick={handleTransfer}
-        disabled={transferring || !!txHash}
+        disabled={transfer.transferring || !!transfer.txHash}
         className={`w-full py-3.5 rounded-xl font-semibold transition-all duration-300 shadow-md
             ${
-              transferring || txHash
+              transfer.transferring || transfer.txHash
                 ? "bg-gray-300 text-gray-500 cursor-not-allowed"
                 : "bg-purple-600 text-white hover:bg-purple-700 hover:shadow-lg active:scale-95"
             }`}
       >
-        {transferring
+        {transfer.transferring
           ? "Transferring..."
-          : txHash
+          : transfer.txHash
             ? "Transfer Complete"
             : "Transfer"}
       </button>

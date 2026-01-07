@@ -1,6 +1,7 @@
 "use client";
 
-import { usePrivy, WalletWithMetadata } from "@privy-io/react-auth";
+import { usePrivy } from "@privy-io/react-auth";
+import { useMovementWallet } from "../hooks/useMovementWallet";
 import { useCreateWallet as useCreateExtendedWallet } from "@privy-io/react-auth/extended-chains";
 import { useState, useEffect } from "react";
 
@@ -10,14 +11,7 @@ export function MovementWalletModal() {
   const [isCreating, setIsCreating] = useState(false);
   const [pendingAction, setPendingAction] = useState(false);
 
-  /**
-   * Get Movement wallet from user's linked accounts
-   * Backend returns chainType as "aptos" for Movement wallets
-   */
-  const movementWallet = user?.linkedAccounts.find(
-    (account): account is WalletWithMetadata =>
-      account.type === "wallet" && account.chainType === "aptos"
-  );
+  const movementWallet = useMovementWallet();
 
   /**
    * Handle pending wallet creation actions after user/guest account is ready

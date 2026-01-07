@@ -1,6 +1,6 @@
 "use client";
 
-import { usePrivy, WalletWithMetadata } from "@privy-io/react-auth";
+import { usePrivy } from "@privy-io/react-auth";
 import { useState, useMemo, useEffect } from "react";
 import { Sidebar } from "../components/sidebar";
 import { RightSidebar } from "../components/right-sidebar";
@@ -8,31 +8,14 @@ import { ThemeToggle } from "../components/themeToggle";
 import { SwapCard } from "../components/features/swap";
 import { AuthGuard } from "../components/auth-guard";
 import { useBalance } from "../hooks/useBalanceContext";
+import { useMovementWallet } from "../hooks/useMovementWallet";
 
 export default function SwapPage() {
-  const { authenticated, user } = usePrivy();
+  const { authenticated } = usePrivy();
+  const movementWallet = useMovementWallet();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isRightSidebarOpen, setIsRightSidebarOpen] = useState(false);
   const { setWalletAddress } = useBalance();
-
-  // Get Movement wallet address (chainType is "aptos" for Movement wallets)
-  const movementWallet = useMemo(() => {
-    if (!authenticated || !user?.linkedAccounts) {
-      return null;
-    }
-
-    const aptosWallet = user.linkedAccounts.find(
-      (account): account is WalletWithMetadata => {
-        if (account.type !== "wallet") return false;
-        const walletAccount = account as WalletWithMetadata & {
-          chainType?: string;
-        };
-        return walletAccount.chainType === "aptos";
-      }
-    ) as (WalletWithMetadata & { chainType?: string }) | undefined;
-
-    return aptosWallet || null;
-  }, [user, authenticated]);
 
   const walletAddress = useMemo(() => {
     if (!movementWallet?.address) return null;

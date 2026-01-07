@@ -1,12 +1,13 @@
 "use client";
 
-import { usePrivy, WalletWithMetadata } from "@privy-io/react-auth";
+import { usePrivy } from "@privy-io/react-auth";
 import { useEffect, useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { Sidebar } from "../components/sidebar";
 import { RightSidebar } from "../components/right-sidebar";
 import { ThemeToggle } from "../components/themeToggle";
 import { AuthGuard } from "../components/auth-guard";
+import { useMovementWallet } from "../hooks/useMovementWallet";
 
 import TransferModal from "../components/transfer/TransferModal";
 import SwapModal from "../components/swap/SwapModal";
@@ -17,13 +18,15 @@ import { QRCodeSVG } from "qrcode.react";
 import { TokenBalance } from "../types";
 
 export default function OverviewPage() {
-  const { ready, authenticated, user } = usePrivy();
+  const { ready, authenticated } = usePrivy();
   const router = useRouter();
+  const movementWallet = useMovementWallet();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isRightSidebarOpen, setIsRightSidebarOpen] = useState(false);
   const [walletAddress, setWalletAddress] = useState<string | null>(null);
   const [balances, setBalances] = useState<TokenBalance[]>([]);
   const [loadingBalances, setLoadingBalances] = useState(true);
+  const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
   const [balanceError, setBalanceError] = useState<string | null>(null);
   const [showTransferModal, setShowTransferModal] = useState(false);
   const [showBridgeModal, setShowBridgeModal] = useState(false);
@@ -32,22 +35,6 @@ export default function OverviewPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [displayLimit, setDisplayLimit] = useState(10);
   const [tokenPrices, setTokenPrices] = useState<Record<string, number>>({});
-
-  const movementWallet = useMemo(() => {
-    if (!authenticated || !user?.linkedAccounts) {
-      return null;
-    }
-    const aptosWallet = user.linkedAccounts.find(
-      (account): account is WalletWithMetadata => {
-        if (account.type !== "wallet") return false;
-        const walletAccount = account as WalletWithMetadata & {
-          chainType?: string;
-        };
-        return walletAccount.chainType === "aptos";
-      }
-    ) as (WalletWithMetadata & { chainType?: string }) | undefined;
-    return aptosWallet || null;
-  }, [user, authenticated]);
 
   useEffect(() => {
     if (movementWallet?.address) {
@@ -64,7 +51,10 @@ export default function OverviewPage() {
         setLoadingBalances(false);
         return;
       }
-      setLoadingBalances(true);
+      // Only show loading on first load
+      if (!hasLoadedOnce) {
+        setLoadingBalances(true);
+      }
       setBalanceError(null);
       try {
         const response = await fetch(
@@ -76,6 +66,7 @@ export default function OverviewPage() {
         const data = await response.json();
         if (data.success && data.balances) {
           setBalances(data.balances);
+          setHasLoadedOnce(true);
         } else {
           setBalanceError(data.error || "Failed to load balances");
         }
@@ -90,7 +81,7 @@ export default function OverviewPage() {
     fetchBalances();
     const interval = setInterval(fetchBalances, 30000);
     return () => clearInterval(interval);
-  }, [walletAddress]);
+  }, [walletAddress, hasLoadedOnce]);
 
   useEffect(() => {
     if (ready && !authenticated) {
