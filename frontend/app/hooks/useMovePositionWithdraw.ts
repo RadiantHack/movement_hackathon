@@ -53,7 +53,8 @@ export function useMovePositionWithdraw({
     async (
       asset: { symbol: string; token: any },
       amount: string,
-      availableBalance?: number
+      availableBalance?: number,
+      exactNoteTokenBalanceRaw?: string
     ): Promise<boolean> => {
       // Reset error state
       setState((prev) => ({ ...prev, error: null, step: null }));
@@ -124,15 +125,26 @@ export function useMovePositionWithdraw({
       }));
 
       try {
-        // Convert amount to raw format
-        const decimals = getCoinDecimals(asset.symbol);
-        const rawAmount = convertAmountToRaw(amount, decimals);
+        // If exact note token balance is provided (from "Max" button), use it directly
+        // This matches MovePosition: maxWithdrawNoteUser is used as txAmount (exact note balance)
+        // Otherwise, convert underlying amount to raw format
+        let rawAmount: string;
+        if (exactNoteTokenBalanceRaw) {
+          // Use exact note token balance (already in raw format)
+          // This ensures we withdraw exactly what user has, leaving zero balance
+          rawAmount = exactNoteTokenBalanceRaw;
+        } else {
+          // Convert underlying amount to raw format
+          const decimals = getCoinDecimals(asset.symbol);
+          rawAmount = convertAmountToRaw(amount, decimals);
+        }
 
         const result = await executeRedeemV2({
           amount: rawAmount,
           coinSymbol: asset.symbol,
           walletAddress,
           publicKey,
+          useExactNoteBalance: !!exactNoteTokenBalanceRaw, // Flag to indicate we're using exact balance
           signHash: async (hash: string) => {
             setState((prev) => ({ ...prev, step: "Waiting for signature..." }));
             try {

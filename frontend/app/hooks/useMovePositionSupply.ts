@@ -53,7 +53,8 @@ export function useMovePositionSupply({
     async (
       asset: { symbol: string; token: any },
       amount: string,
-      availableBalance?: number
+      availableBalance?: number,
+      brokerName?: string // Optional: broker name to use directly (matching MovePosition)
     ): Promise<boolean> => {
       // Reset error state
       setState((prev) => ({ ...prev, error: null, step: null }));
@@ -133,6 +134,7 @@ export function useMovePositionSupply({
           coinSymbol: asset.symbol,
           walletAddress,
           publicKey,
+          brokerName, // Pass broker name directly (matching MovePosition's approach)
           signHash: async (hash: string) => {
             setState((prev) => ({ ...prev, step: "Waiting for signature..." }));
             try {

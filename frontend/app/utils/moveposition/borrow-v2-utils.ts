@@ -58,19 +58,22 @@ export interface PortfolioState {
   liabilities: Array<{ instrumentId: string; amount: string }>;
 }
 
+/**
+ * Get broker from API by network address
+ * Matches MovePosition's approach: find broker by networkAddress
+ * Returns full broker object to access underlyingAsset.name and underlyingAsset.networkAddress
+ */
 async function getBrokerFromAPI(
   superClient: superJsonApiClient.SuperClient,
   brokerAddress: string
-): Promise<{ name: string; networkAddress: string }> {
+): Promise<superJsonApiClient.Broker> {
   const brokers = await superClient.default.getBrokers();
+  // Match MovePosition: find by networkAddress (broker.networkAddress, not underlyingAsset.networkAddress)
   const broker = brokers.find((b) => b.networkAddress === brokerAddress);
   if (!broker) {
     throw new Error(`Broker not found for address: ${brokerAddress}`);
   }
-  return {
-    name: broker.underlyingAsset.name,
-    networkAddress: broker.underlyingAsset.networkAddress,
-  };
+  return broker;
 }
 
 /**
@@ -195,9 +198,12 @@ export async function executeBorrowV2(params: BorrowV2Params): Promise<string> {
   // Get broker data to use the exact networkAddress (coinType) from API
   // This matches MovePosition's approach: broker.underlyingAsset.networkAddress
   const broker = await getBrokerFromAPI(superClient, brokerAddress);
-  const brokerName = broker.name;
-  // Use the networkAddress from the broker API response (matches MovePosition)
-  const coinTypeFromBroker = broker.networkAddress;
+  // Use broker.underlyingAsset.name for API calls (matches MovePosition doTx.ts line 156)
+  // MovePosition uses: brokerName: broker.underlyingAsset.name
+  const brokerName = broker.underlyingAsset.name;
+  // Use the networkAddress from the broker API response (matches MovePosition doTx.ts line 208)
+  // MovePosition uses: broker.underlyingAsset.networkAddress in SDK calls
+  const coinTypeFromBroker = broker.underlyingAsset.networkAddress;
 
   if (onProgress) {
     onProgress("Fetching portfolio state...");
@@ -258,21 +264,39 @@ export async function executeBorrowV2(params: BorrowV2Params): Promise<string> {
   // This is required because wallets prefer Array over Uint8Array
   const packetArray = Array.from(ticketUintArray);
 
-  // Use the coinType from broker API response (matches MovePosition's broker.underlyingAsset.networkAddress)
-  const borrowIX = sdk.borrowV2Ix(ticketUintArray, coinTypeFromBroker);
+  // Use superBorrowV2Ix exactly like MovePosition (line 214 in doTx.ts)
+  // MovePosition: ix = superAptosSDK.superBorrowV2Ix(ar, broker.underlyingAsset.networkAddress, address)
+  // superBorrowV2Ix converts Uint8Array to Array internally and includes sender
+  const transactionData = sdk.superBorrowV2Ix(ticketUintArray, coinTypeFromBroker, walletAddress);
+
+  // Extract function and arguments from transactionData (same pattern as superLendV2Ix)
+  const txData = transactionData.data as any;
+  const txFunction: `${string}::${string}::${string}` = txData.function;
+  const txTypeArguments: string[] = txData.typeArguments || [];
+  const txFunctionArguments: any[] = txData.functionArguments || [];
+
+  console.log(`[BorrowV2] Transaction data from superBorrowV2Ix:`, {
+    sender: transactionData.sender,
+    function: txFunction,
+    typeArguments: txTypeArguments,
+    functionArgumentsLength: Array.isArray(txFunctionArguments[0])
+      ? txFunctionArguments[0].length
+      : "N/A",
+    coinTypeUsed: coinTypeFromBroker,
+    brokerNameUsed: brokerName,
+  });
 
   if (onProgress) {
     onProgress("Building transaction...");
   }
 
   // Build transaction using Aptos SDK
-  // Convert arguments to Array format (matching MovePosition's super* approach)
   const rawTxn = await aptos.transaction.build.simple({
     sender: walletAddress,
     data: {
-      function: borrowIX.function as `${string}::${string}::${string}`,
-      typeArguments: borrowIX.type_arguments || [],
-      functionArguments: [packetArray], // Use Array instead of Uint8Array
+      function: txFunction,
+      typeArguments: txTypeArguments,
+      functionArguments: txFunctionArguments,
     },
   });
 
@@ -291,13 +315,13 @@ export async function executeBorrowV2(params: BorrowV2Params): Promise<string> {
   try {
     console.log(`[BorrowV2] 🔍 Simulating transaction before signing...`);
 
-    // Create a simulation transaction (unsigned)
+    // Create a simulation transaction (unsigned) - use same data as rawTxn
     const simulationTxn = await aptos.transaction.build.simple({
       sender: walletAddress,
       data: {
-        function: borrowIX.function as `${string}::${string}::${string}`,
-        typeArguments: borrowIX.type_arguments || [],
-        functionArguments: [packetArray],
+        function: txFunction,
+        typeArguments: txTypeArguments,
+        functionArguments: txFunctionArguments,
       },
     });
 
@@ -618,21 +642,39 @@ export async function executeRepayV2(params: BorrowV2Params): Promise<string> {
   // This is required because wallets prefer Array over Uint8Array
   const packetArray = Array.from(ticketUintArray);
 
-  // Use the coinType from broker API response (matches MovePosition's broker.underlyingAsset.networkAddress)
-  const repayIX = sdk.repayV2Ix(ticketUintArray, coinTypeFromBroker);
+  // Use superRepayV2Ix exactly like MovePosition (line 217 in doTx.ts)
+  // MovePosition: ix = superAptosSDK.superRepayV2Ix(ar, broker.underlyingAsset.networkAddress, address)
+  // superRepayV2Ix converts Uint8Array to Array internally and includes sender
+  const transactionData = sdk.superRepayV2Ix(ticketUintArray, coinTypeFromBroker, walletAddress);
+
+  // Extract function and arguments from transactionData (same pattern as superLendV2Ix)
+  const txData = transactionData.data as any;
+  const txFunction: `${string}::${string}::${string}` = txData.function;
+  const txTypeArguments: string[] = txData.typeArguments || [];
+  const txFunctionArguments: any[] = txData.functionArguments || [];
+
+  console.log(`[RepayV2] Transaction data from superRepayV2Ix:`, {
+    sender: transactionData.sender,
+    function: txFunction,
+    typeArguments: txTypeArguments,
+    functionArgumentsLength: Array.isArray(txFunctionArguments[0])
+      ? txFunctionArguments[0].length
+      : "N/A",
+    coinTypeUsed: coinTypeFromBroker,
+    brokerNameUsed: brokerName,
+  });
 
   if (onProgress) {
     onProgress("Building transaction...");
   }
 
   // Build transaction using Aptos SDK
-  // Convert arguments to Array format (matching MovePosition's super* approach)
   const rawTxn = await aptos.transaction.build.simple({
     sender: walletAddress,
     data: {
-      function: repayIX.function as `${string}::${string}::${string}`,
-      typeArguments: repayIX.type_arguments || [],
-      functionArguments: [packetArray], // Use Array instead of Uint8Array
+      function: txFunction,
+      typeArguments: txTypeArguments,
+      functionArguments: txFunctionArguments,
     },
   });
 
@@ -651,13 +693,13 @@ export async function executeRepayV2(params: BorrowV2Params): Promise<string> {
   try {
     console.log(`[RepayV2] 🔍 Simulating transaction before signing...`);
 
-    // Create a simulation transaction (unsigned)
+    // Create a simulation transaction (unsigned) - use same data as rawTxn
     const simulationTxn = await aptos.transaction.build.simple({
       sender: walletAddress,
       data: {
-        function: repayIX.function as `${string}::${string}::${string}`,
-        typeArguments: repayIX.type_arguments || [],
-        functionArguments: [packetArray],
+        function: txFunction,
+        typeArguments: txTypeArguments,
+        functionArguments: txFunctionArguments,
       },
     });
 

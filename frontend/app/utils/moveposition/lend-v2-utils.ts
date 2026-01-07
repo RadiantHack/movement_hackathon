@@ -51,6 +51,8 @@ export interface LendV2Params {
   publicKey: string;
   signHash: (hash: string) => Promise<{ signature: string }>;
   onProgress?: (step: string) => void;
+  useExactNoteBalance?: boolean; // If true, amount is already in note tokens (raw), not underlying tokens
+  brokerName?: string; // Optional: If provided, use this broker name directly (matching MovePosition's approach)
 }
 
 export interface PortfolioState {
@@ -215,12 +217,34 @@ export async function executeLendV2(params: LendV2Params): Promise<string> {
   // Get all brokers first (like MovePosition does)
   const brokers = await superClient.default.getBrokers();
 
-  // For MOVE, check balance first to determine which broker to use
+  // CRITICAL: If brokerName is provided, use it directly (matching MovePosition's approach)
+  // MovePosition uses broker.underlyingAsset.name directly (line 156 in doTx.ts)
+  // This ensures we use the exact broker selected in the UI, not re-select it
   let brokerName: string = "";
   let coinTypeFromBroker: string = "";
   let selectedBroker: superJsonApiClient.Broker | null = null;
 
-  if (coinSymbol === "MOVE" || coinSymbol === "APT") {
+  if (params.brokerName) {
+    // Use provided broker name directly (matching MovePosition)
+    brokerName = params.brokerName;
+    const matchingBroker = brokers.find(
+      (b) => b.underlyingAsset.name === brokerName
+    );
+    
+    if (!matchingBroker) {
+      throw new Error(
+        `Broker "${brokerName}" not found. Available brokers: ${brokers.map((b) => b.underlyingAsset.name).join(", ")}`
+      );
+    }
+    
+    selectedBroker = matchingBroker;
+    coinTypeFromBroker = matchingBroker.underlyingAsset.networkAddress;
+    
+    console.log(`[LendV2] Using provided broker name (matching MovePosition):`, {
+      brokerName,
+      networkAddress: coinTypeFromBroker,
+    });
+  } else if (coinSymbol === "MOVE" || coinSymbol === "APT") {
     // Check both coin store and fungible asset balances
     let coinStoreBalance = BigInt(0);
     let fungibleAssetBalance = BigInt(0);
@@ -593,59 +617,14 @@ export async function executeLendV2(params: LendV2Params): Promise<string> {
       fullBroker.scaledAvailableLiquidityUnderlying,
   });
 
-  // VALIDATE DEPOSIT LIMIT BEFORE BUILDING TRANSACTION (like MovePosition does)
-  // MovePosition checks: overBrokerDepositLimit = nextTotalSupplied > maxSupplyBroker
-  // where maxSupplyBroker = Number(broker?.maxDepositScaled)
-  // and nextTotalSupplied = brokerTotal + depositAmount
-  // where brokerTotal = brokerBorrowedUnderlying + totalAvailableUnderlying
-  const maxDepositScaled = Number(fullBroker.maxDepositScaled || "0");
-  const scaledTotalBorrowed = Number(
-    fullBroker.scaledTotalBorrowedUnderlying || "0"
-  );
-  const scaledAvailableLiquidity = Number(
-    fullBroker.scaledAvailableLiquidityUnderlying || "0"
-  );
-  const brokerTotal = scaledTotalBorrowed + scaledAvailableLiquidity;
-
-  // Convert deposit amount to scaled units (same as broker values)
+  // NOTE: MovePosition does NOT validate deposit limits at transaction time
+  // They only validate in the UI (TxForm.tsx line 254: overBrokerDepositLimit)
+  // and disable the button if over limit. The transaction proceeds if the button is enabled.
+  // We follow the same approach - UI validation is sufficient, and the backend will reject
+  // if there's an actual limit issue. This prevents false positives from stale data.
+  
+  // Get coin decimals for later use
   const coinDecimals = getCoinDecimals(coinSymbol);
-  const depositAmountScaled = Number(amount) / Math.pow(10, coinDecimals);
-  const nextTotalSupplied = brokerTotal + depositAmountScaled;
-
-  console.log(`[LendV2] Deposit limit validation:`, {
-    maxDepositScaled,
-    brokerTotal,
-    depositAmountScaled,
-    nextTotalSupplied,
-    wouldExceedLimit: nextTotalSupplied > maxDepositScaled,
-  });
-
-  // Check deposit limit (matching MovePosition's logic)
-  // MovePosition disables the button when over limit, but allows transaction to be built
-  // The simulation will catch ERR_MAX_DEPOSIT_EXCEEDED and show user-friendly error
-  // We only block if pool is completely full (no space at all)
-  const depositDiffToBrokerLimit = maxDepositScaled - brokerTotal;
-
-  if (nextTotalSupplied > maxDepositScaled) {
-    // Log warning but don't throw - let simulation catch it
-    console.warn(
-      `[LendV2] ⚠️ Deposit would exceed limit, but allowing transaction to proceed. Simulation will catch ERR_MAX_DEPOSIT_EXCEEDED.`,
-      {
-        maxDepositScaled,
-        brokerTotal,
-        nextTotalSupplied,
-        depositDiffToLimit: depositDiffToBrokerLimit,
-      }
-    );
-  }
-
-  // Only block if pool is completely full (depositDiffToBrokerLimit <= 0)
-  // Matching MovePosition's poolIsFull check
-  if (depositDiffToBrokerLimit <= 0) {
-    throw new Error(
-      `Pool is full. The broker has reached its maximum deposit limit of ${maxDepositScaled.toFixed(6)} ${coinSymbol}. No more deposits can be accepted. Broker used: ${brokerName}, CoinType: ${coinTypeFromBroker}`
-    );
-  }
 
   // Safety check: If we detected coin store balance, ensure we're NOT using MOVE-FA broker
   if (coinSymbol === "MOVE" || coinSymbol === "APT") {
@@ -1220,7 +1199,7 @@ export async function executeLendV2(params: LendV2Params): Promise<string> {
 }
 
 export async function executeRedeemV2(params: LendV2Params): Promise<string> {
-  const { amount, coinSymbol, walletAddress, publicKey, signHash, onProgress } =
+  const { amount, coinSymbol, walletAddress, publicKey, signHash, onProgress, useExactNoteBalance } =
     params;
 
   if (onProgress) {
@@ -1298,61 +1277,139 @@ export async function executeRedeemV2(params: LendV2Params): Promise<string> {
   }
 
   const userDepositNoteBalanceRaw = BigInt(userDepositNotePosition.amount);
-  const withdrawalAmountRaw = BigInt(amount);
-
+  
   // Get decimals for formatting error messages
   const coinDecimals = getCoinDecimals(coinSymbol);
   const depositNoteDecimals = broker.depositNote?.decimals ?? coinDecimals;
   const depositNoteExchangeRate = broker.depositNoteExchangeRate || 1;
 
-  // Convert withdrawal amount from underlying tokens (raw) to note tokens (raw)
-  // Following MovePosition's approach from TxForm.tsx line 676-686:
-  // For WITHDRAW_TAB: depNoteAmount = scaleUp(amount, depNoteDecimals) / exchangeRate
-  //                   txAmount = Math.floor(depNoteAmount)
-  //
-  // Since our 'amount' is already in raw underlying tokens (scaled by coinDecimals):
-  // - Convert to formatted underlying: amount / 10^coinDecimals
-  // - Scale up by deposit note decimals: (amount / 10^coinDecimals) * 10^depNoteDecimals
-  // - Divide by exchange rate: ((amount / 10^coinDecimals) * 10^depNoteDecimals) / exchangeRate
-  // - Simplify: (amount * 10^(depNoteDecimals - coinDecimals)) / exchangeRate
-  // - Floor to get integer note tokens in raw units
+  // CRITICAL: If useExactNoteBalance is true, amount is already in note tokens (raw)
+  // This matches MovePosition: when "Max" is clicked, txAmount = maxWithdrawNoteUser (exact note balance)
+  // Otherwise, convert from underlying tokens (raw) to note tokens (raw)
+  let withdrawalAmountNoteTokensRaw: bigint;
+  const withdrawalAmountRaw = BigInt(amount); // For logging purposes
+  
+  if (useExactNoteBalance) {
+    // Amount is already in note tokens (raw) - use directly
+    // This is the exact note token balance from portfolio (matching MovePosition line 281)
+    withdrawalAmountNoteTokensRaw = BigInt(amount);
+    console.log(`[RedeemV2] Using exact note token balance (from "Max" button):`, {
+      noteTokenBalanceRaw: withdrawalAmountNoteTokensRaw.toString(),
+      userDepositNoteBalanceRaw: userDepositNoteBalanceRaw.toString(),
+    });
+  } else {
+    // Convert withdrawal amount from underlying tokens (raw) to note tokens (raw)
+    // Following MovePosition's approach from TxForm.tsx line 676-686:
+    // For WITHDRAW_TAB: depNoteAmount = scaleUp(amount, depNoteDecimals) / exchangeRate
+    //                   txAmount = Math.floor(depNoteAmount)
+    //
+    // Since our 'amount' is already in raw underlying tokens (scaled by coinDecimals):
+    // - Convert to formatted underlying: amount / 10^coinDecimals
+    // - Scale up by deposit note decimals: (amount / 10^coinDecimals) * 10^depNoteDecimals
+    // - Divide by exchange rate: ((amount / 10^coinDecimals) * 10^depNoteDecimals) / exchangeRate
+    // - Simplify: (amount * 10^(depNoteDecimals - coinDecimals)) / exchangeRate
+    // - Floor to get integer note tokens in raw units
 
-  const decimalDiff = depositNoteDecimals - coinDecimals;
-  const scaleFactor = Math.pow(10, decimalDiff);
+    const decimalDiff = depositNoteDecimals - coinDecimals;
+    const scaleFactor = Math.pow(10, decimalDiff);
 
-  // Calculate note tokens: (rawUnderlying * scaleFactor) / exchangeRate
-  // Use Number for the calculation, then floor and convert to BigInt
-  const withdrawalAmountNoteTokensRaw = BigInt(
-    Math.floor(
-      (Number(withdrawalAmountRaw) * scaleFactor) / depositNoteExchangeRate
-    )
-  );
+    // Calculate note tokens: (rawUnderlying * scaleFactor) / exchangeRate
+    // Use Number for the calculation, then floor and convert to BigInt
+    withdrawalAmountNoteTokensRaw = BigInt(
+      Math.floor(
+        (Number(withdrawalAmountRaw) * scaleFactor) / depositNoteExchangeRate
+      )
+    );
+  }
+
+  // Calculate underlying amount for logging and validation
+  const withdrawalAmountUnderlying = useExactNoteBalance
+    ? (Number(withdrawalAmountNoteTokensRaw) / Math.pow(10, depositNoteDecimals)) * depositNoteExchangeRate
+    : Number(withdrawalAmountRaw) / Math.pow(10, coinDecimals);
 
   console.log(`[RedeemV2] Balance comparison:`, {
     userDepositNoteBalanceRaw: userDepositNoteBalanceRaw.toString(),
     withdrawalAmountRaw: withdrawalAmountRaw.toString(),
     withdrawalAmountNoteTokensRaw: withdrawalAmountNoteTokensRaw.toString(),
     depositNoteExchangeRate,
+    useExactNoteBalance: useExactNoteBalance || false,
     userBalanceFormatted: (
       Number(userDepositNoteBalanceRaw) / Math.pow(10, depositNoteDecimals)
     ).toFixed(6),
-    withdrawalAmountFormatted: (
-      Number(withdrawalAmountRaw) / Math.pow(10, coinDecimals)
-    ).toFixed(6),
+    withdrawalAmountFormatted: withdrawalAmountUnderlying.toFixed(6),
   });
 
   // Validate withdrawal amount doesn't exceed user's note balance
   // Compare note tokens to note tokens
-  if (withdrawalAmountNoteTokensRaw > userDepositNoteBalanceRaw) {
-    const userBalanceFormatted =
-      (Number(userDepositNoteBalanceRaw) / Math.pow(10, depositNoteDecimals)) *
-      depositNoteExchangeRate;
-    const withdrawalAmountFormatted =
-      Number(withdrawalAmountRaw) / Math.pow(10, coinDecimals);
+  // CRITICAL: If using exact note balance, it should match exactly (or be less)
+  // If not using exact balance, allow small rounding differences
+  const roundingTolerance = BigInt(1); // Allow 1 note token difference for rounding
+  
+  // If using exact note balance, it should match exactly
+  if (useExactNoteBalance) {
+    if (withdrawalAmountNoteTokensRaw > userDepositNoteBalanceRaw) {
+      throw new Error(
+        `Invalid withdrawal amount. Exact note balance (${withdrawalAmountNoteTokensRaw.toString()}) exceeds user balance (${userDepositNoteBalanceRaw.toString()}).`
+      );
+    }
+    // Use exact balance - no adjustment needed
+  } else {
+    // For converted amounts, allow rounding tolerance
+    if (withdrawalAmountNoteTokensRaw > userDepositNoteBalanceRaw + roundingTolerance) {
+      const userBalanceFormatted =
+        (Number(userDepositNoteBalanceRaw) / Math.pow(10, depositNoteDecimals)) *
+        depositNoteExchangeRate;
 
-    throw new Error(
-      `Insufficient balance. You have ${userBalanceFormatted.toFixed(6)} ${coinSymbol} supplied, but trying to withdraw ${withdrawalAmountFormatted.toFixed(6)} ${coinSymbol}.`
-    );
+      throw new Error(
+        `Insufficient balance. You have ${userBalanceFormatted.toFixed(6)} ${coinSymbol} supplied, but trying to withdraw ${withdrawalAmountUnderlying.toFixed(6)} ${coinSymbol}.`
+      );
+    }
+  }
+
+  // CRITICAL: If withdrawal amount is close to or exceeds balance, use exact balance
+  // This ensures we withdraw exactly what user has, leaving zero balance
+  // Matching MovePosition's approach: when user clicks "Max", use exact note token balance
+  let finalWithdrawalAmountNoteTokensRaw = withdrawalAmountNoteTokensRaw;
+  
+  // If using exact note balance, it's already correct
+  if (!useExactNoteBalance) {
+    // If withdrawal amount is within rounding tolerance of balance, use exact balance
+    if (withdrawalAmountNoteTokensRaw > userDepositNoteBalanceRaw && 
+        withdrawalAmountNoteTokensRaw <= userDepositNoteBalanceRaw + roundingTolerance) {
+      console.log(`[RedeemV2] Adjusting withdrawal amount to exact balance (rounding tolerance):`, {
+        original: withdrawalAmountNoteTokensRaw.toString(),
+        adjusted: userDepositNoteBalanceRaw.toString(),
+      });
+      finalWithdrawalAmountNoteTokensRaw = userDepositNoteBalanceRaw;
+    }
+    
+    // If withdrawal amount is less than balance but very close (within 1%), use exact balance
+    // This handles cases where user enters "max" but conversion causes slight under-withdrawal
+    // Also handles very small dust amounts that might have rounding issues
+    const balanceThreshold = (userDepositNoteBalanceRaw * BigInt(99)) / BigInt(100); // 99% of balance
+    if (withdrawalAmountNoteTokensRaw >= balanceThreshold && 
+        withdrawalAmountNoteTokensRaw < userDepositNoteBalanceRaw) {
+      console.log(`[RedeemV2] Adjusting withdrawal amount to exact balance (near-max withdrawal):`, {
+        original: withdrawalAmountNoteTokensRaw.toString(),
+        adjusted: userDepositNoteBalanceRaw.toString(),
+        percentage: (Number(withdrawalAmountNoteTokensRaw) / Number(userDepositNoteBalanceRaw) * 100).toFixed(2) + "%",
+      });
+      finalWithdrawalAmountNoteTokensRaw = userDepositNoteBalanceRaw;
+    }
+    
+    // CRITICAL: For very small amounts (dust), always use exact balance to avoid conversion errors
+    // This handles cases where 0.000001 USDC shows but conversion fails
+    // If the underlying amount is very small (< 0.00001), use exact note balance
+    const DUST_THRESHOLD_UNDERLYING = 0.00001; // 0.00001 tokens
+    if (withdrawalAmountUnderlying < DUST_THRESHOLD_UNDERLYING && 
+        withdrawalAmountNoteTokensRaw < userDepositNoteBalanceRaw) {
+      console.log(`[RedeemV2] Adjusting small dust amount to exact balance (dust threshold):`, {
+        original: withdrawalAmountNoteTokensRaw.toString(),
+        adjusted: userDepositNoteBalanceRaw.toString(),
+        underlyingAmount: withdrawalAmountUnderlying.toFixed(8),
+      });
+      finalWithdrawalAmountNoteTokensRaw = userDepositNoteBalanceRaw;
+    }
   }
 
   // Also check against available liquidity in broker
@@ -1361,10 +1418,8 @@ export async function executeRedeemV2(params: LendV2Params): Promise<string> {
   const availableLiquidityScaled = parseFloat(
     broker.scaledAvailableLiquidityUnderlying || "0"
   );
-  const withdrawalAmountUnderlying =
-    Number(withdrawalAmountRaw) / Math.pow(10, coinDecimals);
-
-  // Compare withdrawal amount (in underlying tokens) against available liquidity (scaled)
+    
+  // withdrawalAmountUnderlying was already calculated above
   if (withdrawalAmountUnderlying > availableLiquidityScaled) {
     throw new Error(
       `Insufficient liquidity. The broker has ${availableLiquidityScaled.toFixed(6)} ${coinSymbol} available, but you're trying to withdraw ${withdrawalAmountUnderlying.toFixed(6)} ${coinSymbol}.`
@@ -1375,14 +1430,16 @@ export async function executeRedeemV2(params: LendV2Params): Promise<string> {
     userDepositNoteBalanceRaw: userDepositNoteBalanceRaw.toString(),
     withdrawalAmountRaw: withdrawalAmountRaw.toString(),
     withdrawalAmountNoteTokensRaw: withdrawalAmountNoteTokensRaw.toString(),
+    finalWithdrawalAmountNoteTokensRaw: finalWithdrawalAmountNoteTokensRaw.toString(),
+    useExactNoteBalance: useExactNoteBalance || false,
     availableLiquidityScaled: availableLiquidityScaled.toFixed(6),
     withdrawalAmountUnderlying: withdrawalAmountUnderlying.toFixed(6),
   });
 
   // CRITICAL: The API expects amount in NOTE TOKENS (raw), not underlying tokens (raw)
   // Following MovePosition's approach: for WITHDRAW, txAmount is in note tokens
-  // We've already calculated withdrawalAmountNoteTokensRaw above, use that for the API
-  const amountInNoteTokens = withdrawalAmountNoteTokensRaw.toString();
+  // Use the final adjusted amount (may have been adjusted for rounding tolerance)
+  const amountInNoteTokens = finalWithdrawalAmountNoteTokensRaw.toString();
 
   console.log(`[RedeemV2] Converting amount for API:`, {
     originalAmountUnderlyingRaw: amount,
@@ -1426,21 +1483,39 @@ export async function executeRedeemV2(params: LendV2Params): Promise<string> {
   // This is required because wallets prefer Array over Uint8Array
   const packetArray = Array.from(ticketUintArray);
 
-  // Use the coinType from broker API response (matches MovePosition's broker.underlyingAsset.networkAddress)
-  const redeemIX = sdk.redeemV2Ix(ticketUintArray, coinTypeFromBroker);
+  // Use superRedeemV2Ix exactly like MovePosition (line 211 in doTx.ts)
+  // MovePosition: ix = superAptosSDK.superRedeemV2Ix(ar, broker.underlyingAsset.networkAddress, address)
+  // superRedeemV2Ix converts Uint8Array to Array internally and includes sender
+  const transactionData = sdk.superRedeemV2Ix(ticketUintArray, coinTypeFromBroker, walletAddress);
+
+  // Extract function and arguments from transactionData (same pattern as superLendV2Ix)
+  const txData = transactionData.data as any;
+  const txFunction: `${string}::${string}::${string}` = txData.function;
+  const txTypeArguments: string[] = txData.typeArguments || [];
+  const txFunctionArguments: any[] = txData.functionArguments || [];
+
+  console.log(`[RedeemV2] Transaction data from superRedeemV2Ix:`, {
+    sender: transactionData.sender,
+    function: txFunction,
+    typeArguments: txTypeArguments,
+    functionArgumentsLength: Array.isArray(txFunctionArguments[0])
+      ? txFunctionArguments[0].length
+      : "N/A",
+    coinTypeUsed: coinTypeFromBroker,
+    brokerNameUsed: brokerName,
+  });
 
   if (onProgress) {
     onProgress("Building transaction...");
   }
 
   // Build transaction using Aptos SDK
-  // Convert arguments to Array format (matching MovePosition's super* approach)
   const rawTxn = await aptos.transaction.build.simple({
     sender: walletAddress,
     data: {
-      function: redeemIX.function as `${string}::${string}::${string}`,
-      typeArguments: redeemIX.type_arguments || [],
-      functionArguments: [packetArray], // Use Array instead of Uint8Array
+      function: txFunction,
+      typeArguments: txTypeArguments,
+      functionArguments: txFunctionArguments,
     },
   });
 
@@ -1464,9 +1539,9 @@ export async function executeRedeemV2(params: LendV2Params): Promise<string> {
     const simulationTxn = await aptos.transaction.build.simple({
       sender: walletAddress,
       data: {
-        function: redeemIX.function as `${string}::${string}::${string}`,
-        typeArguments: redeemIX.type_arguments || [],
-        functionArguments: [packetArray],
+        function: txFunction,
+        typeArguments: txTypeArguments,
+        functionArguments: txFunctionArguments,
       },
     });
 

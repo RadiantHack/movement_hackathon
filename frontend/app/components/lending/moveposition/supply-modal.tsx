@@ -12,8 +12,9 @@ import {
 } from "../../../utils/shared/tokens";
 import { executeLendV2, executeRedeemV2 } from "../../../utils/moveposition";
 import * as superJsonApiClient from "../../../../lib/super-json-api-client/src";
-import { getMovementApiBase } from "@/lib/super-aptos-sdk/src/globals";
+import { getMovementApiBase, requireMovementRpc } from "@/lib/super-aptos-sdk/src/globals";
 import { selectBroker, validateBroker } from "../../../utils/moveposition";
+import { Aptos, AptosConfig, Network } from "@aptos-labs/ts-sdk";
 import { useMovePositionSupply } from "../../../hooks/useMovePositionSupply";
 import { useMovePositionWithdraw } from "../../../hooks/useMovePositionWithdraw";
 import { TransactionSuccessMessage } from "../../shared/modals";
@@ -396,12 +397,70 @@ export function SupplyModal({
         setPortfolioData(portfolioRes as unknown as PortfolioResponse);
         setBrokerData(brokersRes as unknown as any[]);
 
+        // For MOVE, check coin store balance first to select correct broker (matching MovePosition)
+        let coinStoreBalance: bigint | undefined;
+        let fungibleAssetBalance: bigint | undefined;
+        
+        if (asset.symbol === "MOVE" || asset.symbol === "APT") {
+          try {
+            const movementRpc = requireMovementRpc();
+            const aptos = new Aptos(
+              new AptosConfig({
+                network: Network.MAINNET,
+                fullnode: movementRpc,
+              })
+            );
+            const accountResources = await aptos.account.getAccountResources({
+              accountAddress: walletAddress,
+            });
+            const nativeCoinStoreType =
+              "0x1::coin::CoinStore<0x1::aptos_coin::AptosCoin>";
+            const coinStore = accountResources.find(
+              (resource) => resource.type === nativeCoinStoreType
+            );
+            if (coinStore) {
+              coinStoreBalance = BigInt((coinStore.data as any).coin?.value || "0");
+            }
+            
+            // Check fungible asset balance via API
+            try {
+              const balanceResponse = await fetch(
+                `/api/balance?address=${encodeURIComponent(walletAddress)}&token=${encodeURIComponent(asset.symbol)}`
+              );
+              if (balanceResponse.ok) {
+                const balanceData = await balanceResponse.json();
+                if (balanceData.success && balanceData.balances?.length > 0) {
+                  const tokenBalance = balanceData.balances.find((b: any) => {
+                    const symbol = (b.metadata?.symbol || "").toUpperCase();
+                    return symbol === asset.symbol.toUpperCase();
+                  });
+                  if (tokenBalance) {
+                    fungibleAssetBalance = BigInt(tokenBalance.amount || "0");
+                  }
+                }
+              }
+            } catch (e) {
+              console.warn("[SupplyModal] Could not check fungible asset balance:", e);
+            }
+            
+            console.log("[SupplyModal] MOVE balance check for broker selection:", {
+              coinStoreBalance: coinStoreBalance?.toString() || "0",
+              fungibleAssetBalance: fungibleAssetBalance?.toString() || "0",
+            });
+          } catch (e) {
+            console.warn("[SupplyModal] Could not check coin store balance:", e);
+          }
+        }
+
         // Select broker using robust selection logic (matching MovePosition)
+        // Pass balance info to ensure correct broker selection for MOVE
         const broker = selectBroker({
           symbol: asset.symbol,
           brokers: brokersRes as unknown as superJsonApiClient.Broker[],
           walletAddress,
           preferFungibleAsset: true,
+          coinStoreBalance,
+          fungibleAssetBalance,
         });
 
         if (validateBroker(broker)) {
@@ -441,10 +500,19 @@ export function SupplyModal({
     setAmount(formattedValue);
   };
 
+  // DUST_LIMIT matching MovePosition (line 469 in tokens.ts)
+  // Amounts below this are treated as zero (no position)
+  const DUST_LIMIT = 0.00000001;
+  
+  // MIN_DISPLAY_AMOUNT: Hide very small amounts from UI even if above DUST_LIMIT
+  // This prevents showing amounts like 0.000001 that can't be successfully withdrawn
+  const MIN_DISPLAY_AMOUNT = 0.00001; // 0.00001 tokens minimum to display
+
   /**
    * Get user's current supplied amount from portfolio data
    * Formula: scaledAmount × depositNoteExchangeRate
    * Uses selectedBroker for more reliable matching
+   * Matches MovePosition's calcSupplyData (line 100-134)
    */
   const userSuppliedAmount = useMemo(() => {
     if (!portfolioData || !asset || !selectedBroker) return 0;
@@ -463,7 +531,12 @@ export function SupplyModal({
     const exchangeRate = selectedBroker.depositNoteExchangeRate || 1;
 
     // scaledAmount × depositNoteExchangeRate = actual underlying amount
-    return parseFloat(collateral.scaledAmount) * exchangeRate;
+    // Matching MovePosition's calcSupplyData: underlyingTokenBalance = noteBalance * exchangeRate
+    const underlyingTokenBalance = parseFloat(collateral.scaledAmount) * exchangeRate;
+    
+    // Match MovePosition: hasSupply = underlyingTokenBalance >= DUST_LIMIT (line 124)
+    // If below dust limit, treat as zero (no position)
+    return underlyingTokenBalance >= DUST_LIMIT ? underlyingTokenBalance : 0;
   }, [portfolioData, asset, selectedBroker]);
 
   /**
@@ -650,11 +723,12 @@ export function SupplyModal({
       }
     } else {
       // For withdraw: use max withdrawable (min of supplied amount and available liquidity)
-      // Matching MovePosition's maxWithdrawUnderlyingUserShaved
+      // Matching MovePosition's maxWithdrawUnderlyingUserShaved (line 273)
+      // Display the underlying amount, but we'll use exact note token balance for API
       if (maxWithdrawableAmount > 0) {
-        // Format to avoid floating point issues, floor to 8 decimals like MovePosition
+        // Floor to 8 decimals like MovePosition (matching floorAndFixToEightDecimals)
         const floored = Math.floor(maxWithdrawableAmount * 1e8) / 1e8;
-        setAmount(floored.toFixed(6));
+        setAmount(floored.toFixed(8));
       }
     }
   };
@@ -664,17 +738,63 @@ export function SupplyModal({
   // Calculate max withdrawable amount (matching MovePosition's maxWithdrawUnderlyingUser)
   // Max withdraw = min(userSuppliedAmount, availableLiquidity)
   // Uses selectedBroker for more reliable matching
+  // CRITICAL: Use exact note token balance to avoid rounding issues
+  // Matches MovePosition's calcSupplyData and maxWithdrawUnderlyingUser logic
   const maxWithdrawableAmount = useMemo(() => {
-    if (activeTab !== "withdraw" || !selectedBroker) return 0;
+    if (activeTab !== "withdraw" || !selectedBroker || !portfolioData) return 0;
+
+    // Get exact note token balance from portfolio (matching MovePosition line 275-283)
+    const depositNoteName = selectedBroker.depositNote?.name;
+    if (!depositNoteName) return 0;
+
+    const collateral = portfolioData.collaterals.find(
+      (c) => c.instrument.name === depositNoteName
+    );
+    if (!collateral) return 0;
+
+    // Get exact note token balance (in scaled format)
+    const noteTokenBalance = parseFloat(collateral.scaledAmount || "0");
+    
+    // Convert note tokens to underlying tokens using exchange rate
+    // This matches MovePosition's calcSupplyData: underlyingTokenBalance = noteBalance * exchangeRate
+    const exchangeRate = selectedBroker.depositNoteExchangeRate || 1;
+    const userSuppliedAmountExact = noteTokenBalance * exchangeRate;
+
+    // Match MovePosition: hasSupply = underlyingTokenBalance >= DUST_LIMIT (line 124)
+    // If below dust limit, treat as zero (no position to withdraw)
+    if (userSuppliedAmountExact < DUST_LIMIT) {
+      return 0;
+    }
 
     // Available liquidity is already in scaled (normalized) format
     const availableLiquidity = parseFloat(
       selectedBroker.scaledAvailableLiquidityUnderlying || "0"
     );
 
-    // Return minimum of user's supplied amount and available liquidity
-    return Math.min(userSuppliedAmount, availableLiquidity);
-  }, [activeTab, selectedBroker, userSuppliedAmount]);
+    // Return minimum of user's exact supplied amount and available liquidity
+    // This matches MovePosition's maxWithdrawUnderlyingUser (line 269-272)
+    return Math.min(userSuppliedAmountExact, availableLiquidity);
+  }, [activeTab, selectedBroker, portfolioData]);
+
+  // Get exact raw note token balance for "Max" button (matching MovePosition's maxWithdrawNoteUser)
+  // MovePosition: maxWithdrawNoteUser = parseInt(currentPortfolioPosition.amount)
+  // This is the EXACT raw note token balance that will be sent to API when "Max" is clicked
+  // This ensures we withdraw exactly what the user has, leaving zero balance
+  const maxWithdrawNoteTokenBalanceRaw = useMemo(() => {
+    if (activeTab !== "withdraw" || !selectedBroker || !portfolioData) return null;
+
+    const depositNoteName = selectedBroker.depositNote?.name;
+    if (!depositNoteName) return null;
+
+    const collateral = portfolioData.collaterals.find(
+      (c) => c.instrument.name === depositNoteName
+    );
+    if (!collateral) return null;
+
+    // Get exact raw note token balance (matching MovePosition line 281: maxWithdrawNoteUser = parseInt(currentPortfolioPosition.amount))
+    // collateral.amount is the raw note token balance (in smallest units)
+    return collateral.amount;
+  }, [activeTab, selectedBroker, portfolioData]);
 
   // Calculate max depositable amount (matching MovePosition's walletBalanceOrDepositDiffLess)
   // Max deposit = min(walletBalance, depositDiffToBrokerLimit)
@@ -1214,11 +1334,37 @@ export function SupplyModal({
     // Use the appropriate hook based on active tab
     if (activeTab === "supply") {
       const balanceNum = balance ? parseFloat(balance) : undefined;
-      await supply.handleSupply(asset, amount, balanceNum);
+      // Pass selectedBroker's name directly (matching MovePosition's approach)
+      // MovePosition uses broker.underlyingAsset.name directly (line 156 in doTx.ts)
+      const brokerName = selectedBroker?.underlyingAsset?.name;
+      if (!brokerName) {
+        setValidationError("Broker not selected. Please try again.");
+        return;
+      }
+      await supply.handleSupply(asset, amount, balanceNum, brokerName);
     } else {
+      // For withdraw: pass the exact raw note token balance if user clicked "Max"
+      // This matches MovePosition: when "Max" is clicked, use maxWithdrawNoteUser (exact note balance)
+      // This ensures we withdraw exactly what user has, leaving zero balance
       const maxWithdraw =
         maxWithdrawableAmount > 0 ? maxWithdrawableAmount : undefined;
-      await withdraw.handleWithdraw(asset, amount, maxWithdraw);
+      
+      // Check if user is withdrawing max amount (within small tolerance for floating point)
+      const isMaxWithdraw = maxWithdrawNoteTokenBalanceRaw && maxWithdrawableAmount > 0 &&
+        Math.abs(parseFloat(amount) - maxWithdrawableAmount) < 0.00000001;
+      
+      // For very small amounts (dust), always use exact note balance to avoid conversion errors
+      // This handles cases where 0.000001 USDC shows but conversion fails
+      // If amount is very small (< 0.00001), use exact note balance
+      const isSmallAmount = parseFloat(amount) < 0.00001 && parseFloat(amount) > 0;
+      const shouldUseExactBalance = isMaxWithdraw || (isSmallAmount && maxWithdrawNoteTokenBalanceRaw);
+      
+      await withdraw.handleWithdraw(
+        asset, 
+        amount, 
+        maxWithdraw,
+        shouldUseExactBalance ? maxWithdrawNoteTokenBalanceRaw : undefined
+      );
     }
   };
 
@@ -1348,14 +1494,14 @@ export function SupplyModal({
               </span>
             </div>
           )}
-          {activeTab === "withdraw" && userSuppliedAmount > 0 && (
+          {activeTab === "withdraw" && maxWithdrawableAmount >= MIN_DISPLAY_AMOUNT && (
             <div className="text-xs text-zinc-500 dark:text-zinc-400 mt-2">
               Available to withdraw:{" "}
               {loadingPortfolio ? (
                 <span className="text-zinc-400">Loading...</span>
               ) : (
                 <span className="text-zinc-700 dark:text-zinc-300 font-medium">
-                  {userSuppliedAmount.toFixed(6)} {asset.symbol}
+                  {maxWithdrawableAmount.toFixed(6)} {asset.symbol}
                 </span>
               )}
             </div>

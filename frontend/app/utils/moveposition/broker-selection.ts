@@ -12,6 +12,8 @@ export interface BrokerSelectionOptions {
   brokers: superJsonApiClient.Broker[];
   walletAddress?: string;
   preferFungibleAsset?: boolean;
+  coinStoreBalance?: bigint; // Optional: If provided, use this to determine broker selection for MOVE
+  fungibleAssetBalance?: bigint; // Optional: If provided, use this to determine broker selection for MOVE
 }
 
 /**
@@ -35,6 +37,55 @@ export function selectBroker(
     });
 
     if (matchingBrokers.length > 0) {
+      // CRITICAL: If coin store balance is provided, check it first (matching MovePosition's logic)
+      // If user has coin store balance, MUST use regular MOVE broker (NOT MOVE-FA)
+      if (options.coinStoreBalance !== undefined) {
+        const hasCoinBalance = options.coinStoreBalance > BigInt(0);
+        const hasNoFABalance = options.fungibleAssetBalance === undefined || options.fungibleAssetBalance === BigInt(0);
+        
+        if (hasCoinBalance) {
+          // User has coin store balance - MUST use regular MOVE broker (NOT MOVE-FA)
+          const regularMoveBroker = matchingBrokers.find((b) => {
+            const assetName = (b.underlyingAsset?.name || "").toLowerCase();
+            const hasMove = assetName.includes("move");
+            const hasFA =
+              assetName.includes("move-fa") ||
+              assetName.includes("move_fa") ||
+              assetName.includes("movefa");
+            return hasMove && !hasFA;
+          });
+
+          if (regularMoveBroker) {
+            console.log(
+              `[BrokerSelection] Selected regular MOVE broker (coin store balance exists): ${regularMoveBroker.underlyingAsset.name}`
+            );
+            return regularMoveBroker;
+          } else {
+            console.warn(
+              `[BrokerSelection] Coin store balance exists but no regular MOVE broker found. Available: ${matchingBrokers.map((b) => b.underlyingAsset.name).join(", ")}`
+            );
+          }
+        } else if (options.fungibleAssetBalance !== undefined && options.fungibleAssetBalance > BigInt(0)) {
+          // User has fungible asset balance - use MOVE-FA broker
+          const moveFABroker = matchingBrokers.find((b) => {
+            const assetName = (b.underlyingAsset?.name || "").toLowerCase();
+            return (
+              assetName.includes("move-fa") ||
+              assetName.includes("move_fa") ||
+              assetName === "movement-move-fa"
+            );
+          });
+
+          if (moveFABroker) {
+            console.log(
+              `[BrokerSelection] Selected MOVE-FA broker (fungible asset balance exists): ${moveFABroker.underlyingAsset.name}`
+            );
+            return moveFABroker;
+          }
+        }
+      }
+
+      // If no balance info provided, use preferFungibleAsset preference
       // Prefer MOVE-FA (fungible asset) if available and preferFungibleAsset is true
       if (preferFungibleAsset) {
         const moveFABroker = matchingBrokers.find((b) => {
@@ -48,7 +99,7 @@ export function selectBroker(
 
         if (moveFABroker) {
           console.log(
-            `[BrokerSelection] Selected MOVE-FA broker: ${moveFABroker.underlyingAsset.name}`
+            `[BrokerSelection] Selected MOVE-FA broker (preferFungibleAsset=true): ${moveFABroker.underlyingAsset.name}`
           );
           return moveFABroker;
         }
@@ -57,7 +108,7 @@ export function selectBroker(
       // Fall back to first matching broker
       const selectedBroker = matchingBrokers[0];
       console.log(
-        `[BrokerSelection] Selected MOVE broker: ${selectedBroker.underlyingAsset.name}`
+        `[BrokerSelection] Selected MOVE broker (fallback): ${selectedBroker.underlyingAsset.name}`
       );
       return selectedBroker;
     }
