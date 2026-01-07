@@ -12,6 +12,7 @@ import {
   validateTransferAmount,
 } from "../utils/transfer";
 import { AssetIcon } from "./asset-icon";
+import { TransactionSuccessMessage } from "./shared/TransactionSuccessMessage";
 
 interface TransferFormProps {
   walletAddress: string;
@@ -56,6 +57,7 @@ export const TransferForm: React.FC<TransferFormProps> = ({
     transferring,
     error: transferError,
     txHash,
+    step: transferStep,
     handleTransfer,
   } = useTransfer({
     aptos,
@@ -418,34 +420,7 @@ export const TransferForm: React.FC<TransferFormProps> = ({
           )}
 
           {/* Success Message */}
-          {txHash && (
-            <div className="p-4 rounded-xl bg-gradient-to-br from-green-50/90 to-emerald-50/70 dark:from-green-900/30 dark:to-emerald-950/40 border border-green-200/80 dark:border-green-800/60 backdrop-blur-sm text-sm text-green-700 dark:text-green-400 shadow-sm">
-              <div className="flex items-center gap-3">
-                <svg
-                  className="w-5 h-5 flex-shrink-0"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                  strokeWidth={2.5}
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-                  />
-                </svg>
-                <span className="font-medium flex-1">Transfer successful!</span>
-                <a
-                  href={`https://explorer.movementnetwork.xyz/txn/${txHash}?network=mainnet`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-green-600 dark:text-green-400 hover:text-green-700 dark:hover:text-green-300 hover:underline font-semibold transition-colors duration-200"
-                >
-                  View →
-                </a>
-              </div>
-            </div>
-          )}
+          {txHash && <TransactionSuccessMessage txHash={txHash} />}
 
           {/* Transfer Button */}
           <button
@@ -482,7 +457,7 @@ export const TransferForm: React.FC<TransferFormProps> = ({
                       d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
                     />
                   </svg>
-                  Transferring...
+                  {transferStep || "Transferring..."}
                 </>
               ) : txHash ? (
                 "Transfer Complete"

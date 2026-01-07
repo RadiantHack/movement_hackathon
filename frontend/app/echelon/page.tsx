@@ -805,6 +805,8 @@ export default function EchelonPage() {
           }
           totalSupplyBalance={totalSupplyBalance}
           totalBorrowBalance={totalBorrowBalance}
+          hasCollateral={userSupplies.length > 0 || totalSupplyBalance > 0}
+          loadingVault={loadingVault}
           onSuccess={async () => {
             // Wait a bit for blockchain state to update after transaction confirmation
             await new Promise((resolve) => setTimeout(resolve, 2000));

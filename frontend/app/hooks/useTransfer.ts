@@ -28,6 +28,7 @@ interface TransferState {
   transferring: boolean;
   error: string | null;
   txHash: string | null;
+  step: string | null;
 }
 
 /**
@@ -50,6 +51,7 @@ export function useTransfer({
     transferring: false,
     error: null,
     txHash: null,
+    step: null,
   });
 
   const handleTransfer = useCallback(
@@ -136,9 +138,15 @@ export function useTransfer({
       }
 
       // Execute transfer
-      setState((prev) => ({ ...prev, transferring: true, error: null }));
+      setState((prev) => ({
+        ...prev,
+        transferring: true,
+        error: null,
+        step: "Building transaction...",
+      }));
 
       try {
+        setState((prev) => ({ ...prev, step: "Waiting for signature..." }));
         const hash = await executeTransfer({
           aptos,
           movementChainId,
@@ -155,6 +163,7 @@ export function useTransfer({
           transferring: false,
           txHash: hash,
           error: null,
+          step: null,
         }));
 
         // Refresh balances after successful transfer
@@ -173,6 +182,7 @@ export function useTransfer({
           ...prev,
           transferring: false,
           error: errorMessage,
+          step: null,
         }));
         onError?.(errorMessage);
         return false;
@@ -197,6 +207,7 @@ export function useTransfer({
       transferring: false,
       error: null,
       txHash: null,
+      step: null,
     });
   }, []);
 

@@ -1,11 +1,10 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { usePrivy } from "@privy-io/react-auth";
-import { useMovementWallet } from "../hooks/useMovementWallet";
-import { useSignRawHash } from "@privy-io/react-auth/extended-chains";
-import { executeRepayTransaction } from "../hooks/useEchelonTransactions";
+import { useEchelonRepay } from "../hooks/useEchelonRepay";
 import { AssetIcon } from "./asset-icon";
+import { AssetInfo } from "../hooks/useEchelonTransactions";
+import { TransactionSuccessMessage } from "./shared/TransactionSuccessMessage";
 
 interface RepayAsset {
   symbol: string;
@@ -37,15 +36,22 @@ export function EchelonRepayModal({
 }: EchelonRepayModalProps) {
   const [amount, setAmount] = useState("");
   const [percentage, setPercentage] = useState(0);
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [txHash, setTxHash] = useState<string | null>(null);
-  const [step, setStep] = useState<string>("");
 
-  const { user, ready, authenticated } = usePrivy();
-  const { signRawHash } = useSignRawHash();
-
-  const movementWallet = useMovementWallet();
+  // Use centralized repay hook
+  const repay = useEchelonRepay({
+    onSuccess: () => {
+      if (onSuccess) {
+        onSuccess();
+      }
+      // Close modal after a delay
+      setTimeout(() => {
+        onClose();
+        setAmount("");
+        setPercentage(0);
+        repay.resetState();
+      }, 2000);
+    },
+  });
 
   if (!isOpen || !asset) return null;
 
@@ -63,8 +69,8 @@ export function EchelonRepayModal({
     setPercentage(pct);
     const newAmount = (maxRepayable * pct) / 100;
     setAmount(newAmount.toFixed(8));
-    if (error) {
-      setError(null);
+    if (repay.error) {
+      repay.resetState();
     }
   };
 
@@ -73,8 +79,8 @@ export function EchelonRepayModal({
     const num = parseFloat(value) || 0;
     const pct = maxRepayable > 0 ? (num / maxRepayable) * 100 : 0;
     setPercentage(Math.min(pct, 100));
-    if (error) {
-      setError(null);
+    if (repay.error) {
+      repay.resetState();
     }
   };
 
@@ -88,90 +94,20 @@ export function EchelonRepayModal({
   };
 
   const handleRepay = async () => {
-    console.log("[Repay] handleRepay called", {
-      asset,
-      numericAmount,
-      debtAmount,
-      availableToRepay,
-    });
-
     if (!asset || numericAmount <= 0) {
-      console.log("[Repay] Validation failed", {
-        asset: !!asset,
-        numericAmount,
-      });
-      setError("Please enter a valid amount to repay");
       return;
     }
 
-    if (!movementWallet) {
-      console.log("[Repay] No wallet connected");
-      setError("Please connect a Movement wallet");
-      return;
-    }
-
-    // Validate amount doesn't exceed debt
-    if (numericAmount > debtAmount) {
-      setError(
-        `Cannot repay more than the debt amount (${debtAmount.toFixed(6)} ${asset.symbol})`
-      );
-      return;
-    }
-
-    // Validate amount doesn't exceed available balance
-    if (numericAmount > availableToRepay) {
-      setError(
-        `Insufficient balance. You have ${availableToRepay.toFixed(6)} ${asset.symbol} available.`
-      );
-      return;
-    }
-
-    setSubmitting(true);
-    setError(null);
-    setTxHash(null);
-
-    try {
-      const result = await executeRepayTransaction({
-        asset: {
-          symbol: asset.symbol,
-          decimals: asset.decimals,
-          marketAddress: asset.marketAddress,
-          faAddress: asset.faAddress,
-        },
-        amount: numericAmount,
-        maxRepayable: debtAmount,
-        movementWallet: movementWallet as any,
-        publicKey: (movementWallet as any).publicKey as string,
-        signRawHash,
-        onStepChange: setStep,
-      });
-
-      if (result.success && result.txHash) {
-        setTxHash(result.txHash);
-        setStep("");
-
-        // Call onSuccess callback to refresh data
-        if (onSuccess) {
-          onSuccess();
-        }
-
-        // Close modal after a delay
-        setTimeout(() => {
-          onClose();
-          setAmount("");
-          setTxHash(null);
-        }, 2000);
-      } else {
-        setError(result.error || "Transaction failed");
-        setStep("");
-      }
-    } catch (err: any) {
-      console.error("[Repay] Unexpected error:", err);
-      setError(err.message || "An unexpected error occurred");
-      setStep("");
-    } finally {
-      setSubmitting(false);
-    }
+    await repay.handleRepay(
+      {
+        symbol: asset.symbol,
+        decimals: asset.decimals,
+        marketAddress: asset.marketAddress,
+        faAddress: asset.faAddress,
+      } as AssetInfo,
+      numericAmount,
+      maxRepayable
+    );
   };
 
   return (
@@ -344,64 +280,14 @@ export function EchelonRepayModal({
           </div>
 
           {/* Error Message */}
-          {error && (
+          {repay.error && (
             <div className="mb-4 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-sm text-red-700 dark:text-red-400">
-              {error}
+              {repay.error}
             </div>
           )}
 
           {/* Success Message */}
-          {txHash && (
-            <div className="mb-4 p-3 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 text-sm text-green-700 dark:text-green-400">
-              <div className="flex items-center gap-2 flex-wrap">
-                <svg
-                  className="w-5 h-5 flex-shrink-0"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
-                  />
-                </svg>
-                <span className="font-medium">Transaction successful!</span>
-                <a
-                  href={`https://explorer.movementnetwork.xyz/txn/${txHash}?network=mainnet`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="ml-auto text-green-600 dark:text-green-400 hover:text-green-800 dark:hover:text-green-300 underline font-semibold flex items-center gap-1"
-                >
-                  View Transaction
-                  <svg
-                    className="w-4 h-4"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
-                    />
-                  </svg>
-                </a>
-              </div>
-              <div className="mt-2 text-xs font-mono text-green-600 dark:text-green-400 break-all">
-                {txHash}
-              </div>
-            </div>
-          )}
-
-          {/* Step Message */}
-          {step && (
-            <div className="mb-4 p-3 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 text-sm text-blue-700 dark:text-blue-400">
-              {step}
-            </div>
-          )}
+          {repay.txHash && <TransactionSuccessMessage txHash={repay.txHash} />}
 
           {/* Repay Button */}
           <button
@@ -411,25 +297,52 @@ export function EchelonRepayModal({
               e.stopPropagation();
               console.log("[Repay] Button clicked", {
                 numericAmount,
-                submitting,
+                repaying: repay.repaying,
                 asset: asset?.symbol,
               });
               handleRepay();
             }}
             disabled={
-              numericAmount <= 0 || submitting || numericAmount > maxRepayable
+              numericAmount <= 0 ||
+              repay.repaying ||
+              numericAmount > maxRepayable
             }
             className={`w-full py-4 rounded-2xl font-semibold text-lg transition-all duration-200 ${
-              numericAmount > 0 && !submitting && numericAmount <= maxRepayable
+              numericAmount > 0 &&
+              !repay.repaying &&
+              numericAmount <= maxRepayable
                 ? "bg-gradient-to-r from-purple-600 to-violet-600 text-white shadow-lg shadow-purple-500/30 hover:shadow-xl hover:shadow-purple-500/40 hover:scale-[1.02] active:scale-[0.98]"
                 : "bg-zinc-100 dark:bg-zinc-800 text-zinc-400 dark:text-zinc-500 cursor-not-allowed"
             }`}
           >
-            {submitting
-              ? step || "Processing..."
-              : numericAmount > 0
-                ? `Repay ${asset.symbol}`
-                : "Repay"}
+            {repay.repaying ? (
+              <span className="flex items-center justify-center gap-2">
+                <svg
+                  className="w-5 h-5 animate-spin"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                >
+                  <circle
+                    className="opacity-25"
+                    cx="12"
+                    cy="12"
+                    r="10"
+                    stroke="currentColor"
+                    strokeWidth="4"
+                  />
+                  <path
+                    className="opacity-75"
+                    fill="currentColor"
+                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                  />
+                </svg>
+                {repay.step || "Processing..."}
+              </span>
+            ) : numericAmount > 0 ? (
+              `Repay ${asset.symbol}`
+            ) : (
+              "Repay"
+            )}
           </button>
         </div>
       </div>

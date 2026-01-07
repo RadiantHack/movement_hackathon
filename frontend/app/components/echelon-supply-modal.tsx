@@ -1,11 +1,10 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { usePrivy } from "@privy-io/react-auth";
-import { useMovementWallet } from "../hooks/useMovementWallet";
-import { useSignRawHash } from "@privy-io/react-auth/extended-chains";
-import { executeSupplyTransaction } from "@/app/hooks/useEchelonTransactions";
+import { useEchelonSupply } from "../hooks/useEchelonSupply";
 import { AssetIcon } from "./asset-icon";
+import { AssetInfo } from "../hooks/useEchelonTransactions";
+import { TransactionSuccessMessage } from "./shared/TransactionSuccessMessage";
 
 interface EchelonAsset {
   symbol: string;
@@ -65,16 +64,24 @@ export function EchelonSupplyModal({
 }: EchelonSupplyModalProps) {
   const [amount, setAmount] = useState("");
   const [percentage, setPercentage] = useState(0);
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [txHash, setTxHash] = useState<string | null>(null);
-  const [step, setStep] = useState<string>("");
   const [showSuccessMessage, setShowSuccessMessage] = useState(false);
 
-  const { user, ready, authenticated } = usePrivy();
-  const { signRawHash } = useSignRawHash();
-
-  const movementWallet = useMovementWallet();
+  // Use centralized supply hook
+  const supply = useEchelonSupply({
+    onSuccess: () => {
+      setShowSuccessMessage(true);
+      if (onSuccess) {
+        onSuccess();
+      }
+      // Reset after showing success
+      setTimeout(() => {
+        setAmount("");
+        setPercentage(0);
+        setShowSuccessMessage(false);
+        supply.resetState();
+      }, 2500);
+    },
+  });
 
   if (!isOpen || !asset) return null;
 
@@ -106,59 +113,23 @@ export function EchelonSupplyModal({
   const handleSupply = async () => {
     if (!asset || numericAmount <= 0) return;
 
-    if (!movementWallet) {
-      setError("Please connect a Movement wallet");
-      return;
-    }
-
-    setSubmitting(true);
-    setError(null);
-    setTxHash(null);
-
     const marketAddress =
       MARKET_ADDRESSES[asset.symbol] || asset.marketAddress || "";
 
     if (!marketAddress) {
-      setError(`Market address not found for ${asset.symbol}`);
-      setSubmitting(false);
       return;
     }
 
-    const result = await executeSupplyTransaction({
-      asset: {
+    await supply.handleSupply(
+      {
         symbol: asset.symbol,
         decimals: asset.decimals || 8,
         marketAddress,
         faAddress: asset.faAddress,
-      },
-      amount: numericAmount,
-      movementWallet,
-      publicKey: (movementWallet as any).publicKey,
-      signRawHash,
-      onStepChange: setStep,
-    });
-
-    if (result.success) {
-      setTxHash(result.txHash || "");
-      setStep("");
-      setShowSuccessMessage(true);
-
-      if (onSuccess) {
-        onSuccess();
-      }
-
-      // Show explorer link on button for 250ms, then reset to initial state
-      setTimeout(() => {
-        setShowSuccessMessage(false);
-        setTxHash(null);
-        setAmount("");
-      }, 250);
-    } else {
-      setError(result.error || "Transaction failed");
-      setStep("");
-    }
-
-    setSubmitting(false);
+      } as AssetInfo,
+      numericAmount,
+      availableBalance
+    );
   };
 
   if (!isOpen || !asset) {
@@ -311,27 +282,31 @@ export function EchelonSupplyModal({
         </div>
 
         {/* Error Message */}
-        {error && (
+        {supply.error && (
           <div className="mb-4 p-3 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-sm text-red-700 dark:text-red-400">
-            {error}
+            {supply.error}
           </div>
         )}
+
+        {/* Success Message */}
+        {supply.txHash && <TransactionSuccessMessage txHash={supply.txHash} />}
 
         {/* Supply Button */}
         <button
           onClick={handleSupply}
           disabled={
-            (!numericAmount || numericAmount <= 0 || submitting) && !txHash
+            (!numericAmount || numericAmount <= 0 || supply.supplying) &&
+            !supply.txHash
           }
           className={`w-full py-4 rounded-2xl font-semibold text-lg transition-all duration-200 ${
-            txHash
+            supply.txHash
               ? "bg-green-600 text-white cursor-pointer"
-              : numericAmount > 0 && !submitting
+              : numericAmount > 0 && !supply.supplying
                 ? "bg-gradient-to-r from-purple-600 to-violet-600 text-white shadow-lg shadow-purple-500/30 hover:shadow-xl hover:shadow-purple-500/40 hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
                 : "bg-zinc-100 dark:bg-zinc-800 text-zinc-400 dark:text-zinc-500 cursor-not-allowed"
           }`}
         >
-          {txHash && showSuccessMessage ? (
+          {supply.txHash ? (
             <span className="flex items-center justify-center gap-2">
               <svg
                 className="w-5 h-5"
@@ -346,31 +321,9 @@ export function EchelonSupplyModal({
                   d="M5 13l4 4L19 7"
                 />
               </svg>
-              Transaction Submitted!
-              <a
-                href={`https://explorer.movementnetwork.xyz/txn/${txHash}?network=mainnet`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="ml-2 underline hover:opacity-80 flex items-center gap-1"
-                onClick={(e) => e.stopPropagation()}
-              >
-                View
-                <svg
-                  className="w-4 h-4"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
-                  />
-                </svg>
-              </a>
+              Transaction Complete
             </span>
-          ) : submitting ? (
+          ) : supply.supplying ? (
             <span className="flex items-center justify-center gap-2">
               <svg
                 className="w-5 h-5 animate-spin"
@@ -391,7 +344,7 @@ export function EchelonSupplyModal({
                   d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
                 />
               </svg>
-              {step || "Processing..."}
+              {supply.step || "Processing..."}
             </span>
           ) : numericAmount > 0 ? (
             `Supply ${asset.symbol}`
