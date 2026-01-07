@@ -148,8 +148,8 @@ export const TransferForm: React.FC<TransferFormProps> = ({
     !txHash;
 
   return (
-    <div className="w-full max-w-full sm:max-w-[440px] mx-auto px-2 sm:px-3 md:px-4">
-      <div className="relative rounded-3xl p-4 sm:p-5 md:p-6 lg:p-7 bg-white/95 dark:bg-zinc-900/95 backdrop-blur-xl border border-zinc-200/60 dark:border-zinc-700/40 shadow-2xl shadow-zinc-900/5 dark:shadow-zinc-950/50 overflow-hidden">
+    <div className="w-full">
+      <div className="relative rounded-2xl overflow-hidden">
         {/* Enhanced background decoration */}
         <div className="absolute -top-32 -right-32 w-64 h-64 bg-gradient-to-br from-purple-500/15 via-violet-500/10 to-purple-500/15 rounded-full blur-3xl animate-pulse" />
         <div
@@ -159,7 +159,7 @@ export const TransferForm: React.FC<TransferFormProps> = ({
         {/* Subtle grid pattern */}
         <div className="absolute inset-0 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px] opacity-30" />
 
-        <div className="space-y-6 relative z-10">
+        <div className="space-y-5 sm:space-y-6 relative z-10 p-4 sm:p-5 md:p-6">
           {/* Header */}
           <div className="flex items-center gap-2 sm:gap-3">
             <div className="flex h-8 w-8 sm:h-10 sm:w-10 items-center justify-center rounded-lg sm:rounded-xl bg-gradient-to-br from-purple-500 to-violet-600 shadow-lg shadow-purple-500/30">

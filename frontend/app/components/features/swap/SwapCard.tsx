@@ -380,13 +380,7 @@ export const SwapCard: React.FC<SwapCardProps> = ({
       return;
     }
 
-    await swap.handleSwap(
-      fromToken,
-      toToken,
-      fromAmount,
-      quote,
-      fromBalance
-    );
+    await swap.handleSwap(fromToken, toToken, fromAmount, quote, fromBalance);
   };
 
   const canSwap = useMemo(() => {
@@ -414,8 +408,8 @@ export const SwapCard: React.FC<SwapCardProps> = ({
   ]);
 
   return (
-    <div className="w-full max-w-full sm:max-w-[440px] mx-auto px-2 sm:px-3 md:px-4">
-      <div className="relative rounded-3xl p-4 sm:p-5 md:p-6 lg:p-7 bg-white/95 dark:bg-zinc-900/95 backdrop-blur-xl border border-zinc-200/60 dark:border-zinc-700/40 shadow-2xl shadow-zinc-900/5 dark:shadow-zinc-950/50 overflow-hidden">
+    <div className="w-full">
+      <div className="relative rounded-2xl overflow-hidden">
         {/* Enhanced background decoration */}
         <div className="absolute -top-32 -right-32 w-64 h-64 bg-gradient-to-br from-purple-500/15 via-violet-500/10 to-purple-500/15 rounded-full blur-3xl animate-pulse" />
         <div
@@ -425,8 +419,9 @@ export const SwapCard: React.FC<SwapCardProps> = ({
         {/* Subtle grid pattern */}
         <div className="absolute inset-0 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px] opacity-30" />
 
-        {/* Header */}
-        <div className="relative flex items-center gap-2 sm:gap-3 mb-3 sm:mb-5">
+        <div className="p-4 sm:p-5 md:p-6">
+          {/* Header */}
+          <div className="relative flex items-center gap-2 sm:gap-3 mb-3 sm:mb-5">
           <div className="flex h-8 w-8 sm:h-10 sm:w-10 items-center justify-center rounded-lg sm:rounded-xl bg-gradient-to-br from-purple-500 to-violet-600 shadow-lg shadow-purple-500/30">
             <svg
               className="w-4 h-4 sm:w-5 sm:h-5 text-white"
@@ -514,7 +509,7 @@ export const SwapCard: React.FC<SwapCardProps> = ({
         <div className="relative flex justify-center py-2 z-10">
           <button
             onClick={handleSwapTokens}
-                disabled={swap.swapping}
+            disabled={swap.swapping}
             className="p-2.5 rounded-xl bg-white/90 dark:bg-zinc-800/90 backdrop-blur-sm border border-zinc-200/80 dark:border-zinc-700/60 shadow-lg hover:shadow-xl text-zinc-600 dark:text-zinc-400 hover:text-purple-600 dark:hover:text-purple-400 transition-all duration-200 hover:scale-110 hover:border-purple-300/60 dark:hover:border-purple-600/60 disabled:opacity-50"
             aria-label="Swap tokens"
           >
@@ -620,7 +615,7 @@ export const SwapCard: React.FC<SwapCardProps> = ({
             value={slippage}
             onChange={(e) => setSlippage(parseFloat(e.target.value))}
             className="w-full h-1.5 sm:h-2 bg-zinc-200 dark:bg-zinc-700 rounded-full appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 sm:[&::-webkit-slider-thumb]:w-4 sm:[&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-gradient-to-r [&::-webkit-slider-thumb]:from-purple-500 [&::-webkit-slider-thumb]:to-violet-500 [&::-webkit-slider-thumb]:shadow-lg [&::-webkit-slider-thumb]:shadow-purple-500/30 [&::-webkit-slider-thumb]:cursor-pointer"
-                disabled={swap.swapping}
+            disabled={swap.swapping}
           />
           <div className="flex justify-between text-[10px] sm:text-xs text-zinc-400 mt-1.5 sm:mt-2">
             <span>0.1%</span>
@@ -776,6 +771,7 @@ export const SwapCard: React.FC<SwapCardProps> = ({
             Connect your Movement wallet to swap tokens
           </p>
         )}
+        </div>
       </div>
     </div>
   );
