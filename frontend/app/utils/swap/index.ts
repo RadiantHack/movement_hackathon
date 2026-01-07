@@ -9,6 +9,13 @@ import {
 import { toHex } from "viem";
 import type { MosaicQuoteResponse } from "../mosaic-api";
 
+// Re-export validation functions
+export {
+  validateSwapAmount,
+  validateTokenPair,
+  type SwapValidationResult,
+} from "./validation";
+
 interface ExecuteSwapParams {
   aptos: Aptos;
   movementChainId: number;
@@ -94,4 +101,52 @@ export async function executeSwap({
   });
 
   return executed.hash;
+}
+
+/**
+ * Generates a user-friendly error message for swap failures
+ * @param error - The error that occurred
+ * @param fromToken - The token being swapped from
+ * @param toToken - The token being swapped to
+ * @returns User-friendly error message
+ */
+export function getSwapErrorMessage(
+  error: unknown,
+  fromToken: string,
+  toToken: string
+): string {
+  let errorMessage = "Swap failed. Please try again.";
+
+  if (error instanceof Error) {
+    errorMessage = error.message;
+
+    // Check for common swap errors
+    if (
+      error.message.includes("quote") ||
+      error.message.includes("Quote") ||
+      error.message.includes("invalid quote")
+    ) {
+      errorMessage =
+        "Failed to get swap quote. Please try again or select different tokens.";
+    } else if (
+      error.message.includes("insufficient") ||
+      error.message.includes("balance")
+    ) {
+      errorMessage = "Insufficient balance for this swap.";
+    } else if (
+      error.message.includes("slippage") ||
+      error.message.includes("Slippage")
+    ) {
+      errorMessage =
+        "Swap failed due to price movement. Please try again with a higher slippage tolerance.";
+    } else if (
+      error.message.includes("timeout") ||
+      error.message.includes("Timeout")
+    ) {
+      errorMessage =
+        "Swap request timed out. Please check your connection and try again.";
+    }
+  }
+
+  return errorMessage;
 }
