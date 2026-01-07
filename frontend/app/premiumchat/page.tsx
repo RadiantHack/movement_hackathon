@@ -1,41 +1,20 @@
 "use client";
 
-import { usePrivy, WalletWithMetadata } from "@privy-io/react-auth";
+import { usePrivy } from "@privy-io/react-auth";
 import { useState, useMemo } from "react";
 import { Sidebar } from "../components/sidebar";
 import { RightSidebar } from "../components/right-sidebar";
 import PremiumChat from "../components/chat/PremiumChat";
 import { ThemeToggle } from "../components/themeToggle";
 import { AuthGuard } from "../components/auth-guard";
+import { useMovementWallet } from "../hooks/useMovementWallet";
 
 export default function PremiumChatPage() {
-  const { authenticated, user } = usePrivy();
+  const { authenticated } = usePrivy();
+  const movementWallet = useMovementWallet();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isRightSidebarOpen, setIsRightSidebarOpen] = useState(false);
   const [selectedAgent, setSelectedAgent] = useState("premium_lending");
-
-  // Get Movement wallet address (chainType is "aptos" for Movement wallets)
-  const movementWallet = useMemo(() => {
-    // Only check for wallet when user is authenticated
-    if (!authenticated || !user?.linkedAccounts) {
-      return null;
-    }
-
-    // Find Aptos wallet (Movement Network uses Aptos-compatible addresses)
-    // The chainType field is camelCase: "aptos" (confirmed from Privy data structure)
-    const aptosWallet = user.linkedAccounts.find(
-      (account): account is WalletWithMetadata => {
-        if (account.type !== "wallet") return false;
-        // Type assertion needed because Privy types don't expose chainType directly
-        const walletAccount = account as WalletWithMetadata & {
-          chainType?: string;
-        };
-        return walletAccount.chainType === "aptos";
-      }
-    ) as (WalletWithMetadata & { chainType?: string }) | undefined;
-
-    return aptosWallet || null;
-  }, [user, authenticated]);
 
   // Get the wallet address - ensure it's the full 66-character Movement/Aptos address
   const walletAddress = useMemo(() => {

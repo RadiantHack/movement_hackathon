@@ -3,7 +3,8 @@
 import { useState, useEffect } from "react";
 import { X, CreditCard, Loader2, Wallet } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { usePrivy, WalletWithMetadata } from "@privy-io/react-auth";
+import { usePrivy } from "@privy-io/react-auth";
+import { useMovementWallet } from "../hooks/useMovementWallet";
 import { useSignRawHash } from "@privy-io/react-auth/extended-chains";
 import { Aptos, AptosConfig, ChainId, Network } from "@aptos-labs/ts-sdk";
 import { generateSigningMessageForTransaction } from "@aptos-labs/ts-sdk";
@@ -56,11 +57,7 @@ export function PaymentModal({
   const { signRawHash } = useSignRawHash();
   const config = useMovementConfig();
 
-  // Get Movement wallet from Privy
-  const movementWallet = user?.linkedAccounts.find(
-    (account): account is WalletWithMetadata =>
-      account.type === "wallet" && account.chainType === "aptos"
-  );
+  const movementWallet = useMovementWallet();
 
   useEffect(() => {
     if (!isOpen) {

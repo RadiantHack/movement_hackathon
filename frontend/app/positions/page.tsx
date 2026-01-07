@@ -1,6 +1,7 @@
 "use client";
 
-import { usePrivy, WalletWithMetadata } from "@privy-io/react-auth";
+import { usePrivy } from "@privy-io/react-auth";
+import { useMovementWallet } from "../hooks/useMovementWallet";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useState, useMemo, Suspense } from "react";
 import { Sidebar } from "../components/sidebar";
@@ -162,23 +163,7 @@ function PositionsPageContent() {
   };
 
   // Get Movement wallet address
-  const movementWallet = useMemo(() => {
-    if (!ready || !authenticated || !user?.linkedAccounts) {
-      return null;
-    }
-
-    const aptosWallet = user.linkedAccounts.find(
-      (account): account is WalletWithMetadata => {
-        if (account.type !== "wallet") return false;
-        const walletAccount = account as WalletWithMetadata & {
-          chainType?: string;
-        };
-        return walletAccount.chainType === "aptos";
-      }
-    ) as (WalletWithMetadata & { chainType?: string }) | undefined;
-
-    return aptosWallet || null;
-  }, [user, ready, authenticated]);
+  const movementWallet = useMovementWallet();
 
   useEffect(() => {
     if (movementWallet?.address) {

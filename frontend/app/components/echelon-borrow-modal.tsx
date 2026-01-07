@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import { usePrivy, WalletWithMetadata } from "@privy-io/react-auth";
+import { usePrivy } from "@privy-io/react-auth";
+import { useMovementWallet } from "../hooks/useMovementWallet";
 import { useSignRawHash } from "@privy-io/react-auth/extended-chains";
 import { executeBorrowTransaction } from "@/app/hooks/useEchelonTransactions";
 import { AssetIcon } from "./asset-icon";
@@ -70,17 +71,7 @@ export function EchelonBorrowModal({
   const { user, ready, authenticated } = usePrivy();
   const { signRawHash } = useSignRawHash();
 
-  const movementWallet = useMemo(() => {
-    if (!ready || !authenticated || !user?.linkedAccounts) {
-      return null;
-    }
-    return (
-      user.linkedAccounts.find(
-        (account): account is WalletWithMetadata =>
-          account.type === "wallet" && account.chainType === "aptos"
-      ) || null
-    );
-  }, [user, ready, authenticated]);
+  const movementWallet = useMovementWallet();
 
   if (!isOpen || !asset) return null;
 

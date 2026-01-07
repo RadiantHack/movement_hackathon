@@ -38,7 +38,8 @@ export default function AssetsList({
         <h3 className="text-lg font-semibold text-zinc-950 dark:text-zinc-50">
           Assets {balances.length > 0 && `(${balances.length})`}
         </h3>
-        {loadingBalances && (
+        {/* Only show spinner on initial load, not during refreshes */}
+        {loadingBalances && balances.length === 0 && (
           <div className="h-4 w-4 animate-spin rounded-full border-2 border-zinc-300 border-t-zinc-900 dark:border-zinc-700 dark:border-t-zinc-100"></div>
         )}
       </div>

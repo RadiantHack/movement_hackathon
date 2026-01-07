@@ -11,7 +11,7 @@ The agent follows the same multi-layered architecture as other agents:
 1. LangGraph Agent Layer:
    - Uses LangGraph v1.0+ create_agent() API to build the core AI agent
    - Powered by OpenAI's ChatOpenAI model (configurable via OPENAI_MODEL env var)
-   - Has access to tools: execute_transfer(), check_transfer_status(), estimate_transfer_fees()
+   - Has access to tool: execute_transfer() - prepares transfer information for frontend
    - Uses a system prompt that guides the agent on how to handle transfer operations
 
 2. A2A (Agent-to-Agent) Integration Layer:
@@ -47,7 +47,7 @@ KEY COMPONENTS:
 ---------------
 - TransferAgent: Core agent class that wraps LangGraph agent and ADK Runner
 - TransferAgentExecutor: Implements A2A AgentExecutor interface
-- Tools: execute_transfer(), check_transfer_status(), estimate_transfer_fees()
+- Tool: execute_transfer() - prepares transfer information for frontend display
 - create_transfer_agent_app(): Factory function to create A2A server
 
 ENVIRONMENT VARIABLES:
@@ -67,8 +67,8 @@ NOTES:
 - Works exclusively on Movement Network
 - Supports native MOVE token and ERC-20 token transfers
 - Validates recipient addresses (66 characters for Movement Network)
-- Provides fee estimates before executing transfers
-- Monitors transfer transaction status
+- Helper function only - does NOT execute blockchain transactions
+- All transactions require user approval in the frontend
 """
 
 import os
@@ -140,6 +140,11 @@ def get_system_prompt() -> str:
 
 CRITICAL: This application works EXCLUSIVELY with Movement Network. All operations default to Movement Network.
 
+CRITICAL: This agent is a HELPER ONLY - It does NOT execute blockchain transactions.
+- All blockchain transactions require user approval through the frontend
+- This agent helps extract transfer parameters and provides guidance
+- The frontend will handle actual transaction execution after user approval
+
 CRITICAL: Address Validation Rules
 - Movement Network addresses are 66 characters long (0x + 64 hex characters)
 - Addresses must start with "0x" and contain valid hexadecimal characters
@@ -152,12 +157,16 @@ When users ask about transferring tokens:
 2. Extract the amount to transfer (e.g., "1", "100", "0.5")
 3. Extract the recipient address (must be 66 characters, starting with 0x)
 4. Extract the sender address if provided (otherwise use connected wallet)
-5. Use the appropriate tool to estimate fees or execute the transfer
+5. Use the execute_transfer tool to prepare transfer information
+   - This tool does NOT execute the transaction
+   - It returns transfer details that will be used by the frontend
+   - The frontend will display a transfer card for user approval
 
 Available operations:
-- Execute transfer transaction (requires: token, amount, to_address, from_address)
-- Check transfer transaction status (requires: transaction_hash)
-- Estimate transfer fees (requires: token, amount, to_address)
+- Prepare transfer information (requires: token, amount, to_address, from_address)
+  - Returns transfer details for frontend to display
+  - User must approve transaction in frontend
+  - Frontend handles fee calculation and transaction status
 
 Common token symbols on Movement Network:
 - MOVE (native token)
@@ -167,7 +176,7 @@ Common token symbols on Movement Network:
 
 If the user doesn't provide all required information, politely ask for it.
 Always validate recipient addresses (must be 66 characters, starting with 0x).
-Provide fee estimates before executing transfers.
+Explain that transfers require user approval in the frontend.
 Explain that transfers are irreversible once confirmed.
 If there's an error, explain it clearly and suggest alternatives."""
 
@@ -184,7 +193,6 @@ def create_agent_skill() -> AgentSkill:
             "send 100 USDC to address",
             "transfer tokens",
             "send MOVE to 0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb",
-            "check transfer status for 0x...",
         ],
     )
 
@@ -196,7 +204,11 @@ def execute_transfer(
     to_address: str,
     from_address: str = "",
 ) -> str:
-    """Execute a token transfer transaction.
+    """Prepare transfer information for frontend display.
+    
+    NOTE: This tool does NOT execute blockchain transactions. It only prepares
+    transfer details that will be displayed in the frontend transfer card.
+    The user must approve the transaction in the frontend before it executes.
 
     Args:
         token: The token symbol to transfer (e.g., "MOVE", "USDC", "USDT", "USDC.e", "USDT.e")
@@ -207,7 +219,7 @@ def execute_transfer(
                       If empty, uses connected wallet address
 
     Returns:
-        Transfer transaction details as a string
+        Transfer information as JSON string for frontend to display transfer card
     """
     # Validate address format
     if not to_address.startswith("0x") or len(to_address) != 66:
@@ -219,80 +231,26 @@ def execute_transfer(
             }
         )
 
-    # TODO: Implement actual transfer execution via Movement Network smart contracts
+    # Return transfer details for frontend to display
+    # The frontend will show a transfer card and user must approve the transaction
     return json.dumps(
         {
-            "status": "initiated",
+            "status": "ready",
+            "action": "initiate_transfer",
             "token": token.upper() if token else "MOVE",
             "amount": amount,
             "from_address": from_address or "connected_wallet",
             "to_address": to_address,
-            "tx_hash": "0x1234567890abcdef...",
-            "estimated_time": "30-60 seconds",
             "network": "movement",
-            "message": f"Transfer transaction initiated: {amount} {token.upper() if token else 'MOVE'} -> {to_address[:10]}...{to_address[-8:]}",
-        }
-    )
-
-
-@tool
-def check_transfer_status(tx_hash: str) -> str:
-    """Check the status of a transfer transaction.
-
-    Args:
-        tx_hash: The transaction hash of the transfer operation (0x...)
-
-    Returns:
-        Transfer transaction status as a string
-    """
-    # TODO: Implement actual transaction status checking
-    return json.dumps(
-        {
-            "tx_hash": tx_hash,
-            "status": "completed",
-            "confirmations": "12/12",
-            "token": "MOVE",
-            "amount": "1",
-            "from_address": "0x...",
-            "to_address": "0x...",
-            "message": "Transfer transaction completed successfully",
-        }
-    )
-
-
-@tool
-def estimate_transfer_fees(
-    token: str,
-    amount: str,
-    to_address: str,
-) -> str:
-    """Estimate fees for a transfer transaction.
-
-    Args:
-        token: The token symbol to transfer (e.g., "MOVE", "USDC", "USDT")
-        amount: The amount to transfer (as string, e.g., "1", "100", "0.5")
-        to_address: The recipient address (66 characters, must start with 0x)
-
-    Returns:
-        Fee estimates as a string
-    """
-    # TODO: Implement actual fee calculation
-    return json.dumps(
-        {
-            "token": token.upper() if token else "MOVE",
-            "amount": amount,
-            "to_address": to_address,
-            "network_fee": "0.001 MOVE",
-            "total_cost": f"{float(amount) + 0.001} {token.upper() if token else 'MOVE'}",
-            "estimated_time": "30-60 seconds",
-            "message": f"Estimated fees for transferring {amount} {token.upper() if token else 'MOVE'}",
+            "message": f"Transfer prepared: {amount} {token.upper() if token else 'MOVE'} -> {to_address[:10]}...{to_address[-8:]}. Please approve the transaction in the frontend transfer card.",
+            "note": "This is a helper function. The actual transaction will be executed in the frontend after user approval.",
         }
     )
 
 
 def get_tools() -> List[Any]:
     """Get the list of tools available to the agent."""
-    return [execute_transfer, check_transfer_status, estimate_transfer_fees]
+    return [execute_transfer]
 
 
 def validate_openai_api_key() -> None:

@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
-import { usePrivy, WalletWithMetadata } from "@privy-io/react-auth";
+import { usePrivy } from "@privy-io/react-auth";
+import { useMovementWallet } from "../hooks/useMovementWallet";
 import { useSignRawHash } from "@privy-io/react-auth/extended-chains";
 import { type TokenInfo } from "../utils/tokens";
 import { getBrokerName } from "../utils/lending-transaction";
@@ -206,17 +207,7 @@ export function SupplyModal({
 
   const movementApiBase = getMovementApiBase();
 
-  const movementWallet = useMemo(() => {
-    if (!ready || !authenticated || !user?.linkedAccounts) {
-      return null;
-    }
-    return (
-      user.linkedAccounts.find(
-        (account): account is WalletWithMetadata =>
-          account.type === "wallet" && account.chainType === "aptos"
-      ) || null
-    );
-  }, [user, ready, authenticated]);
+  const movementWallet = useMovementWallet();
 
   useEffect(() => {
     if (!isOpen) {

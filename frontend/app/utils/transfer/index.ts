@@ -10,6 +10,12 @@ import {
 import { toHex } from "viem";
 import { TokenBalance } from "../../types";
 
+// Re-export validation functions
+export { validateMovementAddress, validateTransferAmount } from "./validation";
+
+// Import for use in this file
+import { validateTransferAmount } from "./validation";
+
 interface ExecuteTransferParams {
   aptos: Aptos;
   movementChainId: number;
@@ -43,10 +49,14 @@ export async function executeTransfer({
 
   const pubKeyNoScheme = senderPubKeyWithScheme.slice(2);
 
-  const parsedAmount = parseFloat(amount);
-  if (isNaN(parsedAmount) || parsedAmount <= 0) {
-    throw new Error("Invalid amount.");
+  // Validate amount using centralized utility
+  const amountValidation = validateTransferAmount(amount);
+  if (!amountValidation.isValid) {
+    throw new Error(amountValidation.error || "Invalid amount.");
   }
+
+  // Use parsed amount from validation (already validated)
+  const parsedAmount = amountValidation.parsedAmount!;
 
   const decimals = selectedToken.metadata.decimals || 8;
   const amountInSmallestUnit = Math.floor(

@@ -1,65 +1,30 @@
 "use client";
 
-import { usePrivy, WalletWithMetadata } from "@privy-io/react-auth";
+import { usePrivy } from "@privy-io/react-auth";
 import { useState, useMemo } from "react";
 import { Sidebar } from "../components/sidebar";
 import { RightSidebar } from "../components/right-sidebar";
 import MovementChat from "../components/chat/MovementChat";
 import { ThemeToggle } from "../components/themeToggle";
 import { AuthGuard } from "../components/auth-guard";
+import { useMovementWallet } from "../hooks/useMovementWallet";
 
 export default function ChatPage() {
-  const { user, authenticated } = usePrivy();
+  const { authenticated } = usePrivy();
+  const movementWallet = useMovementWallet();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isRightSidebarOpen, setIsRightSidebarOpen] = useState(false);
 
-  // Get Movement wallet address (chainType is "aptos" for Movement wallets)
-  const movementWallet = useMemo(() => {
-    // Only check for wallet when user is authenticated
-    if (!authenticated || !user?.linkedAccounts) {
-      return null;
-    }
-
-    // Find Aptos wallet (Movement Network uses Aptos-compatible addresses)
-    // The chainType field is camelCase: "aptos" (confirmed from Privy data structure)
-    const aptosWallet = user.linkedAccounts.find(
-      (account): account is WalletWithMetadata => {
-        if (account.type !== "wallet") return false;
-        // Type assertion needed because Privy types don't expose chainType directly
-        const walletAccount = account as WalletWithMetadata & {
-          chainType?: string;
-        };
-        return walletAccount.chainType === "aptos";
-      }
-    ) as (WalletWithMetadata & { chainType?: string }) | undefined;
-
-    // Debug logging - only when ready and authenticated
-    if (aptosWallet) {
-      console.log("✅ Found Movement/Aptos wallet:", aptosWallet.address);
-      console.log(
-        "   Address length:",
-        aptosWallet.address.length,
-        "(should be 66 for Movement Network)"
-      );
-      console.log("   Chain type:", (aptosWallet as any).chainType);
-    } else if (authenticated) {
-      // Only log warning if authenticated but still no wallet found
-      console.log(
-        "⚠️ No Movement/Aptos wallet found. Available accounts:",
-        user.linkedAccounts.map((acc) => ({
-          type: acc.type,
-          chainType: (acc as any).chainType,
-          address:
-            acc.type === "wallet"
-              ? `${acc.address?.substring(0, 30)}...`
-              : "N/A",
-          addressLength: acc.type === "wallet" ? acc.address?.length : 0,
-        }))
-      );
-    }
-
-    return aptosWallet || null;
-  }, [user, authenticated]);
+  // Debug logging - only when ready and authenticated
+  if (movementWallet) {
+    console.log("✅ Found Movement/Aptos wallet:", movementWallet.address);
+    console.log(
+      "   Address length:",
+      movementWallet.address.length,
+      "(should be 66 for Movement Network)"
+    );
+    console.log("   Chain type:", (movementWallet as any).chainType);
+  }
 
   // Get the wallet address - ensure it's the full 66-character Movement/Aptos address
   const walletAddress = useMemo(() => {

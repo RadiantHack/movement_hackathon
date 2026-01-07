@@ -1,11 +1,12 @@
 "use client";
 
-import { usePrivy, WalletWithMetadata } from "@privy-io/react-auth";
+import { usePrivy } from "@privy-io/react-auth";
 import { useEffect, useState, useMemo } from "react";
 import { Sidebar } from "../components/sidebar";
 import { RightSidebar } from "../components/right-sidebar";
 import { ThemeToggle } from "../components/themeToggle";
 import { AuthGuard } from "../components/auth-guard";
+import { useMovementWallet } from "../hooks/useMovementWallet";
 import { EchelonSupplyModal } from "../components/echelon-supply-modal";
 import { EchelonBorrowModal } from "../components/echelon-borrow-modal";
 import { EchelonWithdrawModal } from "../components/echelon-withdraw-modal";
@@ -25,7 +26,8 @@ import {
 } from "../hooks/useEchelonVault";
 
 export default function EchelonPage() {
-  const { ready, authenticated, user } = usePrivy();
+  const { ready, authenticated } = usePrivy();
+  const movementWallet = useMovementWallet();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [rightSidebarOpen, setRightSidebarOpen] = useState(false);
   const [hideZeroBalance, setHideZeroBalance] = useState(false);
@@ -50,18 +52,6 @@ export default function EchelonPage() {
   const [availableBalances, setAvailableBalances] = useState<
     Record<string, number>
   >({});
-
-  const movementWallet = useMemo(() => {
-    if (!ready || !authenticated || !user?.linkedAccounts) {
-      return null;
-    }
-    return (
-      user.linkedAccounts.find(
-        (account): account is WalletWithMetadata =>
-          account.type === "wallet" && account.chainType === "aptos"
-      ) || null
-    );
-  }, [user, ready, authenticated]);
 
   useEffect(() => {
     const fetchMarkets = async () => {

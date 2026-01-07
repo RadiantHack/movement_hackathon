@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { validateMovementAddress } from "@/app/utils/transfer";
 
 // Movement Network Indexer GraphQL endpoint
 const MOVEMENT_INDEXER_URL =
@@ -55,10 +56,11 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Validate address format
-    if (!address.startsWith("0x") || address.length < 3) {
+    // Validate Movement Network address format
+    const addressValidation = validateMovementAddress(address);
+    if (!addressValidation.isValid) {
       return NextResponse.json(
-        { error: "Invalid address format" },
+        { error: addressValidation.error || "Invalid address format" },
         { status: 400 }
       );
     }

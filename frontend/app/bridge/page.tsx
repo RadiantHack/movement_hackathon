@@ -1,6 +1,6 @@
 "use client";
 
-import { usePrivy, WalletWithMetadata } from "@privy-io/react-auth";
+import { usePrivy } from "@privy-io/react-auth";
 import { useState, useMemo, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Sidebar } from "../components/sidebar";
@@ -12,6 +12,7 @@ import { useSignRawHash } from "@privy-io/react-auth/extended-chains";
 import { useMovementConfig } from "../hooks/useMovementConfig";
 import { executeBridge, isValidEthereumAddress } from "../utils/bridge";
 import { createAptosClient } from "../utils/aptos-client";
+import { useMovementWallet } from "../hooks/useMovementWallet";
 
 const MOVEMENT_CHAIN = {
   id: "movement",
@@ -36,8 +37,9 @@ const TOKENS = [
 ];
 
 export default function BridgePage() {
-  const { ready, authenticated, user } = usePrivy();
+  const { ready, authenticated } = usePrivy();
   const router = useRouter();
+  const movementWallet = useMovementWallet();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isRightSidebarOpen, setIsRightSidebarOpen] = useState(false);
 
@@ -65,25 +67,6 @@ export default function BridgePage() {
   const movementChainId = useMemo(() => {
     return config.movementChainId || 126;
   }, [config.movementChainId]);
-
-  // Get Movement wallet address
-  const movementWallet = useMemo(() => {
-    if (!ready || !authenticated || !user?.linkedAccounts) {
-      return null;
-    }
-
-    const aptosWallet = user.linkedAccounts.find(
-      (account): account is WalletWithMetadata => {
-        if (account.type !== "wallet") return false;
-        const walletAccount = account as WalletWithMetadata & {
-          chainType?: string;
-        };
-        return walletAccount.chainType === "aptos";
-      }
-    ) as (WalletWithMetadata & { chainType?: string }) | undefined;
-
-    return aptosWallet || null;
-  }, [user, ready, authenticated]);
 
   const walletAddress = useMemo(() => {
     if (!movementWallet?.address) return null;
