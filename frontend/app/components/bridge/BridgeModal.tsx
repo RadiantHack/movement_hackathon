@@ -1,7 +1,7 @@
 "use client";
 
 import BridgeForm from "./BridgeForm";
-import ModalShell from "../modal/ModalShell";
+import { ModalShell } from "../shared/modals";
 
 interface BridgeModalProps {
   walletAddress?: string | null;

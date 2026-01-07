@@ -1,7 +1,7 @@
 "use client";
 
-import { SwapCard } from "../features/swap/SwapCard";
-import ModalShell from "../modal/ModalShell";
+import { SwapCard } from "./SwapCard";
+import { ModalShell } from "../shared/modals";
 
 interface SwapModalProps {
   walletAddress?: string | null;

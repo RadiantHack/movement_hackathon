@@ -6,7 +6,15 @@
 import { useState, useCallback } from "react";
 import { usePrivy } from "@privy-io/react-auth";
 import { useSignRawHash } from "@privy-io/react-auth/extended-chains";
-import { executeRepayV2 } from "../utils/borrow-v2-utils";
+import { executeTransaction } from "../services/transaction-service";
+import {
+  getBrokerByAssetName,
+  validateBroker,
+} from "../services/broker-service";
+import {
+  fetchPortfolioWithRisk,
+  buildCurrentPortfolioBasicState,
+} from "../services/portfolio-service";
 import {
   validateMovePositionAmount,
   validateMovePositionWallet,
@@ -14,7 +22,7 @@ import {
 } from "../utils/moveposition/validation";
 import { useBalance } from "./useBalanceContext";
 import { useMovementWallet } from "./useMovementWallet";
-import { getCoinDecimals, convertAmountToRaw } from "../utils/token-utils";
+import { getCoinDecimals, convertAmountToRaw } from "../utils/shared/tokens";
 
 interface UseMovePositionRepayOptions {
   onSuccess?: () => void;
@@ -120,19 +128,40 @@ export function useMovePositionRepay({
         ...prev,
         repaying: true,
         error: null,
-        step: "Building transaction...",
+        step: "Fetching broker information...",
       }));
 
       try {
+        // Get broker for the asset
+        const broker = await getBrokerByAssetName(asset.symbol);
+        if (!broker) {
+          throw new Error(`Broker not found for asset: ${asset.symbol}`);
+        }
+        const brokerValidation = validateBroker(broker, "repay");
+        if (!brokerValidation.isValid) {
+          throw new Error(brokerValidation.error || "Invalid broker");
+        }
+
+        // Fetch current portfolio state
+        setState((prev) => ({ ...prev, step: "Fetching portfolio state..." }));
+        const portfolioResponse = await fetchPortfolioWithRisk(walletAddress);
+        const currentPortfolioState =
+          buildCurrentPortfolioBasicState(portfolioResponse);
+
         // Convert amount to raw format
         const decimals = getCoinDecimals(asset.symbol);
         const rawAmount = convertAmountToRaw(amount, decimals);
 
-        const result = await executeRepayV2({
-          amount: rawAmount,
-          coinSymbol: asset.symbol,
-          walletAddress,
+        setState((prev) => ({ ...prev, step: "Building transaction..." }));
+
+        // Execute transaction using unified service
+        const result = await executeTransaction({
+          txType: "repay",
+          txAmount: rawAmount,
+          broker,
+          address: walletAddress,
           publicKey,
+          currentPortfolioState,
           signHash: async (hash: string) => {
             setState((prev) => ({ ...prev, step: "Waiting for signature..." }));
             try {

@@ -6,7 +6,15 @@
 import { useState, useCallback } from "react";
 import { usePrivy } from "@privy-io/react-auth";
 import { useSignRawHash } from "@privy-io/react-auth/extended-chains";
-import { executeRedeemV2 } from "../utils/lend-v2-utils";
+import { executeTransaction } from "../services/transaction-service";
+import {
+  getBrokerByAssetName,
+  validateBroker,
+} from "../services/broker-service";
+import {
+  fetchPortfolioWithRisk,
+  buildCurrentPortfolioBasicState,
+} from "../services/portfolio-service";
 import {
   validateMovePositionAmount,
   validateMovePositionWallet,
@@ -14,7 +22,7 @@ import {
 } from "../utils/moveposition/validation";
 import { useBalance } from "./useBalanceContext";
 import { useMovementWallet } from "./useMovementWallet";
-import { getCoinDecimals, convertAmountToRaw } from "../utils/token-utils";
+import { getCoinDecimals, convertAmountToRaw } from "../utils/shared/tokens";
 
 interface UseMovePositionWithdrawOptions {
   onSuccess?: () => void;
@@ -53,7 +61,8 @@ export function useMovePositionWithdraw({
     async (
       asset: { symbol: string; token: any },
       amount: string,
-      availableBalance?: number
+      availableBalance?: number,
+      exactNoteTokenBalanceRaw?: string
     ): Promise<boolean> => {
       // Reset error state
       setState((prev) => ({ ...prev, error: null, step: null }));
@@ -120,19 +129,50 @@ export function useMovePositionWithdraw({
         ...prev,
         withdrawing: true,
         error: null,
-        step: "Building transaction...",
+        step: "Fetching broker information...",
       }));
 
       try {
-        // Convert amount to raw format
-        const decimals = getCoinDecimals(asset.symbol);
-        const rawAmount = convertAmountToRaw(amount, decimals);
+        // Get broker for the asset
+        const broker = await getBrokerByAssetName(asset.symbol);
+        if (!broker) {
+          throw new Error(`Broker not found for asset: ${asset.symbol}`);
+        }
+        const brokerValidation = validateBroker(broker, "withdraw");
+        if (!brokerValidation.isValid) {
+          throw new Error(brokerValidation.error || "Invalid broker");
+        }
 
-        const result = await executeRedeemV2({
-          amount: rawAmount,
-          coinSymbol: asset.symbol,
-          walletAddress,
+        // Fetch current portfolio state
+        setState((prev) => ({ ...prev, step: "Fetching portfolio state..." }));
+        const portfolioResponse = await fetchPortfolioWithRisk(walletAddress);
+        const currentPortfolioState =
+          buildCurrentPortfolioBasicState(portfolioResponse);
+
+        // If exact note token balance is provided (from "Max" button), use it directly
+        // This matches MovePosition: maxWithdrawNoteUser is used as txAmount (exact note balance)
+        // Otherwise, convert underlying amount to raw format
+        let rawAmount: string;
+        if (exactNoteTokenBalanceRaw) {
+          // Use exact note token balance (already in raw format)
+          // This ensures we withdraw exactly what user has, leaving zero balance
+          rawAmount = exactNoteTokenBalanceRaw;
+        } else {
+          // Convert underlying amount to raw format
+          const decimals = getCoinDecimals(asset.symbol);
+          rawAmount = convertAmountToRaw(amount, decimals);
+        }
+
+        setState((prev) => ({ ...prev, step: "Building transaction..." }));
+
+        // Execute transaction using unified service
+        const result = await executeTransaction({
+          txType: "withdraw",
+          txAmount: rawAmount,
+          broker,
+          address: walletAddress,
           publicKey,
+          currentPortfolioState,
           signHash: async (hash: string) => {
             setState((prev) => ({ ...prev, step: "Waiting for signature..." }));
             try {

@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { AssetIcon } from "../asset-icon";
+import { AssetIcon } from "../shared/ui";
 import { TokenBalance } from "../../types";
 
 interface AssetsListProps {

@@ -5,13 +5,18 @@
 
 import React from "react";
 import { useCopilotAction } from "@copilotkit/react-core";
-import { LendCard } from "../../features/lend/LendCard";
-import { EchelonSupplyModal } from "../../echelon-supply-modal";
-import { EchelonAssetData } from "../hooks/use-chat-data";
+import { SupplyModal } from "../../lending/moveposition";
+import { EchelonSupplyModal } from "../../lending/echelon";
+import {
+  EchelonAssetData,
+  MovePositionAssetData,
+} from "../hooks/use-chat-data";
 
 interface UseSupplyActionProps {
   walletAddress: string | null;
   echelonAssets: Record<string, EchelonAssetData>;
+  movePositionAssets: Record<string, MovePositionAssetData>;
+  healthFactor: number | null;
   availableBalances: Record<string, number>;
   onSupplySuccess: () => Promise<void>;
 }
@@ -22,6 +27,8 @@ interface UseSupplyActionProps {
 export function useSupplyAction({
   walletAddress,
   echelonAssets,
+  movePositionAssets,
+  healthFactor,
   availableBalances,
   onSupplySuccess,
 }: UseSupplyActionProps) {
@@ -66,11 +73,29 @@ export function useSupplyAction({
       const isEchelon = protocolLower === "echelon";
 
       if (isMovePosition) {
-        return (
-          <div className="my-3">
-            <LendCard walletAddress={walletAddress} asset={asset} />
-          </div>
-        );
+        const assetSymbol = asset?.toUpperCase() || "MOVE";
+        const movePositionAsset = movePositionAssets[assetSymbol];
+
+        if (movePositionAsset) {
+          return (
+            <div className="my-3 max-w-lg mx-auto">
+              <SupplyModal
+                isOpen={true}
+                onClose={() => {}}
+                inline={true}
+                asset={{
+                  token: movePositionAsset.token,
+                  symbol: movePositionAsset.symbol,
+                  price: movePositionAsset.price,
+                  supplyApy: movePositionAsset.supplyApy,
+                  totalSupplied: movePositionAsset.totalSupplied,
+                }}
+                walletAddress={walletAddress}
+                healthFactor={healthFactor}
+              />
+            </div>
+          );
+        }
       }
 
       if (isEchelon) {

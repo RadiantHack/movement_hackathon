@@ -4,7 +4,7 @@ import { PrivyProvider } from "@privy-io/react-auth";
 import { CopilotKit } from "@copilotkit/react-core";
 import { ReactNode, useEffect } from "react";
 import { usePathname } from "next/navigation";
-import { MovementWalletModal } from "./components/movement-wallet-modal";
+import { MovementWalletModal } from "./components/shared/ui";
 import {
   Provider as ReduxProvider,
   useDispatch,
@@ -78,7 +78,9 @@ function PrivyProviderWithConfig({
             rpcUrls: {
               default: {
                 http: [
-                  config.movementLabsUrl || "https://mainnet.movementlabs.xyz",
+                  config.movementLabsUrl ||
+                    "https://mainnet.movementnetwork.xyz/v1",
+                  "https://mainnet.movementnetwork.xyz/v1",
                 ],
               },
             },

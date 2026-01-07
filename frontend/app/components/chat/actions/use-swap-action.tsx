@@ -5,8 +5,8 @@
 
 import React from "react";
 import { useCopilotAction } from "@copilotkit/react-core";
-import { SwapCard } from "../../features/swap/SwapCard";
-import { getAllTokens } from "../../../utils/token-constants";
+import { SwapCard } from "../../swap";
+import { getAllTokens } from "../../../utils/shared/tokens";
 
 interface UseSwapActionProps {
   walletAddress: string | null;
@@ -14,6 +14,7 @@ interface UseSwapActionProps {
 
 /**
  * Normalize token symbol for swap (USDC -> USDC.e, USDT -> USDT.e)
+ * Uses lowercase e to match actual token symbols and SwapCard expectations
  */
 function normalizeTokenForSwap(token: string): string {
   const upperToken = token?.toUpperCase() || "";
@@ -77,13 +78,16 @@ export function useSwapAction({ walletAddress }: UseSwapActionProps) {
       const normalizedFromToken = normalizeTokenForSwap(fromTokenUpper);
       const normalizedToToken = normalizeTokenForSwap(toTokenUpper);
 
+      // Check if token is valid - accept both normalized and original forms
+      // availableSymbols are uppercase, so normalizeTokenForSwap returns uppercase with .e
+      // But we need to check against uppercase version in availableSymbols
       const isValidFromToken =
         normalizedFromToken &&
-        (availableSymbols.includes(normalizedFromToken) ||
+        (availableSymbols.includes(normalizedFromToken.toUpperCase()) ||
           availableSymbols.includes(fromTokenUpper));
       const isValidToToken =
         normalizedToToken &&
-        (availableSymbols.includes(normalizedToToken) ||
+        (availableSymbols.includes(normalizedToToken.toUpperCase()) ||
           availableSymbols.includes(toTokenUpper));
 
       if (fromTokenUpper && !isValidFromToken) {
@@ -118,11 +122,22 @@ export function useSwapAction({ walletAddress }: UseSwapActionProps) {
       const finalToToken = normalizeTokenForSwap(toTokenUpper) || "USDC";
 
       return (
-        <SwapCard
-          walletAddress={walletAddress}
-          initialFromToken={finalFromToken}
-          initialToToken={finalToToken}
-        />
+        <div className="my-3 max-w-lg mx-auto relative z-10">
+          <div className="relative rounded-xl border border-zinc-200/60 dark:border-zinc-700/40 bg-white dark:bg-zinc-900 p-2.5 shadow-lg shadow-zinc-200/30 dark:shadow-zinc-950/30 overflow-hidden z-10">
+            {/* Subtle background decoration */}
+            <div className="absolute -top-12 -right-12 w-24 h-24 bg-gradient-to-br from-purple-500/3 to-violet-500/3 rounded-full blur-xl" />
+            <div className="absolute -bottom-12 -left-12 w-24 h-24 bg-gradient-to-tr from-purple-500/3 to-violet-500/3 rounded-full blur-xl" />
+
+            {/* Swap Card Content - Compact for chat */}
+            <div className="relative -m-1.5 scale-[0.95] origin-center">
+              <SwapCard
+                walletAddress={walletAddress}
+                initialFromToken={finalFromToken}
+                initialToToken={finalToToken}
+              />
+            </div>
+          </div>
+        </div>
       );
     },
   });

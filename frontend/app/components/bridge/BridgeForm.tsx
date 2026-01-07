@@ -5,10 +5,10 @@ import { usePrivy } from "@privy-io/react-auth";
 import { useMovementWallet } from "../../hooks/useMovementWallet";
 import { useSignRawHash } from "@privy-io/react-auth/extended-chains";
 import { useMovementConfig } from "../../hooks/useMovementConfig";
-import { AssetIcon } from "../asset-icon";
+import { AssetIcon } from "../shared/ui";
 import { executeBridge, isValidEthereumAddress } from "../../utils/bridge";
-import { createAptosClient } from "../../utils/aptos-client";
-import { TransactionSuccessMessage } from "../shared/TransactionSuccessMessage";
+import { createAptosClient } from "../../utils/shared/clients";
+import { TransactionSuccessMessage } from "../shared/modals";
 
 const MOVEMENT_CHAIN = {
   id: "movement",
@@ -46,7 +46,9 @@ export default function BridgeForm({ walletAddress }: BridgeFormProps) {
   const [bridging, setBridging] = useState(false);
   const [bridgeStep, setBridgeStep] = useState<string | null>(null);
   const [bridgeTxHash, setBridgeTxHash] = useState<string | null>(null);
-  const [showSuccessMessage, setShowSuccessMessage] = useState(false);
+  const [displayTxHash, setDisplayTxHash] = useState<string | null>(null);
+  // Track last shown txHash to prevent re-showing
+  const lastShownTxHashRef = useRef<string | null>(null);
   const [showTokenDropdown, setShowTokenDropdown] = useState(false);
   const [balance, setBalance] = useState<string | null>(null);
   const [loadingBalance, setLoadingBalance] = useState(false);
@@ -111,6 +113,19 @@ export default function BridgeForm({ walletAddress }: BridgeFormProps) {
     fetchBalance();
   }, [walletAddress, token]);
 
+  // Show notification when txHash appears - only if it's a new txHash
+  useEffect(() => {
+    if (bridgeTxHash && bridgeTxHash !== lastShownTxHashRef.current) {
+      // Only show if this is a new txHash we haven't shown before
+      setDisplayTxHash(bridgeTxHash);
+      lastShownTxHashRef.current = bridgeTxHash;
+      // Reset amount input when transaction completes
+      setAmount("");
+    } else if (!bridgeTxHash) {
+      setDisplayTxHash(null);
+    }
+  }, [bridgeTxHash]);
+
   const handleBridge = async () => {
     if (!recipientAddress || !isValidEthereumAddress(recipientAddress)) return;
     if (!walletAddress || !movementWallet || !aptos) return;
@@ -136,12 +151,9 @@ export default function BridgeForm({ walletAddress }: BridgeFormProps) {
 
       setBridgeStep("Transaction submitted...");
       setBridgeTxHash(txHash);
-      setShowSuccessMessage(true);
-      setTimeout(() => {
-        setShowSuccessMessage(false);
-        setAmount("");
-        setRecipientAddress("");
-      }, 250);
+      // Reset form state after successful transaction
+      setAmount("");
+      setRecipientAddress("");
       setBridgeStep(null);
     } catch (error) {
       console.error("Bridge error:", error);
@@ -392,9 +404,17 @@ export default function BridgeForm({ walletAddress }: BridgeFormProps) {
             </div>
           </div>
 
-          {/* Success Message */}
-          {bridgeTxHash && showSuccessMessage && (
-            <TransactionSuccessMessage txHash={bridgeTxHash} />
+          {/* Success Message - Self-managing, shows for 5 seconds then auto-dismisses */}
+          {displayTxHash && (
+            <TransactionSuccessMessage
+              key={displayTxHash}
+              txHash={displayTxHash}
+              onClose={() => {
+                // Clear displayTxHash immediately when notification closes
+                // This prevents it from showing again - notification is non-persistent
+                setDisplayTxHash(null);
+              }}
+            />
           )}
 
           {/* Bridge Button */}
