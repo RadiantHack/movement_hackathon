@@ -112,23 +112,23 @@ export function EchelonWithdrawModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6">
       <div
         className="absolute inset-0 bg-black/70 backdrop-blur-md"
         onClick={onClose}
       />
 
-      <div className="relative w-full max-w-md rounded-3xl border border-zinc-200 dark:border-zinc-700/50 bg-white dark:bg-zinc-900 shadow-2xl overflow-hidden">
-        <div className="flex items-center justify-between p-6 pb-4">
-          <h2 className="text-2xl font-bold text-zinc-950 dark:text-zinc-50">
+      <div className="relative w-[calc(100%-2rem)] sm:w-[calc(100%-4rem)] max-w-sm sm:max-w-md rounded-xl sm:rounded-3xl border border-zinc-200 dark:border-zinc-700/50 bg-white dark:bg-zinc-900 shadow-2xl overflow-hidden">
+        <div className="flex items-center justify-between p-4 sm:p-6 pb-3 sm:pb-4">
+          <h2 className="text-base sm:text-lg md:text-xl font-bold text-zinc-950 dark:text-zinc-50">
             Withdraw
           </h2>
           <button
             onClick={onClose}
-            className="w-10 h-10 rounded-full bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center text-zinc-500 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700 hover:text-zinc-700 dark:hover:text-zinc-200 transition-all duration-200"
+            className="w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-zinc-100 dark:bg-zinc-800 flex items-center justify-center text-zinc-500 dark:text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-700 hover:text-zinc-700 dark:hover:text-zinc-200 transition-all duration-200"
           >
             <svg
-              className="w-5 h-5"
+              className="w-4 h-4 sm:w-5 sm:h-5"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -143,11 +143,11 @@ export function EchelonWithdrawModal({
           </button>
         </div>
 
-        <div className="px-6 pb-6">
-          <div className="rounded-2xl border border-zinc-200 dark:border-zinc-700/50 bg-zinc-50 dark:bg-zinc-800/50 p-5 mb-5">
-            <div className="flex items-start justify-between gap-4">
-              <div className="flex items-center gap-4">
-                <div className="relative">
+        <div className="px-4 sm:px-6 pb-4 sm:pb-6">
+          <div className="rounded-xl sm:rounded-2xl border border-zinc-200 dark:border-zinc-700/50 bg-zinc-50 dark:bg-zinc-800/50 p-3 sm:p-5 mb-4 sm:mb-5">
+            <div className="flex items-start justify-between gap-2 sm:gap-4">
+              <div className="flex items-center gap-2 sm:gap-4 flex-1 min-w-0">
+                <div className="relative flex-shrink-0">
                   <AssetIcon
                     symbol={asset.symbol}
                     echelonIcon={asset.icon}
@@ -155,15 +155,15 @@ export function EchelonWithdrawModal({
                     ring={true}
                   />
                 </div>
-                <div>
+                <div className="flex-1 min-w-0">
                   <input
                     type="text"
                     value={amount}
                     onChange={(e) => handleAmountChange(e.target.value)}
                     placeholder="0.00000000"
-                    className="bg-transparent text-zinc-950 dark:text-zinc-50 text-2xl font-bold outline-none w-full placeholder:text-zinc-300 dark:placeholder:text-zinc-600"
+                    className="bg-transparent text-zinc-950 dark:text-zinc-50 text-xl sm:text-2xl font-bold outline-none w-full placeholder:text-zinc-300 dark:placeholder:text-zinc-600"
                   />
-                  <div className="text-zinc-500 dark:text-zinc-400 text-sm mt-0.5">
+                  <div className="text-zinc-500 dark:text-zinc-400 text-[10px] sm:text-xs md:text-sm mt-0.5">
                     $
                     {usdValue.toLocaleString(undefined, {
                       minimumFractionDigits: 2,
@@ -175,11 +175,11 @@ export function EchelonWithdrawModal({
               <div className="text-right shrink-0">
                 <button
                   onClick={handleMax}
-                  className="px-4 py-2 rounded-xl bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 text-sm font-semibold hover:bg-purple-200 dark:hover:bg-purple-900/50 transition-colors"
+                  className="px-3 sm:px-4 py-1.5 sm:py-2 rounded-lg sm:rounded-xl bg-purple-100 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400 text-xs sm:text-sm font-semibold hover:bg-purple-200 dark:hover:bg-purple-900/50 transition-colors"
                 >
                   MAX
                 </button>
-                <div className="text-zinc-400 dark:text-zinc-500 text-xs mt-2">
+                <div className="text-zinc-400 dark:text-zinc-500 text-[9px] sm:text-[10px] md:text-xs mt-1.5 sm:mt-2">
                   Available:{" "}
                   <span className="text-zinc-600 dark:text-zinc-300 font-medium">
                     {availableBalance.toFixed(8)}
@@ -190,11 +190,11 @@ export function EchelonWithdrawModal({
             </div>
           </div>
 
-          <div className="rounded-2xl border border-zinc-200 dark:border-zinc-700/50 bg-zinc-50 dark:bg-zinc-800/30 p-4 mb-6 space-y-3">
+          <div className="rounded-xl sm:rounded-2xl border border-zinc-200 dark:border-zinc-700/50 bg-zinc-50 dark:bg-zinc-800/30 p-3 sm:p-4 mb-4 sm:mb-6 space-y-2 sm:space-y-3">
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 text-zinc-600 dark:text-zinc-400">
+              <div className="flex items-center gap-1.5 sm:gap-2 text-zinc-600 dark:text-zinc-400">
                 <svg
-                  className="w-4 h-4"
+                  className="w-3.5 h-3.5 sm:w-4 sm:h-4"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -206,7 +206,9 @@ export function EchelonWithdrawModal({
                     d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"
                   />
                 </svg>
-                <span className="text-sm">Health factor</span>
+                <span className="text-[10px] sm:text-xs md:text-sm">
+                  Health factor
+                </span>
                 <svg
                   className="w-3.5 h-3.5 text-zinc-400"
                   fill="none"
@@ -221,15 +223,17 @@ export function EchelonWithdrawModal({
                   />
                 </svg>
               </div>
-              <span className="text-lg font-bold text-green-500">∞%</span>
+              <span className="text-sm sm:text-base md:text-lg font-bold text-green-500">
+                ∞%
+              </span>
             </div>
 
             <div className="h-px bg-zinc-200 dark:bg-zinc-700/50" />
 
             <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 text-zinc-600 dark:text-zinc-400">
+              <div className="flex items-center gap-1.5 sm:gap-2 text-zinc-600 dark:text-zinc-400">
                 <svg
-                  className="w-4 h-4"
+                  className="w-3.5 h-3.5 sm:w-4 sm:h-4"
                   fill="none"
                   stroke="currentColor"
                   viewBox="0 0 24 24"
@@ -241,7 +245,9 @@ export function EchelonWithdrawModal({
                     d="M13 10V3L4 14h7v7l9-11h-7z"
                   />
                 </svg>
-                <span className="text-sm">Rate limit</span>
+                <span className="text-[10px] sm:text-xs md:text-sm">
+                  Rate limit
+                </span>
                 <svg
                   className="w-3.5 h-3.5 text-zinc-400"
                   fill="none"
@@ -256,14 +262,14 @@ export function EchelonWithdrawModal({
                   />
                 </svg>
               </div>
-              <span className="text-zinc-950 dark:text-zinc-50 font-medium">
+              <span className="text-[10px] sm:text-xs md:text-sm text-zinc-950 dark:text-zinc-50 font-medium">
                 {rateLimit.toLocaleString()} / {rateLimitMax.toLocaleString()}
               </span>
             </div>
           </div>
 
           {withdraw.error && (
-            <div className="mb-4 p-3 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-sm text-red-700 dark:text-red-400">
+            <div className="mb-3 sm:mb-4 p-2.5 sm:p-3 rounded-lg sm:rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-[10px] sm:text-xs md:text-sm text-red-700 dark:text-red-400">
               {withdraw.error}
             </div>
           )}
@@ -288,7 +294,7 @@ export function EchelonWithdrawModal({
               (!numericAmount || numericAmount <= 0 || withdraw.withdrawing) &&
               !withdraw.txHash
             }
-            className={`w-full py-4 rounded-2xl font-semibold text-lg transition-all duration-200 ${
+            className={`w-full py-2.5 sm:py-3 md:py-4 rounded-xl sm:rounded-2xl font-semibold text-xs sm:text-sm md:text-base lg:text-lg transition-all duration-200 ${
               withdraw.txHash
                 ? "bg-green-600 text-white cursor-pointer"
                 : numericAmount > 0 && !withdraw.withdrawing
