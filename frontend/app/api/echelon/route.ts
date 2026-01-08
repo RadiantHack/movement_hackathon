@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { EchelonMarketsApiResponse } from "@/app/types/echelon";
 
 export async function GET() {
   try {
@@ -19,8 +20,17 @@ export async function GET() {
       );
     }
 
-    const data = await response.json();
-    return NextResponse.json(data);
+    const data = (await response.json()) as EchelonMarketsApiResponse["data"];
+
+    // Validate response structure
+    if (!data || !Array.isArray(data.assets) || !Array.isArray(data.marketStats)) {
+      return NextResponse.json(
+        { error: "Invalid API response structure" },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json({ data });
   } catch (error) {
     console.error("Echelon API error:", error);
     return NextResponse.json(

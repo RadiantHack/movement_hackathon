@@ -64,6 +64,7 @@ export function EchelonBorrowModal({
   const [displayTxHash, setDisplayTxHash] = useState<string | null>(null);
   // Track last shown txHash to prevent re-showing
   const lastShownTxHashRef = useRef<string | null>(null);
+  const [showButtonComplete, setShowButtonComplete] = useState(false);
 
   // Use centralized borrow hook
   const borrow = useEchelonBorrow({
@@ -71,6 +72,11 @@ export function EchelonBorrowModal({
       // Reset form state after successful transaction
       setAmount("");
       setPercentage(0);
+      // Clear txHash after a short delay to allow the success message to show
+      // This enables the user to borrow again immediately
+      setTimeout(() => {
+        borrow.resetState();
+      }, 1000);
       if (onSuccess) {
         onSuccess();
       }
@@ -95,19 +101,96 @@ export function EchelonBorrowModal({
     if (!isOpen) {
       setDisplayTxHash(null);
       lastShownTxHashRef.current = null;
+      setAmount("");
+      setPercentage(0);
+      setShowButtonComplete(false);
     }
   }, [isOpen]);
 
-  if (!isOpen || !asset) return null;
+  // Show button complete state after transaction
+  useEffect(() => {
+    if (borrow.txHash && displayTxHash) {
+      const timer = setTimeout(() => {
+        setShowButtonComplete(true);
+      }, 250);
+      return () => clearTimeout(timer);
+    } else {
+      setShowButtonComplete(false);
+    }
+  }, [borrow.txHash, displayTxHash]);
 
   const numericAmount = parseFloat(amount) || 0;
-  const usdValue = numericAmount * asset.price;
+  const usdValue = numericAmount * (asset?.price || 0);
   const rateLimit = 184608.6;
   const rateLimitMax = 500000;
 
+  // Memoize availableBalance to ensure it recalculates when prop changes
+  const memoizedAvailableBalance = useMemo(() => {
+    return availableBalance || 0;
+  }, [availableBalance]);
+
+  // Reset amount if it exceeds the new available balance after recalculation
+  useEffect(() => {
+    if (
+      numericAmount > memoizedAvailableBalance &&
+      memoizedAvailableBalance > 0
+    ) {
+      // If the current amount exceeds the new available balance, reset to max
+      // Use the exact on-chain value without additional buffers
+      const maxAmount = Math.floor(memoizedAvailableBalance * 1e8) / 1e8;
+      const formatted = maxAmount.toFixed(8).replace(/\.?0+$/, "");
+      setAmount(formatted);
+      const pct =
+        memoizedAvailableBalance > 0
+          ? (maxAmount / memoizedAvailableBalance) * 100
+          : 0;
+      setPercentage(Math.min(pct, 100));
+    } else if (memoizedAvailableBalance === 0 && numericAmount > 0) {
+      // If no borrowing power available, reset the form
+      setAmount("");
+      setPercentage(0);
+    }
+  }, [memoizedAvailableBalance, numericAmount]);
+
+  // Calculate current health factor (equity / debt, or ∞ if no debt)
+  const currentHealthFactor = useMemo(() => {
+    if (totalBorrowBalance <= 0) return null; // No debt = infinite health
+    return totalSupplyBalance / totalBorrowBalance;
+  }, [totalSupplyBalance, totalBorrowBalance]);
+
+  // Calculate simulated health factor when amount changes (borrow increases debt)
+  const simulatedHealthFactor = useMemo(() => {
+    if (!numericAmount || numericAmount <= 0 || !asset)
+      return currentHealthFactor;
+
+    const borrowAmountUSD = numericAmount * asset.price;
+    const newBorrowBalance = totalBorrowBalance + borrowAmountUSD;
+
+    if (newBorrowBalance <= 0) return null; // No debt = infinite health
+    return totalSupplyBalance / newBorrowBalance;
+  }, [
+    numericAmount,
+    asset?.price,
+    totalSupplyBalance,
+    totalBorrowBalance,
+    currentHealthFactor,
+  ]);
+
+  // Determine health factor color
+  const getHealthFactorColor = (hf: number | null) => {
+    if (hf === null) return "text-green-500";
+    if (hf <= 1.0) return "text-red-500";
+    if (hf <= 1.2) return "text-yellow-500";
+    return "text-green-500";
+  };
+
+  const displayHealthFactor = simulatedHealthFactor ?? currentHealthFactor;
+
+  if (!isOpen || !asset) return null;
+
   const handlePercentageChange = (pct: number) => {
     setPercentage(pct);
-    const newAmount = (availableBalance * pct) / 100;
+    const newAmount = (memoizedAvailableBalance * pct) / 100;
     setAmount(newAmount.toFixed(6));
     // Clear error when user changes percentage
     if (borrow.error) {
@@ -118,7 +201,8 @@ export function EchelonBorrowModal({
   const handleAmountChange = (value: string) => {
     setAmount(value);
     const num = parseFloat(value) || 0;
-    const pct = availableBalance > 0 ? (num / availableBalance) * 100 : 0;
+    const pct =
+      memoizedAvailableBalance > 0 ? (num / memoizedAvailableBalance) * 100 : 0;
     setPercentage(Math.min(pct, 100));
     // Clear error when user changes amount
     if (borrow.error) {
@@ -127,7 +211,12 @@ export function EchelonBorrowModal({
   };
 
   const handleMax = () => {
-    setAmount(availableBalance.toFixed(6));
+    // Use the exact on-chain value without any additional buffers
+    // Floor to 8 decimal places to match the calculation precision
+    const maxAmount = Math.floor(memoizedAvailableBalance * 1e8) / 1e8;
+    // Format to remove trailing zeros but keep up to 8 decimals
+    const formatted = maxAmount.toFixed(8).replace(/\.?0+$/, "");
+    setAmount(formatted);
     setPercentage(100);
   };
 
@@ -150,6 +239,8 @@ export function EchelonBorrowModal({
       return;
     }
 
+    // The memoizedAvailableBalance already accounts for LTV and health factor constraints
+    // The hook's validateBorrowingPower will handle validation
     await borrow.handleBorrow(
       {
         symbol: asset.symbol,
@@ -158,7 +249,7 @@ export function EchelonBorrowModal({
         faAddress: asset.faAddress,
       } as AssetInfo,
       numericAmount,
-      availableBalance,
+      memoizedAvailableBalance,
       hasCollateral,
       totalSupplyBalance,
       totalBorrowBalance
@@ -244,17 +335,27 @@ export function EchelonBorrowModal({
                     Loading...
                   </span>
                 ) : hasCollateral || totalSupplyBalance > 0 ? (
-                  availableBalance > 0 ? (
+                  loadingVault ? (
+                    <span className="text-zinc-500 dark:text-zinc-400">
+                      Loading...
+                    </span>
+                  ) : memoizedAvailableBalance > 0 ? (
                     <>
                       Available:{" "}
                       <span className="text-zinc-600 dark:text-zinc-300 font-medium">
-                        {availableBalance.toFixed(6)}
+                        {memoizedAvailableBalance.toFixed(6)}
                       </span>{" "}
                       {asset.symbol}
                     </>
-                  ) : (
+                  ) : totalBorrowBalance > 0 ? (
+                    // Only show "Max borrow reached" if user has actually borrowed something
                     <span className="text-amber-600 dark:text-amber-400">
                       Max borrow reached
+                    </span>
+                  ) : (
+                    // If no borrows and memoizedAvailableBalance is 0, it's likely still loading or no borrowing power
+                    <span className="text-zinc-500 dark:text-zinc-400">
+                      Calculating...
                     </span>
                   )
                 ) : (
@@ -382,9 +483,31 @@ export function EchelonBorrowModal({
                 />
               </svg>
             </div>
-            <span className="text-sm sm:text-base md:text-lg font-bold text-green-500">
-              ∞%
-            </span>
+            <div className="flex items-center gap-1.5 sm:gap-2">
+              {currentHealthFactor !== null &&
+              simulatedHealthFactor !== null &&
+              numericAmount > 0 ? (
+                <>
+                  <span
+                    className={`text-sm sm:text-base md:text-lg font-bold ${getHealthFactorColor(currentHealthFactor)}`}
+                  >
+                    {currentHealthFactor.toFixed(2)}x
+                  </span>
+                  <span className="text-zinc-400">→</span>
+                  <span
+                    className={`text-sm sm:text-base md:text-lg font-bold ${getHealthFactorColor(simulatedHealthFactor)}`}
+                  >
+                    {simulatedHealthFactor.toFixed(2)}x
+                  </span>
+                </>
+              ) : (
+                <span className="text-sm sm:text-base md:text-lg font-bold text-green-500">
+                  {displayHealthFactor !== null
+                    ? `${displayHealthFactor.toFixed(2)}x`
+                    : "∞"}
+                </span>
+              )}
+            </div>
           </div>
 
           <div className="h-px bg-zinc-200 dark:bg-zinc-700/50" />
@@ -444,6 +567,8 @@ export function EchelonBorrowModal({
               // Clear displayTxHash immediately when notification closes
               // This prevents it from showing again - notification is non-persistent
               setDisplayTxHash(null);
+              // Clear the borrow state to allow another transaction
+              borrow.resetState();
             }}
           />
         )}
@@ -454,25 +579,11 @@ export function EchelonBorrowModal({
           onClick={(e) => {
             e.preventDefault();
             e.stopPropagation();
-            console.log("[Borrow] Button clicked", {
-              numericAmount,
-              borrowing: borrow.borrowing,
-              asset: asset?.symbol,
-              disabled: numericAmount <= 0 || borrow.borrowing,
-            });
             if (numericAmount > 0 && !borrow.borrowing) {
               handleBorrow();
-            } else {
-              console.log("[Borrow] Button click ignored - disabled state", {
-                numericAmount,
-                borrowing: borrow.borrowing,
-              });
             }
           }}
-          disabled={
-            (!numericAmount || numericAmount <= 0 || borrow.borrowing) &&
-            !borrow.txHash
-          }
+          disabled={!numericAmount || numericAmount <= 0 || borrow.borrowing}
           className={`w-full py-2.5 sm:py-3 md:py-4 rounded-xl sm:rounded-2xl font-semibold text-xs sm:text-sm md:text-base lg:text-lg transition-all duration-200 relative z-10 ${
             borrow.txHash
               ? "bg-green-600 text-white cursor-pointer"
@@ -481,10 +592,10 @@ export function EchelonBorrowModal({
                 : "bg-zinc-100 dark:bg-zinc-800 text-zinc-400 dark:text-zinc-500 cursor-not-allowed"
           }`}
         >
-          {borrow.txHash ? (
-            <span className="flex items-center justify-center gap-2">
+          {displayTxHash && showButtonComplete ? (
+            <span className="flex items-center justify-center gap-1.5 sm:gap-2">
               <svg
-                className="w-5 h-5"
+                className="w-4 h-4 sm:w-5 sm:h-5"
                 fill="none"
                 viewBox="0 0 24 24"
                 stroke="currentColor"
@@ -499,9 +610,9 @@ export function EchelonBorrowModal({
               Transaction Complete
             </span>
           ) : borrow.borrowing ? (
-            <span className="flex items-center justify-center gap-2">
+            <span className="flex items-center justify-center gap-1.5 sm:gap-2">
               <svg
-                className="w-5 h-5 animate-spin"
+                className="w-4 h-4 sm:w-5 sm:h-5 animate-spin"
                 fill="none"
                 viewBox="0 0 24 24"
               >
@@ -522,7 +633,22 @@ export function EchelonBorrowModal({
               {borrow.step || "Processing..."}
             </span>
           ) : numericAmount > 0 ? (
-            `Borrow ${asset.symbol}`
+            <span className="flex items-center justify-center gap-1.5 sm:gap-2">
+              <svg
+                className="w-4 h-4 sm:w-5 sm:h-5"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"
+                />
+              </svg>
+              Borrow {asset.symbol}
+            </span>
           ) : (
             "Enter amount to borrow"
           )}

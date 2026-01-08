@@ -16,6 +16,7 @@ import {
   ChainId,
 } from "@aptos-labs/ts-sdk";
 import { toHex } from "viem";
+import { store } from "@/store";
 
 const ECHELON_CONTRACT =
   "0x6a01d5761d43a5b5a0ccbfc42edf2d02c0611464aae99a2ea0e0d4819f0550b5";
@@ -33,15 +34,33 @@ const TYPE_ARGUMENTS: Record<string, string> = {
   rsETH: "0x51ffc9885233adf3dd411078cad57535ed1982013dc82d9d6c433a55f2e0035d",
 };
 
-const MOVEMENT_RPC = "https://mainnet.movementnetwork.xyz/v1";
 const MOVEMENT_CHAIN_ID = 126;
 
-const aptos = new Aptos(
-  new AptosConfig({
-    network: Network.CUSTOM,
-    fullnode: MOVEMENT_RPC,
-  })
-);
+/**
+ * Get Movement RPC URL from runtime config
+ */
+function getMovementRpc(): string {
+  const state = store.getState() as any;
+  const cfg = state.config || {};
+  if (!cfg.loaded) {
+    // Fallback to default if config not loaded
+    return "https://mainnet.movementnetwork.xyz/v1";
+  }
+  return cfg.movementRpc || "https://mainnet.movementnetwork.xyz/v1";
+}
+
+/**
+ * Get Aptos client instance using RPC from config
+ */
+function getAptosClient(): Aptos {
+  const movementRpc = getMovementRpc();
+  return new Aptos(
+    new AptosConfig({
+      network: Network.CUSTOM,
+      fullnode: movementRpc,
+    })
+  );
+}
 
 export interface AssetInfo {
   symbol: string;
@@ -241,6 +260,7 @@ export async function executeRepayTransaction(
       transactionData.typeArguments = typeArguments;
     }
 
+    const aptos = getAptosClient();
     const rawTxn = await aptos.transaction.build.simple({
       sender: senderAddress,
       data: transactionData,
@@ -477,6 +497,7 @@ export async function executeSupplyTransaction(
         const coinStoreResource = `0x1::coin::CoinStore<${coinType}>`;
         const faResource = `0x1::fungible_asset::Balance<${coinType}>`;
 
+        const aptos = getAptosClient();
         const resources = await aptos.account.getAccountResources({
           accountAddress: senderAddress,
         });
@@ -608,6 +629,7 @@ export async function executeSupplyTransaction(
       transactionData.typeArguments = typeArguments;
     }
 
+    const aptos = getAptosClient();
     const rawTxn = await aptos.transaction.build.simple({
       sender: senderAddress,
       data: transactionData,
@@ -748,12 +770,18 @@ export async function executeBorrowTransaction(
       };
     }
 
-    if (numericAmount > availableBalance) {
+    // Validate against availableBalance (which already includes 10% safety buffer)
+    // Add a small tolerance for floating point precision
+    const TOLERANCE = 0.000001;
+    if (numericAmount > availableBalance + TOLERANCE) {
       return {
         success: false,
         error: `Insufficient borrowing power. You can borrow up to ${availableBalance.toFixed(6)} ${asset.symbol} based on your collateral.`,
       };
     }
+
+    // Use the entered amount (availableBalance is already conservative enough)
+    const finalAmount = numericAmount;
 
     const senderAddress = movementWallet.address;
 
@@ -762,19 +790,19 @@ export async function executeBorrowTransaction(
 
     onStepChange("Building transaction...");
 
-    // Convert amount
+    // Convert amount (use the reduced safe amount)
     const decimals = asset.decimals || 8;
     const maxU64 = BigInt("18446744073709551615");
     const maxAmount = Number(maxU64) / Math.pow(10, decimals);
 
-    if (numericAmount > maxAmount) {
+    if (finalAmount > maxAmount) {
       return {
         success: false,
         error: `Amount too large. Maximum borrowable amount is ${maxAmount.toFixed(decimals)} ${asset.symbol}`,
       };
     }
 
-    if (numericAmount <= 0) {
+    if (finalAmount <= 0) {
       return {
         success: false,
         error: "Amount must be greater than 0",
@@ -783,14 +811,14 @@ export async function executeBorrowTransaction(
 
     const multiplier = Math.pow(10, decimals);
 
-    if (numericAmount * multiplier > Number.MAX_SAFE_INTEGER) {
+    if (finalAmount * multiplier > Number.MAX_SAFE_INTEGER) {
       return {
         success: false,
         error: "Amount too large. Please use a smaller amount.",
       };
     }
 
-    const rawAmountNum = Math.floor(numericAmount * multiplier);
+    const rawAmountNum = Math.floor(finalAmount * multiplier);
     const maxU64Num = Number(maxU64);
 
     if (rawAmountNum > maxU64Num || !Number.isSafeInteger(rawAmountNum)) {
@@ -841,6 +869,7 @@ export async function executeBorrowTransaction(
       transactionData.typeArguments = typeArguments;
     }
 
+    const aptos = getAptosClient();
     const rawTxn = await aptos.transaction.build.simple({
       sender: senderAddress,
       data: transactionData,
@@ -1013,6 +1042,7 @@ export async function executeWithdrawTransaction(
       transactionData.typeArguments = typeArguments;
     }
 
+    const aptos = getAptosClient();
     const rawTxn = await aptos.transaction.build.simple({
       sender: senderAddress,
       data: transactionData,
