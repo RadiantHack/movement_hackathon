@@ -10,6 +10,7 @@ import {
   AccountAuthenticatorEd25519,
   generateSigningMessageForTransaction,
   ChainId,
+  AccountAddress,
 } from "@aptos-labs/ts-sdk";
 import { toHex } from "viem";
 import * as Gen from "../../lib/super-json-api-client/src";
@@ -185,7 +186,20 @@ function buildTransactionIx(
     }
   );
 
-  return ix;
+  // Convert InputTransactionData to TransactionInstructionData
+  // The SDK returns InputTransactionData which has sender as AccountAddressInput | undefined
+  // We need to convert it to string | undefined
+  const senderString =
+    typeof ix.sender === "string"
+      ? ix.sender
+      : ix.sender
+        ? AccountAddress.from(ix.sender).toString()
+        : undefined;
+
+  return {
+    sender: senderString,
+    data: ix.data,
+  } as TransactionInstructionData;
 }
 
 /**
@@ -228,7 +242,7 @@ async function signAndSubmitTransaction({
     data: {
       function: txFunction as `${string}::${string}::${string}`,
       typeArguments: txTypeArguments,
-      functionArguments: txFunctionArguments,
+      functionArguments: txFunctionArguments as any, // SDK accepts various argument types
     },
   });
 

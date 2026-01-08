@@ -3,7 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import "@copilotkit/react-ui/styles.css";
 import { Providers } from "./providers";
-import { ThemeProvider } from "./components/shared/ui";
+import { ThemeProvider } from "./components/shared/ui/themeProvider";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -22,6 +22,7 @@ export const metadata: Metadata = {
   manifest: "/manifest.json",
   icons: {
     icon: [
+      { url: "/favicon.svg", type: "image/svg+xml" },
       { url: "/icons/icon-192x192.png", sizes: "192x192", type: "image/png" },
       { url: "/icons/icon-512x512.png", sizes: "512x512", type: "image/png" },
     ],

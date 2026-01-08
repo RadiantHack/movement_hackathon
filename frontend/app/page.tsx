@@ -3,7 +3,7 @@
 import { usePrivy } from "@privy-io/react-auth";
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { ThemeToggle } from "./components/shared/ui";
+import { ThemeToggle, Logo } from "./components/shared/ui";
 
 export default function Home() {
   const { ready, authenticated, login } = usePrivy();
@@ -49,20 +49,8 @@ export default function Home() {
 
       <main className="relative z-10 flex w-full max-w-md flex-col items-center gap-10 px-8 py-16">
         {/* Logo/Icon */}
-        <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-zinc-900 dark:bg-zinc-100 shadow-xl animate-[bounce_3s_ease-in-out_infinite]">
-          <svg
-            className="h-10 w-10 text-white dark:text-zinc-900"
-            fill="none"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-            strokeWidth={2}
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M13 10V3L4 14h7v7l9-11h-7z"
-            />
-          </svg>
+        <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-zinc-900 dark:bg-zinc-100 shadow-xl animate-[bounce_3s_ease-in-out_infinite] p-2">
+          <Logo size="lg" variant="icon" />
         </div>
 
         {/* Content */}

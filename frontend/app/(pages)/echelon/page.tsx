@@ -518,52 +518,35 @@ export default function EchelonPage() {
                     </div>
                     <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
                       {userSupplies.map((supply) => {
-                        // Use withdrawable amount if user has borrows (to match withdraw modal),
-                        // otherwise use total supply amount
-                        // This ensures "Your Supplies" matches what's shown in withdraw modal
-                        const withdrawableAmount =
-                          withdrawableAmounts[supply.marketAddress];
+                        // "Your Supplies" should ALWAYS show the total amount supplied (not withdrawable)
+                        // This is the actual amount the user has supplied to the protocol
                         const onChainSupplyAmount =
                           supplyAmounts[supply.marketAddress];
 
-                        // Determine the amount to display based on user's borrow status and data availability
-                        // This logic ensures consistency between "Your Supplies" and withdraw modal
+                        // Calculate vault amount as fallback
+                        const vaultAmount =
+                          parseFloat(supply.amount) /
+                          Math.pow(10, supply.decimals);
+
+                        // Determine the amount to display - always show total supply amount
+                        // Priority: on-chain supply amount > vault amount
+                        // Note: 0 is a valid value (user might have withdrawn everything)
                         let amount: number;
                         const isItemLoading =
-                          userBorrows.length > 0
-                            ? loadingWithdrawableAmounts ||
-                              (withdrawableAmount === undefined &&
-                                loadingSupplyAmounts)
-                            : onChainSupplyAmount === undefined &&
-                              loadingSupplyAmounts;
+                          onChainSupplyAmount === undefined &&
+                          loadingSupplyAmounts;
 
                         if (isItemLoading) {
-                          // While loading, use fallback amount (will be replaced when loading completes)
-                          amount =
-                            onChainSupplyAmount !== undefined
-                              ? onChainSupplyAmount
-                              : parseFloat(supply.amount) /
-                                Math.pow(10, supply.decimals);
-                        } else if (userBorrows.length > 0) {
-                          // If user has borrows, show withdrawable amount (matches withdraw modal)
-                          if (withdrawableAmount !== undefined) {
-                            amount = withdrawableAmount;
-                          } else {
-                            // Fallback to supply amount if withdrawable fetch failed
-                            amount =
-                              onChainSupplyAmount !== undefined
-                                ? onChainSupplyAmount
-                                : parseFloat(supply.amount) /
-                                  Math.pow(10, supply.decimals);
-                          }
+                          // While loading, use vault amount (will be replaced when loading completes)
+                          amount = vaultAmount;
                         } else if (onChainSupplyAmount !== undefined) {
-                          // If no borrows, show total supply amount
+                          // Use on-chain supply amount (most accurate - total amount supplied)
+                          // Even if it's 0, use it (0 is a valid value)
                           amount = onChainSupplyAmount;
                         } else {
-                          // Fallback to vault amount
-                          amount =
-                            parseFloat(supply.amount) /
-                            Math.pow(10, supply.decimals);
+                          // Fallback to vault amount if on-chain fetch failed
+                          // This ensures we always show something if the user has supplies
+                          amount = vaultAmount;
                         }
 
                         const usdValue = amount * supply.price;
@@ -587,7 +570,7 @@ export default function EchelonPage() {
                               <div className="text-xs sm:text-sm text-zinc-500 dark:text-zinc-400 mb-1 sm:hidden">
                                 Balance
                               </div>
-                              {isLoadingSupplyData ? (
+                              {isItemLoading ? (
                                 <div className="text-zinc-500 dark:text-zinc-400 text-sm sm:text-base">
                                   Loading...
                                 </div>
@@ -1035,19 +1018,46 @@ export default function EchelonPage() {
                   icon: selectedWithdrawAsset.icon,
                   price: selectedWithdrawAsset.price,
                   decimals: selectedWithdrawAsset.decimals,
-                  // Use on-chain supply amount if available, otherwise use vault amount
-                  // Convert to raw format for the amount field
+                  // Use the same amount logic as displayed in "Your Supplies" card
+                  // This ensures consistency: withdrawable amount if user has borrows, otherwise supply amount
                   amount: (() => {
-                    const onChainAmount =
+                    const withdrawableAmount =
+                      withdrawableAmounts[selectedWithdrawAsset.marketAddress];
+                    const onChainSupplyAmount =
                       supplyAmounts[selectedWithdrawAsset.marketAddress];
-                    if (onChainAmount !== undefined) {
-                      // Convert back to raw units for consistency
-                      return (
-                        onChainAmount *
-                        Math.pow(10, selectedWithdrawAsset.decimals)
-                      ).toString();
+
+                    let displayAmount: number;
+
+                    if (userBorrows.length > 0) {
+                      // If user has borrows, use withdrawable amount (matches card display)
+                      if (withdrawableAmount !== undefined) {
+                        displayAmount = withdrawableAmount;
+                      } else if (onChainSupplyAmount !== undefined) {
+                        // Fallback to supply amount if withdrawable not available
+                        displayAmount = onChainSupplyAmount;
+                      } else {
+                        // Final fallback to vault amount
+                        displayAmount =
+                          parseFloat(selectedWithdrawAsset.amount) /
+                          Math.pow(10, selectedWithdrawAsset.decimals);
+                      }
+                    } else {
+                      // If no borrows, use total supply amount (matches card display)
+                      if (onChainSupplyAmount !== undefined) {
+                        displayAmount = onChainSupplyAmount;
+                      } else {
+                        // Fallback to vault amount
+                        displayAmount =
+                          parseFloat(selectedWithdrawAsset.amount) /
+                          Math.pow(10, selectedWithdrawAsset.decimals);
+                      }
                     }
-                    return selectedWithdrawAsset.amount;
+
+                    // Convert to raw format for the amount field
+                    return (
+                      displayAmount *
+                      Math.pow(10, selectedWithdrawAsset.decimals)
+                    ).toString();
                   })(),
                   marketAddress: selectedWithdrawAsset.marketAddress,
                   faAddress: assets.find(
