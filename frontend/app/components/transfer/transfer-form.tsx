@@ -63,6 +63,7 @@ export const TransferForm: React.FC<TransferFormProps> = ({
     txHash,
     step: transferStep,
     handleTransfer,
+    resetState,
   } = useTransfer({
     aptos,
     movementChainId,
@@ -448,6 +449,8 @@ export const TransferForm: React.FC<TransferFormProps> = ({
                 // Clear displayTxHash immediately when notification closes
                 // This prevents it from showing again - notification is non-persistent
                 setDisplayTxHash(null);
+                // Reset transfer state to allow new transactions
+                resetState();
               }}
             />
           )}

@@ -16,6 +16,7 @@ import * as superJsonApiClient from "../../../../lib/super-json-api-client/src";
 import { getMovementApiBase } from "@/lib/super-aptos-sdk/src/globals";
 import { useTokenBalance } from "../../../hooks/useTokenBalance";
 import { TransactionSuccessMessage } from "../../shared/modals";
+import { getAssetIconUrl } from "../../../utils/shared/icons/asset-icon";
 
 interface BorrowModalProps {
   isOpen: boolean;
@@ -146,6 +147,16 @@ export function BorrowModal({
     activeTab === "borrow" ? borrow.borrowing : borrow.repaying;
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [submissionStep, setSubmissionStep] = useState<string>("");
+
+  // Token icon error state
+  const [iconError, setIconError] = useState(false);
+
+  // Compute icon URL
+  const iconUrl = useMemo(() => {
+    if (!asset) return null;
+    setIconError(false); // Reset error when asset changes
+    return getAssetIconUrl(asset.symbol, asset.token?.iconUri);
+  }, [asset?.symbol, asset?.token?.iconUri]);
 
   // Get txHash from hook
   const txHash = borrow.txHash;
@@ -765,23 +776,25 @@ export function BorrowModal({
   }
 
   const baseClasses = inline
-    ? "w-full max-w-md mx-auto rounded-2xl bg-white dark:bg-zinc-900 shadow-lg"
-    : "relative w-full max-w-md rounded-2xl bg-white dark:bg-zinc-900 shadow-2xl";
+    ? "w-full max-w-md mx-auto rounded-xl sm:rounded-2xl bg-white dark:bg-zinc-900 shadow-lg"
+    : "relative w-[calc(100%-2rem)] sm:w-[calc(100%-4rem)] max-w-sm sm:max-w-md rounded-xl sm:rounded-2xl bg-white dark:bg-zinc-900 shadow-2xl";
 
   const content = (
     <div className={baseClasses}>
       {/* Header */}
-      <div className="flex items-center justify-between p-6 border-b border-zinc-200 dark:border-zinc-800">
-        <h2 className="text-xl font-semibold text-zinc-950 dark:text-zinc-50">
-          {activeTab === "borrow" ? "Borrow" : "Repay"} {asset.symbol}
-        </h2>
+      <div className="flex items-center justify-between p-4 sm:p-6 border-b border-zinc-200 dark:border-zinc-800">
+        <div className="flex-1 min-w-0">
+          <h2 className="text-base sm:text-lg md:text-xl font-semibold text-zinc-950 dark:text-zinc-50 truncate">
+            {activeTab === "borrow" ? "Borrow" : "Repay"} {asset.symbol}
+          </h2>
+        </div>
         {!inline && (
           <button
             onClick={onClose}
-            className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors"
+            className="ml-2 flex-shrink-0 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors p-1"
           >
             <svg
-              className="w-6 h-6"
+              className="w-5 h-5 sm:w-6 sm:h-6"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -798,13 +811,13 @@ export function BorrowModal({
       </div>
 
       {/* Tabs */}
-      <div className="flex p-2 gap-2 border-b border-zinc-200 dark:border-zinc-800">
+      <div className="flex p-1.5 sm:p-2 gap-1.5 sm:gap-2 border-b border-zinc-200 dark:border-zinc-800">
         <button
           onClick={() => {
             setActiveTab("borrow");
             setAmount("");
           }}
-          className={`flex-1 py-3 text-sm rounded-md font-medium transition-colors ${
+          className={`flex-1 py-2 sm:py-3 text-xs sm:text-sm rounded-md font-medium transition-colors ${
             activeTab === "borrow"
               ? "bg-blue-600 text-white"
               : "bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200"
@@ -817,7 +830,7 @@ export function BorrowModal({
             setActiveTab("repay");
             setAmount("");
           }}
-          className={`flex-1 py-3 text-sm font-medium rounded-md transition-colors ${
+          className={`flex-1 py-2 sm:py-3 text-xs sm:text-sm font-medium rounded-md transition-colors ${
             activeTab === "repay"
               ? "bg-blue-600 text-white"
               : "bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200"
@@ -828,38 +841,39 @@ export function BorrowModal({
       </div>
 
       {/* Form Content */}
-      <div className="p-6">
+      <div className="p-4 sm:p-6">
         {/* Amount Input */}
-        <div className="mb-6">
-          <div className="flex items-center gap-3 mb-4">
-            {asset.token?.iconUri ? (
+        <div className="mb-4 sm:mb-6">
+          <div className="flex items-center gap-2 sm:gap-3 mb-3 sm:mb-4">
+            {iconUrl && !iconError ? (
               <img
-                src={asset.token.iconUri}
+                src={iconUrl}
                 alt={asset.symbol}
-                className="w-10 h-10 rounded-full"
+                className="w-8 h-8 sm:w-10 sm:h-10 rounded-full flex-shrink-0"
+                onError={() => setIconError(true)}
               />
             ) : (
-              <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center">
-                <span className="text-white font-bold text-sm">
+              <div className="w-8 h-8 sm:w-10 sm:h-10 bg-blue-500 rounded-full flex items-center justify-center flex-shrink-0">
+                <span className="text-white font-bold text-xs sm:text-sm">
                   {asset.symbol.charAt(0)}
                 </span>
               </div>
             )}
-            <div className="flex-1">
+            <div className="flex-1 min-w-0">
               <input
                 type="text"
                 value={amount}
                 onChange={(e) => handleAmountChange(e.target.value)}
                 placeholder="0"
-                className="w-full bg-transparent text-4xl text-zinc-500 dark:text-zinc-400 font-light outline-none"
+                className="w-full bg-transparent text-xl sm:text-2xl md:text-3xl text-zinc-500 dark:text-zinc-400 font-light outline-none"
               />
-              <div className="text-zinc-500 dark:text-zinc-400 text-sm mt-1">
+              <div className="text-zinc-500 dark:text-zinc-400 text-[10px] sm:text-xs md:text-sm mt-0.5 sm:mt-1">
                 ${usdValue.toFixed(2)}
               </div>
             </div>
             <button
               onClick={handleMax}
-              className="px-4 py-1 bg-blue-500 text-white text-sm font-medium rounded hover:bg-blue-400 transition-colors"
+              className="px-3 sm:px-4 py-1.5 sm:py-1 bg-blue-500 text-white text-xs sm:text-sm font-medium rounded hover:bg-blue-400 transition-colors flex-shrink-0"
             >
               Max
             </button>
@@ -867,17 +881,17 @@ export function BorrowModal({
         </div>
 
         {/* Stats */}
-        <div className="space-y-3 mb-4">
-          <div className="flex justify-between items-center">
-            <span className="text-zinc-500 dark:text-zinc-400 text-sm">
+        <div className="space-y-2 sm:space-y-3 mb-3 sm:mb-4">
+          <div className="flex justify-between items-center flex-wrap gap-1 sm:gap-0">
+            <span className="text-[10px] sm:text-xs md:text-sm text-zinc-500 dark:text-zinc-400">
               Health factor
               {loadingSimulation && (
-                <span className="ml-2 text-xs text-zinc-400">
+                <span className="ml-1 sm:ml-1.5 sm:ml-2 text-[9px] sm:text-[10px] md:text-xs text-zinc-400">
                   (simulating...)
                 </span>
               )}
             </span>
-            <span className="text-sm font-medium flex items-center gap-2">
+            <span className="text-[10px] sm:text-xs md:text-sm font-medium flex items-center gap-1 sm:gap-2 flex-wrap">
               <span className="text-zinc-500 dark:text-zinc-400">
                 {currentHealthFactor
                   ? `${currentHealthFactor.toFixed(2)}x`
@@ -907,11 +921,11 @@ export function BorrowModal({
             </span>
           </div>
 
-          <div className="flex justify-between items-center">
-            <span className="text-zinc-500 dark:text-zinc-400 text-sm">
+          <div className="flex justify-between items-center flex-wrap gap-1 sm:gap-0">
+            <span className="text-[10px] sm:text-xs md:text-sm text-zinc-500 dark:text-zinc-400">
               Borrowed
             </span>
-            <span className="text-sm font-medium flex items-center gap-2">
+            <span className="text-[10px] sm:text-xs md:text-sm font-medium flex items-center gap-1 sm:gap-2 flex-wrap">
               <span className="text-zinc-500 dark:text-zinc-400">
                 {userBorrowedAmount.toFixed(4)} {asset.symbol}
               </span>
@@ -932,30 +946,30 @@ export function BorrowModal({
             </span>
           </div>
 
-          <div className="flex justify-between items-center">
-            <span className="text-zinc-500 dark:text-zinc-400 text-sm">
+          <div className="flex justify-between items-center flex-wrap gap-1 sm:gap-0">
+            <span className="text-[10px] sm:text-xs md:text-sm text-zinc-500 dark:text-zinc-400">
               Borrow APY
             </span>
-            <span className="text-sm font-medium text-red-600 dark:text-red-400">
+            <span className="text-[10px] sm:text-xs md:text-sm font-medium text-red-600 dark:text-red-400">
               {asset.borrowApy.toFixed(2)}%
             </span>
           </div>
 
-          <div className="flex justify-between items-center">
-            <span className="text-zinc-500 dark:text-zinc-400 text-sm">
+          <div className="flex justify-between items-center flex-wrap gap-1 sm:gap-0">
+            <span className="text-[10px] sm:text-xs md:text-sm text-zinc-500 dark:text-zinc-400">
               Available Liquidity
             </span>
-            <span className="text-sm font-medium text-zinc-900 dark:text-zinc-50">
+            <span className="text-[10px] sm:text-xs md:text-sm font-medium text-zinc-900 dark:text-zinc-50">
               {asset.availableLiquidity.toFixed(4)} {asset.symbol}
             </span>
           </div>
 
           {activeTab === "repay" && userBorrowedAmount > 0 && (
-            <div className="flex justify-between items-center">
-              <span className="text-zinc-500 dark:text-zinc-400 text-sm">
+            <div className="flex justify-between items-center flex-wrap gap-1 sm:gap-0">
+              <span className="text-[10px] sm:text-xs md:text-sm text-zinc-500 dark:text-zinc-400">
                 Available to repay
               </span>
-              <span className="text-sm font-medium text-zinc-900 dark:text-zinc-50">
+              <span className="text-[10px] sm:text-xs md:text-sm font-medium text-zinc-900 dark:text-zinc-50">
                 {maxRepayAmount.toFixed(6)} {asset.symbol}
               </span>
             </div>
@@ -995,7 +1009,7 @@ export function BorrowModal({
 
             {/* Red Zone Warning */}
             {simHealthRed && !isLTVWarning && (
-              <div className="mb-4 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-sm text-red-700 dark:text-red-400">
+              <div className="mb-3 sm:mb-4 p-2.5 sm:p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-[10px] sm:text-xs md:text-sm text-red-700 dark:text-red-400">
                 🚨 Danger: This borrow would make your position unhealthy
                 (health factor ≤ 1.2x). Your position may be at risk of
                 liquidation. Please reduce the amount.
@@ -1004,7 +1018,7 @@ export function BorrowModal({
 
             {/* LTV Warning */}
             {isLTVWarning && isSimHealthy && simLTV > 0 && (
-              <div className="mb-4 p-3 rounded-lg bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 text-sm text-orange-700 dark:text-orange-400">
+              <div className="mb-3 sm:mb-4 p-2.5 sm:p-3 rounded-lg bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800 text-[10px] sm:text-xs md:text-sm text-orange-700 dark:text-orange-400">
                 ⚠️ LTV Warning: This borrow would result in an LTV of{" "}
                 {(simLTV * 100).toFixed(1)}%, which exceeds the recommended 95%
                 threshold. Consider borrowing less to maintain a safer position.
@@ -1015,7 +1029,7 @@ export function BorrowModal({
 
         {/* Error Message */}
         {submitError && (
-          <div className="mb-4 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-sm text-red-700 dark:text-red-400">
+          <div className="mb-3 sm:mb-4 p-2.5 sm:p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-[10px] sm:text-xs md:text-sm text-red-700 dark:text-red-400">
             {submitError}
           </div>
         )}
@@ -1037,7 +1051,7 @@ export function BorrowModal({
         <button
           onClick={handleSubmit}
           disabled={(!canReview || submitting) && !displayTxHash}
-          className={`w-full font-semibold py-3.5 rounded-lg transition-all duration-200 mt-4 shadow-lg ${
+          className={`w-full font-semibold py-2.5 sm:py-3 md:py-3.5 rounded-lg transition-all duration-200 mt-3 sm:mt-4 shadow-lg text-xs sm:text-sm md:text-base ${
             displayTxHash && showButtonComplete
               ? "bg-green-600 text-white cursor-pointer"
               : canReview && !submitting
@@ -1096,11 +1110,11 @@ export function BorrowModal({
         </button>
 
         {/* Wallet Balance */}
-        <div className="flex justify-between items-center mt-4 pt-4 border-t border-zinc-200 dark:border-zinc-800">
-          <span className="text-zinc-500 dark:text-zinc-400 text-sm">
+        <div className="flex justify-between items-center mt-3 sm:mt-4 pt-3 sm:pt-4 border-t border-zinc-200 dark:border-zinc-800 flex-wrap gap-1 sm:gap-0">
+          <span className="text-xs sm:text-sm text-zinc-500 dark:text-zinc-400">
             Wallet balance
           </span>
-          <span className="text-sm font-medium flex items-center gap-2">
+          <span className="text-xs sm:text-sm font-medium flex items-center gap-1 sm:gap-2 flex-wrap">
             {loadingBalance ? (
               <span className="text-zinc-400">Loading...</span>
             ) : balance ? (
@@ -1132,7 +1146,7 @@ export function BorrowModal({
   }
 
   return (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80 backdrop-blur-sm">
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 sm:p-6">
       {content}
     </div>
   );

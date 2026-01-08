@@ -21,6 +21,7 @@ import {
   checkCoinStoreBalance,
   convertCoinStoreToFA,
 } from "../../../utils/moveposition/coin-conversion";
+import { getAssetIconUrl } from "../../../utils/shared/icons/asset-icon";
 
 // Utility functions for formatting (matching MovePosition's format.ts)
 function prettyTokenBal(num: number): string {
@@ -238,6 +239,16 @@ export function SupplyModal({
   const [hasCoinStoreBalance, setHasCoinStoreBalance] = useState(false);
   const [converting, setConverting] = useState(false);
   const [conversionError, setConversionError] = useState<string | null>(null);
+
+  // Token icon error state
+  const [iconError, setIconError] = useState(false);
+
+  // Compute icon URL
+  const iconUrl = useMemo(() => {
+    if (!asset) return null;
+    setIconError(false); // Reset error when asset changes
+    return getAssetIconUrl(asset.symbol, asset.token?.iconUri);
+  }, [asset?.symbol, asset?.token?.iconUri]);
 
   // Determine which hook to use based on active tab
   const currentOperation = activeTab === "supply" ? supply : withdraw;
@@ -1418,18 +1429,18 @@ export function SupplyModal({
   }
 
   const baseClasses = inline
-    ? "w-full max-w-md mx-auto rounded-2xl bg-white dark:bg-zinc-900 shadow-lg"
-    : "relative w-full max-w-md rounded-2xl bg-white dark:bg-zinc-900 shadow-2xl";
+    ? "w-full max-w-md mx-auto rounded-xl sm:rounded-2xl bg-white dark:bg-zinc-900 shadow-lg"
+    : "relative w-[calc(100%-2rem)] sm:w-[calc(100%-4rem)] max-w-sm sm:max-w-md rounded-xl sm:rounded-2xl bg-white dark:bg-zinc-900 shadow-2xl";
 
   const content = (
     <div className={baseClasses}>
       {/* Header */}
-      <div className="flex items-center justify-between p-6 border-b border-zinc-200 dark:border-zinc-800">
-        <div>
-          <h2 className="text-xl font-semibold text-zinc-950 dark:text-zinc-50">
+      <div className="flex items-center justify-between p-4 sm:p-6 border-b border-zinc-200 dark:border-zinc-800">
+        <div className="flex-1 min-w-0">
+          <h2 className="text-base sm:text-lg md:text-xl font-semibold text-zinc-950 dark:text-zinc-50 truncate">
             {activeTab === "supply" ? "Lend" : "Withdraw"} {asset.symbol}
           </h2>
-          <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">
+          <p className="text-[10px] sm:text-xs md:text-sm text-zinc-500 dark:text-zinc-400 mt-0.5 sm:mt-1">
             {activeTab === "supply"
               ? "Supply tokens to earn interest"
               : "Withdraw your supplied tokens"}
@@ -1438,10 +1449,10 @@ export function SupplyModal({
         {!inline && (
           <button
             onClick={onClose}
-            className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors"
+            className="ml-2 flex-shrink-0 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 transition-colors p-1"
           >
             <svg
-              className="w-6 h-6"
+              className="w-5 h-5 sm:w-6 sm:h-6"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -1458,14 +1469,14 @@ export function SupplyModal({
       </div>
 
       {/* Tabs */}
-      <div className="flex p-2 gap-2 border-b border-zinc-200 dark:border-zinc-800">
+      <div className="flex p-1.5 sm:p-2 gap-1.5 sm:gap-2 border-b border-zinc-200 dark:border-zinc-800">
         <button
           onClick={() => {
             handleTabSwitch("supply");
             // setActiveTab("supply");
             // setAmount("");
           }}
-          className={`flex-1 py-3 text-sm rounded-md font-medium transition-colors ${
+          className={`flex-1 py-2 sm:py-3 text-xs sm:text-sm rounded-md font-medium transition-colors ${
             activeTab === "supply"
               ? "bg-green-600 text-white"
               : "bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200"
@@ -1479,7 +1490,7 @@ export function SupplyModal({
             // setActiveTab("withdraw");
             // setAmount("");
           }}
-          className={`flex-1 py-3 text-sm font-medium rounded-md transition-colors ${
+          className={`flex-1 py-2 sm:py-3 text-xs sm:text-sm font-medium rounded-md transition-colors ${
             activeTab === "withdraw"
               ? "bg-green-600 text-white"
               : "bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200"
@@ -1490,32 +1501,33 @@ export function SupplyModal({
       </div>
 
       {/* Form Content */}
-      <div className="p-6">
+      <div className="p-4 sm:p-6">
         {/* Amount Input */}
-        <div className="mb-6">
-          <div className="flex items-center gap-3 mb-4">
-            {asset.token?.iconUri ? (
+        <div className="mb-4 sm:mb-6">
+          <div className="flex items-center gap-2 sm:gap-3 mb-3 sm:mb-4">
+            {iconUrl && !iconError ? (
               <img
-                src={asset.token.iconUri}
+                src={iconUrl}
                 alt={asset.symbol}
-                className="w-10 h-10 rounded-full"
+                className="w-8 h-8 sm:w-10 sm:h-10 rounded-full flex-shrink-0"
+                onError={() => setIconError(true)}
               />
             ) : (
-              <div className="w-10 h-10 bg-yellow-500 rounded-full flex items-center justify-center">
-                <span className="text-black font-bold text-sm">
+              <div className="w-8 h-8 sm:w-10 sm:h-10 bg-yellow-500 rounded-full flex items-center justify-center flex-shrink-0">
+                <span className="text-black font-bold text-xs sm:text-sm">
                   {asset.symbol.charAt(0)}
                 </span>
               </div>
             )}
-            <div className="flex-1">
+            <div className="flex-1 min-w-0">
               <input
                 type="text"
                 value={amount}
                 onChange={(e) => handleAmountChange(e.target.value)}
                 placeholder="0"
-                className="w-full bg-transparent text-4xl text-zinc-500 dark:text-zinc-400 font-light outline-none"
+                className="w-full bg-transparent text-xl sm:text-2xl md:text-3xl text-zinc-500 dark:text-zinc-400 font-light outline-none"
               />
-              <div className="text-zinc-500 dark:text-zinc-400 text-sm mt-1">
+              <div className="text-zinc-500 dark:text-zinc-400 text-[10px] sm:text-xs md:text-sm mt-0.5 sm:mt-1">
                 ${usdValue.toFixed(2)}
               </div>
             </div>
@@ -1523,7 +1535,7 @@ export function SupplyModal({
             {showMaxButton && (
               <button
                 onClick={handleMax}
-                className="px-4 py-1 bg-yellow-500 text-black text-sm font-medium rounded hover:bg-yellow-400 transition-colors"
+                className="px-3 sm:px-4 py-1.5 sm:py-1 bg-yellow-500 text-black text-xs sm:text-sm font-medium rounded hover:bg-yellow-400 transition-colors flex-shrink-0"
               >
                 Max
               </button>
@@ -1534,13 +1546,13 @@ export function SupplyModal({
           {activeTab === "supply" &&
             hasCoinStoreBalance &&
             coinStoreBalance > BigInt(0) && (
-              <div className="mt-4 p-4 rounded-xl bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800">
-                <div className="flex items-start gap-3">
-                  <div className="flex-1">
-                    <h3 className="text-sm font-semibold text-yellow-900 dark:text-yellow-100 mb-1">
+              <div className="mt-3 sm:mt-4 p-3 sm:p-4 rounded-lg sm:rounded-xl bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800">
+                <div className="flex items-start gap-2 sm:gap-3">
+                  <div className="flex-1 min-w-0">
+                    <h3 className="text-xs sm:text-sm font-semibold text-yellow-900 dark:text-yellow-100 mb-1">
                       Convert your {asset.symbol} coins!
                     </h3>
-                    <p className="text-xs text-yellow-800 dark:text-yellow-200 mb-3">
+                    <p className="text-[11px] sm:text-xs text-yellow-800 dark:text-yellow-200 mb-2 sm:mb-3">
                       You have{" "}
                       <span className="font-medium">
                         {(Number(coinStoreBalance) / Math.pow(10, 8)).toFixed(
@@ -1552,14 +1564,14 @@ export function SupplyModal({
                       supply it to MovePosition.
                     </p>
                     {conversionError && (
-                      <p className="text-xs text-red-600 dark:text-red-400 mb-2">
+                      <p className="text-[11px] sm:text-xs text-red-600 dark:text-red-400 mb-2">
                         {conversionError}
                       </p>
                     )}
                     <button
                       onClick={handleConvertToFA}
                       disabled={converting}
-                      className="px-4 py-2 bg-yellow-500 text-black text-sm font-medium rounded-lg hover:bg-yellow-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="w-full sm:w-auto px-3 sm:px-4 py-1.5 sm:py-2 bg-yellow-500 text-black text-xs sm:text-sm font-medium rounded-lg hover:bg-yellow-400 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {converting
                         ? "Converting..."
@@ -1572,7 +1584,7 @@ export function SupplyModal({
 
           {/* Available balance hint - different text for supply vs withdraw */}
           {activeTab === "supply" && balance && parseFloat(balance) > 0 && (
-            <div className="text-xs text-zinc-500 dark:text-zinc-400 mt-2">
+            <div className="text-[10px] sm:text-xs text-zinc-500 dark:text-zinc-400 mt-1.5 sm:mt-2">
               Available to supply:{" "}
               <span className="text-zinc-700 dark:text-zinc-300 font-medium">
                 {parseFloat(balance).toFixed(6)} {asset.symbol}
@@ -1581,7 +1593,7 @@ export function SupplyModal({
           )}
           {activeTab === "withdraw" &&
             maxWithdrawableAmount >= MIN_DISPLAY_AMOUNT && (
-              <div className="text-xs text-zinc-500 dark:text-zinc-400 mt-2">
+              <div className="text-[10px] sm:text-xs text-zinc-500 dark:text-zinc-400 mt-1.5 sm:mt-2">
                 Available to withdraw:{" "}
                 {loadingPortfolio ? (
                   <span className="text-zinc-400">Loading...</span>
@@ -1595,12 +1607,12 @@ export function SupplyModal({
         </div>
 
         {/* Stats - Always show previously supplied and health factor */}
-        <div className="mb-4 p-4 rounded-xl bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-700 space-y-3">
+        <div className="mb-4 p-3 sm:p-4 rounded-lg sm:rounded-xl bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-700 space-y-2 sm:space-y-3">
           {/* Health Factor - Prominently displayed */}
-          <div className="flex justify-between items-center">
-            <div className="flex items-center gap-2">
+          <div className="flex justify-between items-center flex-wrap gap-1 sm:gap-0">
+            <div className="flex items-center gap-1.5 sm:gap-2">
               <svg
-                className="w-4 h-4 text-zinc-500 dark:text-zinc-400"
+                className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-zinc-500 dark:text-zinc-400 flex-shrink-0"
                 fill="none"
                 viewBox="0 0 24 24"
                 stroke="currentColor"
@@ -1612,16 +1624,16 @@ export function SupplyModal({
                   d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"
                 />
               </svg>
-              <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+              <span className="text-[10px] sm:text-xs md:text-sm font-medium text-zinc-700 dark:text-zinc-300">
                 Health Factor
                 {loadingSimulation && (
-                  <span className="ml-2 text-xs text-zinc-400">
+                  <span className="ml-1 sm:ml-1.5 sm:ml-2 text-[9px] sm:text-[10px] md:text-xs text-zinc-400">
                     (simulating...)
                   </span>
                 )}
               </span>
             </div>
-            <span className="text-sm font-bold flex items-center gap-2">
+            <span className="text-[10px] sm:text-xs md:text-sm font-bold flex items-center gap-1 sm:gap-2 flex-wrap">
               {loadingPortfolio ? (
                 <span className="text-zinc-400">Loading...</span>
               ) : (
@@ -1661,10 +1673,10 @@ export function SupplyModal({
           </div>
 
           {/* Previously Supplied - Prominently displayed */}
-          <div className="flex justify-between items-center">
-            <div className="flex items-center gap-2">
+          <div className="flex justify-between items-center flex-wrap gap-1 sm:gap-0">
+            <div className="flex items-center gap-1.5 sm:gap-2">
               <svg
-                className="w-4 h-4 text-zinc-500 dark:text-zinc-400"
+                className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-zinc-500 dark:text-zinc-400 flex-shrink-0"
                 fill="none"
                 viewBox="0 0 24 24"
                 stroke="currentColor"
@@ -1676,18 +1688,18 @@ export function SupplyModal({
                   d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
                 />
               </svg>
-              <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">
+              <span className="text-[10px] sm:text-xs md:text-sm font-medium text-zinc-700 dark:text-zinc-300">
                 {activeTab === "supply"
                   ? "Previously Supplied"
                   : "Available to Withdraw"}
                 {loadingPortfolio && (
-                  <span className="ml-2 text-xs text-zinc-400">
+                  <span className="ml-1 sm:ml-1.5 sm:ml-2 text-[9px] sm:text-[10px] md:text-xs text-zinc-400">
                     (loading...)
                   </span>
                 )}
               </span>
             </div>
-            <span className="text-sm font-bold flex items-center gap-2">
+            <span className="text-[10px] sm:text-xs md:text-sm font-bold flex items-center gap-1 sm:gap-2 flex-wrap">
               {loadingPortfolio ? (
                 <span className="text-zinc-400">Loading...</span>
               ) : (
@@ -1714,10 +1726,10 @@ export function SupplyModal({
 
           {/* Supply APY with next value (matching MovePosition) */}
           <div className="flex justify-between items-center">
-            <span className="text-sm text-zinc-500 dark:text-zinc-400">
+            <span className="text-[10px] sm:text-xs md:text-sm text-zinc-500 dark:text-zinc-400">
               Supply APY
             </span>
-            <span className="text-sm font-medium text-green-600 dark:text-green-400 flex items-center gap-2">
+            <span className="text-[10px] sm:text-xs md:text-sm font-medium text-green-600 dark:text-green-400 flex items-center gap-1 sm:gap-2">
               {formatPercentage(supplyAPY.current)}
               {supplyAPY.next !== null && supplyAPY.next < 1 && (
                 <>
@@ -1737,7 +1749,7 @@ export function SupplyModal({
             <div className="flex-1 h-px bg-zinc-200 dark:bg-zinc-700"></div>
             <button
               onClick={() => setShowMore(!showMore)}
-              className="text-yellow-500 dark:text-yellow-400 text-sm font-medium px-4 py-2 hover:text-yellow-600 dark:hover:text-yellow-300 transition-colors"
+              className="text-yellow-500 dark:text-yellow-400 text-xs sm:text-sm font-medium px-3 sm:px-4 py-1.5 sm:py-2 hover:text-yellow-600 dark:hover:text-yellow-300 transition-colors"
             >
               {showMore ? "Less" : "More"}
             </button>
@@ -1747,15 +1759,15 @@ export function SupplyModal({
 
         {/* Broker Stats Section (matching MovePosition's brokerStats) - Only shown when showMore is true */}
         {brokerStats && showMore && (
-          <div className="mb-4 p-4 rounded-xl bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-700 space-y-3">
-            <div className="text-xs font-semibold text-zinc-600 dark:text-zinc-400 uppercase tracking-wide mb-2">
+          <div className="mb-4 p-3 sm:p-4 rounded-lg sm:rounded-xl bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-700 space-y-2 sm:space-y-3">
+            <div className="text-[10px] sm:text-xs font-semibold text-zinc-600 dark:text-zinc-400 uppercase tracking-wide mb-1.5 sm:mb-2">
               Broker Statistics
             </div>
 
             {/* Total Available In Broker */}
             <div className="flex justify-between items-center">
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-zinc-500 dark:text-zinc-400">
+              <div className="flex items-center gap-1.5 sm:gap-2">
+                <span className="text-[10px] sm:text-xs text-zinc-500 dark:text-zinc-400">
                   Total Available In Broker
                 </span>
                 <div className="group relative">
@@ -1777,7 +1789,7 @@ export function SupplyModal({
                   </div>
                 </div>
               </div>
-              <span className="text-sm font-medium text-zinc-900 dark:text-zinc-50 flex items-center gap-2">
+              <span className="text-[10px] sm:text-xs md:text-sm font-medium text-zinc-900 dark:text-zinc-50 flex items-center gap-1 sm:gap-2">
                 {prettyTokenBal(brokerStats.totalAvailable)} {asset.symbol}
                 {brokerStats.nextAvailable !== null && (
                   <>
@@ -1792,8 +1804,8 @@ export function SupplyModal({
 
             {/* Total Loaned By Broker */}
             <div className="flex justify-between items-center">
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-zinc-500 dark:text-zinc-400">
+              <div className="flex items-center gap-1.5 sm:gap-2">
+                <span className="text-[10px] sm:text-xs text-zinc-500 dark:text-zinc-400">
                   Total Loaned By Broker
                 </span>
                 <div className="group relative">
@@ -1815,7 +1827,7 @@ export function SupplyModal({
                   </div>
                 </div>
               </div>
-              <span className="text-sm font-medium text-zinc-900 dark:text-zinc-50 flex items-center gap-2">
+              <span className="text-[10px] sm:text-xs md:text-sm font-medium text-zinc-900 dark:text-zinc-50 flex items-center gap-1 sm:gap-2">
                 {prettyTokenBal(brokerStats.totalLoaned)} {asset.symbol}
                 {brokerStats.nextTotalLoaned !== null && (
                   <>
@@ -1831,8 +1843,8 @@ export function SupplyModal({
 
             {/* Total Supplied In Broker */}
             <div className="flex justify-between items-center">
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-zinc-500 dark:text-zinc-400">
+              <div className="flex items-center gap-1.5 sm:gap-2">
+                <span className="text-[10px] sm:text-xs text-zinc-500 dark:text-zinc-400">
                   Total Supplied In Broker
                 </span>
                 <div className="group relative">
@@ -1854,7 +1866,7 @@ export function SupplyModal({
                   </div>
                 </div>
               </div>
-              <span className="text-sm font-medium text-zinc-900 dark:text-zinc-50 flex items-center gap-2">
+              <span className="text-[10px] sm:text-xs md:text-sm font-medium text-zinc-900 dark:text-zinc-50 flex items-center gap-1 sm:gap-2">
                 {prettyTokenBal(brokerStats.totalSupplied)} {asset.symbol}
                 {brokerStats.nextTotalSupplied !== null && (
                   <>
@@ -1870,8 +1882,8 @@ export function SupplyModal({
 
             {/* Pool Max Limit (shown for supply/withdraw tabs) */}
             <div className="flex justify-between items-center">
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-zinc-500 dark:text-zinc-400">
+              <div className="flex items-center gap-1.5 sm:gap-2">
+                <span className="text-[10px] sm:text-xs text-zinc-500 dark:text-zinc-400">
                   Pool Max Limit
                 </span>
                 <div className="group relative">
@@ -1893,15 +1905,15 @@ export function SupplyModal({
                   </div>
                 </div>
               </div>
-              <span className="text-sm font-medium text-zinc-900 dark:text-zinc-50">
+              <span className="text-[10px] sm:text-xs md:text-sm font-medium text-zinc-900 dark:text-zinc-50">
                 {prettyTokenBal(brokerStats.poolMaxLimit)} {asset.symbol}
               </span>
             </div>
 
             {/* Utilization */}
             <div className="flex justify-between items-center">
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-zinc-500 dark:text-zinc-400">
+              <div className="flex items-center gap-1.5 sm:gap-2">
+                <span className="text-[10px] sm:text-xs text-zinc-500 dark:text-zinc-400">
                   Utilization
                 </span>
                 <div className="group relative">
@@ -1924,7 +1936,7 @@ export function SupplyModal({
                   </div>
                 </div>
               </div>
-              <span className="text-sm font-medium text-zinc-900 dark:text-zinc-50 flex items-center gap-2">
+              <span className="text-[10px] sm:text-xs md:text-sm font-medium text-zinc-900 dark:text-zinc-50 flex items-center gap-1 sm:gap-2">
                 {formatPercentage(brokerStats.utilization)}
                 {brokerStats.nextUtilization !== null && (
                   <>
@@ -1941,7 +1953,7 @@ export function SupplyModal({
 
         {/* Error Message - Show over limit errors before submission */}
         {overLimitErrorMessage && (
-          <div className="mb-4 p-3 rounded-lg bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 text-sm text-yellow-700 dark:text-yellow-400">
+          <div className="mb-3 sm:mb-4 p-2.5 sm:p-3 rounded-lg bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 text-xs sm:text-sm text-yellow-700 dark:text-yellow-400">
             {overLimitErrorMessage}
           </div>
         )}
@@ -1949,7 +1961,7 @@ export function SupplyModal({
         {/* Transaction Error Message */}
         {/* Error Message */}
         {submitError && (
-          <div className="mb-4 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-sm text-red-700 dark:text-red-400">
+          <div className="mb-3 sm:mb-4 p-2.5 sm:p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-xs sm:text-sm text-red-700 dark:text-red-400">
             {submitError}
           </div>
         )}
@@ -1973,7 +1985,7 @@ export function SupplyModal({
         <button
           onClick={handleSubmit}
           disabled={(!canReview || submitting) && !txHash}
-          className={`w-full font-semibold py-3.5 rounded-lg transition-all duration-200 mt-4 shadow-lg ${
+          className={`w-full font-semibold py-2.5 sm:py-3 md:py-3.5 text-xs sm:text-sm md:text-base rounded-lg transition-all duration-200 mt-3 sm:mt-4 shadow-lg ${
             txHash
               ? "bg-green-600 text-white cursor-pointer"
               : canReview && !submitting
@@ -1984,9 +1996,9 @@ export function SupplyModal({
           }`}
         >
           {displayTxHash && showButtonComplete ? (
-            <span className="flex items-center justify-center gap-2">
+            <span className="flex items-center justify-center gap-1.5 sm:gap-2">
               <svg
-                className="w-5 h-5"
+                className="w-4 h-4 sm:w-5 sm:h-5"
                 fill="none"
                 viewBox="0 0 24 24"
                 stroke="currentColor"
@@ -2001,9 +2013,9 @@ export function SupplyModal({
               Transaction Complete
             </span>
           ) : submitting ? (
-            <span className="flex items-center justify-center gap-2">
+            <span className="flex items-center justify-center gap-1.5 sm:gap-2">
               <svg
-                className="w-5 h-5 animate-spin"
+                className="w-4 h-4 sm:w-5 sm:h-5 animate-spin"
                 fill="none"
                 viewBox="0 0 24 24"
               >
@@ -2025,9 +2037,9 @@ export function SupplyModal({
                 (activeTab === "supply" ? "Supplying..." : "Withdrawing...")}
             </span>
           ) : activeTab === "supply" ? (
-            <span className="flex items-center justify-center gap-2">
+            <span className="flex items-center justify-center gap-1.5 sm:gap-2">
               <svg
-                className="w-5 h-5"
+                className="w-4 h-4 sm:w-5 sm:h-5"
                 fill="none"
                 viewBox="0 0 24 24"
                 stroke="currentColor"
@@ -2042,9 +2054,9 @@ export function SupplyModal({
               Supply {asset.symbol}
             </span>
           ) : (
-            <span className="flex items-center justify-center gap-2">
+            <span className="flex items-center justify-center gap-1.5 sm:gap-2">
               <svg
-                className="w-5 h-5"
+                className="w-4 h-4 sm:w-5 sm:h-5"
                 fill="none"
                 viewBox="0 0 24 24"
                 stroke="currentColor"
@@ -2062,18 +2074,18 @@ export function SupplyModal({
         </button>
 
         {!walletAddress && (
-          <p className="mt-3 text-xs text-center text-zinc-500 dark:text-zinc-400">
+          <p className="mt-2 sm:mt-3 text-[10px] sm:text-xs text-center text-zinc-500 dark:text-zinc-400">
             Connect your Privy wallet to{" "}
             {activeTab === "supply" ? "supply" : "withdraw"} tokens
           </p>
         )}
 
         {/* Wallet Balance */}
-        <div className="flex justify-between items-center mt-4 pt-4 border-t border-zinc-200 dark:border-zinc-800">
-          <span className="text-zinc-500 dark:text-zinc-400 text-sm">
+        <div className="flex justify-between items-center mt-3 sm:mt-4 pt-3 sm:pt-4 border-t border-zinc-200 dark:border-zinc-800">
+          <span className="text-zinc-500 dark:text-zinc-400 text-xs sm:text-sm">
             Wallet balance
           </span>
-          <span className="text-sm font-medium flex items-center gap-2">
+          <span className="text-xs sm:text-sm font-medium flex items-center gap-1.5 sm:gap-2">
             {loadingBalance ? (
               <span className="text-zinc-400">Loading...</span>
             ) : balance ? (
@@ -2108,7 +2120,7 @@ export function SupplyModal({
   }
 
   return (
-    <div className="fixed inset-0 z-9999 flex items-center justify-center bg-black/80 backdrop-blur-sm">
+    <div className="fixed inset-0 z-9999 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4 sm:p-6">
       {content}
     </div>
   );

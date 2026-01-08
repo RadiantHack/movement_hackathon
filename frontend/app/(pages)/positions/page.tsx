@@ -399,7 +399,7 @@ function PositionsPageContent() {
           {/* Main Content */}
           <div className="flex flex-1 overflow-hidden">
             {/* Left Content Area */}
-            <div className="flex-1 overflow-y-auto p-4 md:p-6">
+            <div className="flex-1 overflow-y-auto p-3 sm:p-4 md:p-6">
               <>
                 {/* Top Metrics */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
@@ -573,228 +573,223 @@ function PositionsPageContent() {
                   </div>
                 )}
 
-                {/* Asset Table */}
-                <div className="bg-white dark:bg-zinc-900 rounded-lg border border-zinc-200 dark:border-zinc-800 overflow-hidden">
-                  <div className="overflow-x-auto">
-                    <table className="w-full table-fixed">
-                      <thead className="bg-gradient-to-r from-zinc-50 to-zinc-100 dark:from-zinc-800/80 dark:to-zinc-800/40 border-b border-zinc-200 dark:border-zinc-700">
-                        <tr>
-                          <th className="px-5 py-4 text-left">
-                            <span className="text-xs font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-widest">
-                              Asset
-                            </span>
-                          </th>
-                          <th className="px-5 py-4 text-left">
-                            <span className="text-xs font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-widest">
-                              Supplied
-                            </span>
-                          </th>
-                          <th className="px-5 py-4 text-left hidden md:table-cell">
-                            <span className="text-xs font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-widest">
-                              Utilization
-                            </span>
-                          </th>
-                          <th className="px-5 py-4 text-left hidden md:table-cell">
-                            <span className="text-xs font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-widest">
-                              Total Supplied
-                            </span>
-                          </th>
-                          <th className="px-5 py-4 text-left hidden md:table-cell">
-                            <span className="text-xs font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-widest">
-                              Supply APY
-                            </span>
-                          </th>
-                          <th className="px-5 py-4 text-center">
-                            <span className="text-xs font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-widest">
-                              Actions
-                            </span>
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
-                        {filteredAssets.map((asset) => (
-                          <tr
-                            key={asset.token?.id ?? asset.symbol}
-                            className="group hover:bg-gradient-to-r hover:from-zinc-50 hover:to-transparent dark:hover:from-zinc-800/30 dark:hover:to-transparent transition-all duration-200"
-                          >
-                            <td className="px-5 py-4">
-                              <div className="flex items-center gap-4">
-                                <AssetIcon
-                                  symbol={asset.token?.symbol ?? asset.symbol}
-                                  echelonIcon={asset.token?.iconUri}
-                                  size="w-11 h-11"
-                                  className="rounded-2xl shadow-md group-hover:shadow-lg transition-shadow"
-                                />
-                                <div className="min-w-0">
-                                  <div className="font-bold text-base text-zinc-900 dark:text-zinc-50 group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors">
-                                    {asset.symbol}
-                                  </div>
-                                  <div className="text-sm text-zinc-500 dark:text-zinc-400 tabular-nums">
-                                    $
-                                    {asset.price < 1
-                                      ? asset.price.toFixed(4)
-                                      : asset.price.toLocaleString(undefined, {
-                                          minimumFractionDigits: 2,
-                                          maximumFractionDigits: 2,
-                                        })}
-                                  </div>
-                                </div>
-                              </div>
-                            </td>
-                            <td className="px-5 py-4">
-                              <div className="text-sm font-medium text-zinc-900 dark:text-zinc-50 tabular-nums tracking-tight">
-                                {asset.totalSupplied > 0
-                                  ? asset.totalSupplied.toLocaleString(
-                                      undefined,
-                                      {
-                                        minimumFractionDigits: 2,
-                                        maximumFractionDigits: 2,
-                                      }
-                                    )
-                                  : "—"}
-                              </div>
-                            </td>
-                            <td className="px-5 py-4 hidden md:table-cell">
-                              <div className="flex items-center gap-2">
-                                <div className="flex-1 h-2 bg-zinc-200 dark:bg-zinc-700 rounded-full overflow-hidden">
-                                  <div
-                                    className={`h-full rounded-full transition-all ${
-                                      asset.utilization >= 90
-                                        ? "bg-gradient-to-r from-red-500 to-orange-500"
-                                        : asset.utilization >= 70
-                                          ? "bg-gradient-to-r from-yellow-500 to-amber-500"
-                                          : "bg-gradient-to-r from-emerald-500 to-green-500"
-                                    }`}
-                                    style={{
-                                      width: `${Math.min(asset.utilization, 100)}%`,
-                                    }}
-                                  />
-                                </div>
-                                <span
-                                  className={`text-sm font-semibold min-w-[52px] text-right ${
-                                    asset.utilization >= 90
-                                      ? "text-red-600 dark:text-red-400"
-                                      : asset.utilization >= 70
-                                        ? "text-yellow-600 dark:text-yellow-400"
-                                        : "text-emerald-600 dark:text-emerald-400"
-                                  }`}
-                                >
-                                  {asset.utilization.toFixed(1)}%
-                                </span>
-                              </div>
-                            </td>
-                            <td className="px-5 py-4 hidden md:table-cell">
-                              <div>
-                                <div className="font-semibold text-zinc-900 dark:text-zinc-50">
-                                  {asset.availableLiquidity.toLocaleString(
-                                    undefined,
-                                    {
-                                      minimumFractionDigits: 2,
-                                      maximumFractionDigits: 2,
-                                    }
-                                  )}
-                                </div>
-                                <div className="text-xs text-zinc-400 dark:text-zinc-500">
-                                  of{" "}
-                                  {asset.totalSupplied.toLocaleString(
-                                    undefined,
-                                    {
-                                      minimumFractionDigits: 2,
-                                      maximumFractionDigits: 2,
-                                    }
-                                  )}{" "}
-                                  available
-                                </div>
-                              </div>
-                            </td>
-                            <td className="px-5 py-4 hidden md:table-cell">
+                {/* Asset Cards - Mobile-friendly design similar to Echelon */}
+                <div className="md:rounded-xl md:border md:border-zinc-200 md:dark:border-zinc-800 md:bg-white md:dark:bg-zinc-900 p-0 md:p-4 md:sm:p-6">
+                  {/* Desktop Table Header */}
+                  <div className="hidden md:grid grid-cols-6 gap-4 text-xs text-zinc-500 dark:text-zinc-400 uppercase tracking-wider pb-3 border-b border-zinc-200 dark:border-zinc-800 mb-2">
+                    <div>Asset</div>
+                    <div>Supplied</div>
+                    <div>Utilization</div>
+                    <div>Total Supplied</div>
+                    <div>Supply APY</div>
+                    <div className="text-center">Actions</div>
+                  </div>
+
+                  {/* Asset Rows - Card layout on mobile, table on desktop */}
+                  <div className="space-y-3 md:space-y-0 md:divide-y divide-zinc-100 dark:divide-zinc-800">
+                    {filteredAssets.map((asset, index) => (
+                      <div
+                        key={asset.token?.id ?? asset.symbol}
+                        className={`grid grid-cols-1 md:grid-cols-6 gap-3 sm:gap-4 p-4 sm:p-5 md:py-3 md:px-0 md:items-center group transition-colors rounded-xl md:rounded-none border md:border-0 ${
+                          index % 2 === 0
+                            ? "bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800"
+                            : "bg-zinc-50/50 dark:bg-zinc-800/30 border-zinc-200 dark:border-zinc-700"
+                        } hover:border-zinc-300 dark:hover:border-zinc-600 hover:shadow-sm md:hover:bg-zinc-50/50 dark:md:hover:bg-zinc-800/30 md:hover:shadow-none`}
+                      >
+                        {/* Asset */}
+                        <div className="flex items-center gap-3">
+                          <AssetIcon
+                            symbol={asset.token?.symbol ?? asset.symbol}
+                            echelonIcon={asset.token?.iconUri}
+                            size="w-10 h-10 sm:w-11 sm:h-11"
+                            className="rounded-xl sm:rounded-2xl shadow-md"
+                          />
+                          <div className="min-w-0">
+                            <div className="font-semibold text-sm sm:text-base text-zinc-950 dark:text-zinc-50">
+                              {asset.symbol}
+                            </div>
+                            <div className="text-xs sm:text-sm text-zinc-500 dark:text-zinc-400 tabular-nums">
+                              $
+                              {asset.price < 1
+                                ? asset.price.toFixed(4)
+                                : asset.price.toLocaleString(undefined, {
+                                    minimumFractionDigits: 2,
+                                    maximumFractionDigits: 2,
+                                  })}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Supplied */}
+                        <div className="md:block">
+                          <div className="text-xs sm:text-sm text-zinc-500 dark:text-zinc-400 mb-1 md:hidden">
+                            Supplied
+                          </div>
+                          <div className="text-sm sm:text-base font-medium text-zinc-950 dark:text-zinc-50 tabular-nums">
+                            {asset.totalSupplied > 0
+                              ? asset.totalSupplied.toLocaleString(undefined, {
+                                  minimumFractionDigits: 2,
+                                  maximumFractionDigits: 2,
+                                })
+                              : "—"}
+                          </div>
+                        </div>
+
+                        {/* Utilization */}
+                        <div className="md:block">
+                          <div className="text-xs sm:text-sm text-zinc-500 dark:text-zinc-400 mb-1 md:hidden">
+                            Utilization
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <div className="flex-1 h-2 bg-zinc-200 dark:bg-zinc-700 rounded-full overflow-hidden">
                               <div
-                                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-sm font-medium ${
-                                  asset.supplyApy >= 50
-                                    ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
-                                    : asset.supplyApy >= 10
-                                      ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
-                                      : asset.supplyApy >= 1
-                                        ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
-                                        : "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400"
+                                className={`h-full rounded-full transition-all ${
+                                  asset.utilization >= 90
+                                    ? "bg-gradient-to-r from-red-500 to-orange-500"
+                                    : asset.utilization >= 70
+                                      ? "bg-gradient-to-r from-yellow-500 to-amber-500"
+                                      : "bg-gradient-to-r from-emerald-500 to-green-500"
                                 }`}
+                                style={{
+                                  width: `${Math.min(asset.utilization, 100)}%`,
+                                }}
+                              />
+                            </div>
+                            <span
+                              className={`text-xs sm:text-sm font-semibold min-w-[45px] text-right ${
+                                asset.utilization >= 90
+                                  ? "text-red-600 dark:text-red-400"
+                                  : asset.utilization >= 70
+                                    ? "text-yellow-600 dark:text-yellow-400"
+                                    : "text-emerald-600 dark:text-emerald-400"
+                              }`}
+                            >
+                              {asset.utilization.toFixed(1)}%
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Total Supplied */}
+                        <div className="md:block">
+                          <div className="text-xs sm:text-sm text-zinc-500 dark:text-zinc-400 mb-1 md:hidden">
+                            Total Supplied
+                          </div>
+                          <div>
+                            <div className="text-sm sm:text-base font-semibold text-zinc-950 dark:text-zinc-50">
+                              {asset.availableLiquidity.toLocaleString(
+                                undefined,
+                                {
+                                  minimumFractionDigits: 2,
+                                  maximumFractionDigits: 2,
+                                }
+                              )}
+                            </div>
+                            <div className="text-xs text-zinc-400 dark:text-zinc-500">
+                              of{" "}
+                              {asset.totalSupplied.toLocaleString(undefined, {
+                                minimumFractionDigits: 2,
+                                maximumFractionDigits: 2,
+                              })}{" "}
+                              available
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Supply APY */}
+                        <div className="md:block">
+                          <div className="text-xs sm:text-sm text-zinc-500 dark:text-zinc-400 mb-1 md:hidden">
+                            Supply APY
+                          </div>
+                          <div
+                            className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs sm:text-sm font-medium ${
+                              asset.supplyApy >= 50
+                                ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400"
+                                : asset.supplyApy >= 10
+                                  ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                                  : asset.supplyApy >= 1
+                                    ? "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400"
+                                    : "bg-zinc-100 text-zinc-600 dark:bg-zinc-800 dark:text-zinc-400"
+                            }`}
+                          >
+                            <span
+                              className={`w-1.5 h-1.5 rounded-full ${
+                                asset.supplyApy >= 50
+                                  ? "bg-emerald-500 animate-pulse"
+                                  : asset.supplyApy >= 10
+                                    ? "bg-green-500"
+                                    : asset.supplyApy >= 1
+                                      ? "bg-blue-500"
+                                      : "bg-zinc-400"
+                              }`}
+                            />
+                            {asset.supplyApy.toFixed(2)}%
+                          </div>
+                        </div>
+
+                        {/* Actions */}
+                        <div className="md:block md:text-center">
+                          <div className="text-xs sm:text-sm text-zinc-500 dark:text-zinc-400 mb-2 md:hidden">
+                            Actions
+                          </div>
+                          <div className="flex items-center gap-2 md:justify-center">
+                            {/* Supply */}
+                            <button
+                              className="group relative w-9 h-9 sm:w-10 sm:h-10 rounded-xl overflow-hidden bg-gradient-to-br from-emerald-50 to-teal-100 dark:from-emerald-900/30 dark:to-teal-900/30 border border-emerald-200 dark:border-emerald-700/50 flex items-center justify-center transition-all duration-300 hover:scale-105 hover:shadow-lg hover:shadow-emerald-500/20 hover:border-emerald-400"
+                              onClick={() => {
+                                setSelectedAsset(asset);
+                                setIsSupplyModalOpen(true);
+                              }}
+                            >
+                              <div className="absolute inset-0 bg-gradient-to-br from-emerald-500 to-teal-500 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                              <svg
+                                className="w-[18px] h-[18px] relative z-10 text-emerald-600 dark:text-emerald-400 group-hover:text-white transition-colors"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth={2}
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
                               >
-                                <span
-                                  className={`w-1.5 h-1.5 rounded-full ${
-                                    asset.supplyApy >= 50
-                                      ? "bg-emerald-500 animate-pulse"
-                                      : asset.supplyApy >= 10
-                                        ? "bg-green-500"
-                                        : asset.supplyApy >= 1
-                                          ? "bg-blue-500"
-                                          : "bg-zinc-400"
-                                  }`}
+                                <circle
+                                  cx="12"
+                                  cy="12"
+                                  r="8"
+                                  className="group-hover:animate-pulse"
                                 />
-                                {asset.supplyApy.toFixed(2)}%
-                              </div>
-                            </td>
-                            <td className="px-5 py-4">
-                              <div className="flex items-center justify-center gap-3">
-                                {/* Supply */}
-                                <button
-                                  className="group relative w-9 h-9 rounded-xl overflow-hidden bg-gradient-to-br from-emerald-50 to-teal-100 dark:from-emerald-900/30 dark:to-teal-900/30 border border-emerald-200 dark:border-emerald-700/50 flex items-center justify-center transition-all duration-300 hover:scale-105 hover:shadow-lg hover:shadow-emerald-500/20 hover:border-emerald-400"
-                                  onClick={() => {
-                                    setSelectedAsset(asset);
-                                    setIsSupplyModalOpen(true);
-                                  }}
-                                >
-                                  <div className="absolute inset-0 bg-gradient-to-br from-emerald-500 to-teal-500 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-                                  <svg
-                                    className="w-[18px] h-[18px] relative z-10 text-emerald-600 dark:text-emerald-400 group-hover:text-white transition-colors"
-                                    viewBox="0 0 24 24"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    strokeWidth={2}
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                  >
-                                    <circle
-                                      cx="12"
-                                      cy="12"
-                                      r="8"
-                                      className="group-hover:animate-pulse"
-                                    />
-                                    <path d="M12 8v8M8 12h8" />
-                                  </svg>
-                                </button>
-                                {/* Borrow - Coin coming out */}
-                                <button
-                                  className="group relative w-9 h-9 rounded-xl overflow-hidden bg-gradient-to-br from-violet-50 to-purple-100 dark:from-violet-900/30 dark:to-purple-900/30 border border-violet-200 dark:border-violet-700/50 flex items-center justify-center transition-all duration-300 hover:scale-105 hover:shadow-lg hover:shadow-purple-500/20 hover:border-violet-400"
-                                  onClick={() => {
-                                    setSelectedAsset(asset);
-                                    setIsBorrowModalOpen(true);
-                                  }}
-                                >
-                                  <div className="absolute inset-0 bg-gradient-to-br from-violet-500 to-purple-500 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-                                  <svg
-                                    className="w-[18px] h-[18px] relative z-10 text-violet-600 dark:text-violet-400 group-hover:text-white transition-colors"
-                                    viewBox="0 0 24 24"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    strokeWidth={2}
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                  >
-                                    <circle
-                                      cx="12"
-                                      cy="12"
-                                      r="8"
-                                      className="group-hover:animate-pulse"
-                                    />
-                                    <path d="M8 12h8" />
-                                  </svg>
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
+                                <path d="M12 8v8M8 12h8" />
+                              </svg>
+                            </button>
+                            {/* Borrow */}
+                            <button
+                              className="group relative w-9 h-9 sm:w-10 sm:h-10 rounded-xl overflow-hidden bg-gradient-to-br from-violet-50 to-purple-100 dark:from-violet-900/30 dark:to-purple-900/30 border border-violet-200 dark:border-violet-700/50 flex items-center justify-center transition-all duration-300 hover:scale-105 hover:shadow-lg hover:shadow-purple-500/20 hover:border-violet-400"
+                              onClick={() => {
+                                setSelectedAsset(asset);
+                                setIsBorrowModalOpen(true);
+                              }}
+                            >
+                              <div className="absolute inset-0 bg-gradient-to-br from-violet-500 to-purple-500 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                              <svg
+                                className="w-[18px] h-[18px] relative z-10 text-violet-600 dark:text-violet-400 group-hover:text-white transition-colors"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth={2}
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                              >
+                                <circle
+                                  cx="12"
+                                  cy="12"
+                                  r="8"
+                                  className="group-hover:animate-pulse"
+                                />
+                                <path d="M8 12h8" />
+                              </svg>
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
               </>

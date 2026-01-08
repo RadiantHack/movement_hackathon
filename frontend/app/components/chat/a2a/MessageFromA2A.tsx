@@ -34,7 +34,7 @@ export const MessageFromA2A: React.FC<MessageActionRenderProps> = ({
   const agentStyle = getAgentStyle(args.agentName);
 
   return (
-    <div className="my-2 sm:my-3 w-full max-w-full">
+    <div className="my-2 sm:my-3 w-full max-w-full lg:max-w-3xl lg:mx-auto">
       <div className="bg-gradient-to-br from-blue-50 to-cyan-50 dark:from-blue-950/20 dark:to-cyan-950/20 border border-blue-200 dark:border-blue-800 rounded-lg sm:rounded-xl px-2.5 py-2 sm:px-3 sm:py-3 md:px-4 md:py-4 shadow-sm hover:shadow-md transition-shadow w-full max-w-full overflow-hidden">
         {/* Agent badges and response */}
         <div className="space-y-1.5 sm:space-y-3">
