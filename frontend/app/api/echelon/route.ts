@@ -23,7 +23,11 @@ export async function GET() {
     const data = (await response.json()) as EchelonMarketsApiResponse["data"];
 
     // Validate response structure
-    if (!data || !Array.isArray(data.assets) || !Array.isArray(data.marketStats)) {
+    if (
+      !data ||
+      !Array.isArray(data.assets) ||
+      !Array.isArray(data.marketStats)
+    ) {
       return NextResponse.json(
         { error: "Invalid API response structure" },
         { status: 500 }

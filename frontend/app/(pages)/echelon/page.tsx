@@ -186,11 +186,15 @@ export default function EchelonPage() {
 
         // Validate response structure
         if (!json.data || !Array.isArray(json.data.assets)) {
-          throw new Error("Invalid API response structure: missing assets array");
+          throw new Error(
+            "Invalid API response structure: missing assets array"
+          );
         }
 
         if (!Array.isArray(json.data.marketStats)) {
-          throw new Error("Invalid API response structure: missing marketStats array");
+          throw new Error(
+            "Invalid API response structure: missing marketStats array"
+          );
         }
 
         const data = json.data;
@@ -217,7 +221,11 @@ export default function EchelonPage() {
         const statsMap = new Map<string, MarketStats>();
         data.marketStats.forEach(([address, stats]: [string, MarketStats]) => {
           // Validate that address is a string and stats is a valid MarketStats object
-          if (typeof address === "string" && stats && typeof stats === "object") {
+          if (
+            typeof address === "string" &&
+            stats &&
+            typeof stats === "object"
+          ) {
             statsMap.set(address, stats);
           }
         });
@@ -278,7 +286,11 @@ export default function EchelonPage() {
         const collaterals = data.data?.collaterals || data.collaterals || [];
         const supplies = processVaultCollaterals(collaterals, assets);
         console.log("[UI] Processed supplies (after filtering):", supplies);
-        console.log("[UI] Setting userSupplies with", supplies.length, "item(s)");
+        console.log(
+          "[UI] Setting userSupplies with",
+          supplies.length,
+          "item(s)"
+        );
         setUserSupplies(supplies);
 
         // Process liabilities - use totalLiability (principal + interest_accumulated)
