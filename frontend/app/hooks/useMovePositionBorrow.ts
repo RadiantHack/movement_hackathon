@@ -15,6 +15,7 @@ import {
 import { useBalance } from "./useBalanceContext";
 import { useMovementWallet } from "./useMovementWallet";
 import { getCoinDecimals, convertAmountToRaw } from "../utils/shared/tokens";
+import { hasPublicKey } from "../types/moveposition";
 import {
   getBrokerByAssetName,
   validateBroker,
@@ -144,8 +145,19 @@ export function useMovePositionBorrow({
         onErrorRef.current?.(error);
         return false;
       }
+
+      // Type-safe publicKey extraction
+      if (!hasPublicKey(movementWallet)) {
+        const error =
+          "Wallet missing public key. Please reconnect your wallet.";
+        setState((prev) => ({ ...prev, error }));
+        onErrorRef.current?.(error);
+        return false;
+      }
+
       const walletAddress = movementWallet.address as string;
-      const publicKey = (movementWallet as any).publicKey as string;
+      const publicKey = movementWallet.publicKey;
+
       if (!publicKey || publicKey.length < 2) {
         const error = "Invalid public key format";
         setState((prev) => ({ ...prev, error }));
@@ -214,10 +226,12 @@ export function useMovePositionBorrow({
           onProgress: (step: string) => setState((prev) => ({ ...prev, step })),
         });
 
+        // Clear error state on success to prevent stale error messages
         setState((prev) => ({
           ...prev,
           borrowing: false,
           txHash: hash,
+          error: null, // Explicitly clear error on success
           step: null,
         }));
 
@@ -295,8 +309,19 @@ export function useMovePositionBorrow({
         onErrorRef.current?.(error);
         return false;
       }
+
+      // Type-safe publicKey extraction
+      if (!hasPublicKey(movementWallet)) {
+        const error =
+          "Wallet missing public key. Please reconnect your wallet.";
+        setState((prev) => ({ ...prev, error }));
+        onErrorRef.current?.(error);
+        return false;
+      }
+
       const walletAddress = movementWallet.address as string;
-      const publicKey = (movementWallet as any).publicKey as string;
+      const publicKey = movementWallet.publicKey;
+
       if (!publicKey || publicKey.length < 2) {
         const error = "Invalid public key format";
         setState((prev) => ({ ...prev, error }));
@@ -328,20 +353,77 @@ export function useMovePositionBorrow({
           buildCurrentPortfolioBasicState(freshPortfolio);
 
         const decimals = getCoinDecimals(asset.symbol);
+
+        // Validate decimals is a positive integer
+        if (!Number.isInteger(decimals) || decimals < 0 || decimals > 18) {
+          throw new Error(
+            `Invalid coin decimals: ${decimals}. Expected integer between 0 and 18.`
+          );
+        }
+
         const rawAmountUnderlying = convertAmountToRaw(amount, decimals);
 
         // CRITICAL: For REPAY, the API expects amount in NOTE TOKENS (raw), not underlying tokens (raw)
         // Following MovePosition's approach: loanNoteAmount = scaleUp(amount, loanNoteDecimals) / loanNoteExchangeRate
         // Convert underlying token amount (raw) to note token amount (raw)
         const loanNoteDecimals = broker.loanNote?.decimals ?? decimals;
+
+        // Validate loanNoteDecimals is a positive integer
+        if (
+          !Number.isInteger(loanNoteDecimals) ||
+          loanNoteDecimals < 0 ||
+          loanNoteDecimals > 18
+        ) {
+          throw new Error(
+            `Invalid loan note decimals: ${loanNoteDecimals}. Expected integer between 0 and 18. Broker configuration error.`
+          );
+        }
+
         const loanNoteExchangeRate = broker.loanNoteExchangeRate || 1;
+
+        // Validate loan note exchange rate is positive
+        if (
+          loanNoteExchangeRate <= 0 ||
+          !Number.isFinite(loanNoteExchangeRate)
+        ) {
+          throw new Error(
+            `Invalid loan note exchange rate: ${loanNoteExchangeRate}. Must be a positive finite number. Broker configuration error.`
+          );
+        }
+
         const decimalDiff = loanNoteDecimals - decimals;
+
+        // Validate decimal difference is reasonable (prevent extreme scale factors)
+        if (Math.abs(decimalDiff) > 18) {
+          throw new Error(
+            `Invalid decimal difference: ${decimalDiff}. Difference between loan note decimals (${loanNoteDecimals}) and coin decimals (${decimals}) is too large. Broker configuration error.`
+          );
+        }
+
         const scaleFactor = Math.pow(10, decimalDiff);
+
+        // Validate scale factor is finite
+        if (!Number.isFinite(scaleFactor) || scaleFactor <= 0) {
+          throw new Error(
+            `Invalid scale factor: ${scaleFactor}. Calculated from decimal difference: ${decimalDiff}.`
+          );
+        }
 
         // Calculate note tokens: (rawUnderlying * scaleFactor) / exchangeRate
         const rawAmountNoteTokens = Math.floor(
           (Number(rawAmountUnderlying) * scaleFactor) / loanNoteExchangeRate
         ).toString();
+
+        // Validate calculated note token amount is valid
+        if (
+          rawAmountNoteTokens === "NaN" ||
+          rawAmountNoteTokens === "Infinity" ||
+          rawAmountNoteTokens === "-Infinity"
+        ) {
+          throw new Error(
+            `Invalid note token amount calculation. Raw underlying: ${rawAmountUnderlying}, scale factor: ${scaleFactor}, exchange rate: ${loanNoteExchangeRate}.`
+          );
+        }
 
         // Validate repay amount against user's loan note balance
         const loanNoteName = broker.loanNote?.name;
@@ -423,10 +505,12 @@ export function useMovePositionBorrow({
           onProgress: (step: string) => setState((prev) => ({ ...prev, step })),
         });
 
+        // Clear error state on success to prevent stale error messages
         setState((prev) => ({
           ...prev,
           repaying: false,
           txHash: hash,
+          error: null, // Explicitly clear error on success
           step: null,
         }));
 

@@ -176,10 +176,25 @@ export default function EchelonPage() {
     const fetchMarkets = async () => {
       try {
         setLoading(true);
+        setError(null); // Clear previous errors
         const response = await fetch("/api/echelon");
 
         if (!response.ok) {
-          throw new Error(`Failed to fetch markets: ${response.status}`);
+          // Try to extract error details from response
+          let errorDetails = `Failed to fetch markets: ${response.status}`;
+          try {
+            const errorData = await response.json();
+            if (errorData.error) {
+              errorDetails = errorData.error;
+              if (errorData.details) {
+                errorDetails += ` - ${errorData.details}`;
+              }
+            }
+          } catch {
+            // If JSON parsing fails, use status text
+            errorDetails = `Failed to fetch markets: ${response.status} ${response.statusText}`;
+          }
+          throw new Error(errorDetails);
         }
 
         const json = (await response.json()) as EchelonMarketsApiResponse;

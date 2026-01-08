@@ -3,7 +3,7 @@
  * Consolidates repay logic used across multiple components
  */
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { usePrivy } from "@privy-io/react-auth";
 import { useSignRawHash } from "@privy-io/react-auth/extended-chains";
 import { executeTransaction } from "../services/transaction-service";
@@ -23,6 +23,7 @@ import {
 import { useBalance } from "./useBalanceContext";
 import { useMovementWallet } from "./useMovementWallet";
 import { getCoinDecimals, convertAmountToRaw } from "../utils/shared/tokens";
+import { hasPublicKey } from "../types/moveposition";
 
 interface UseMovePositionRepayOptions {
   onSuccess?: () => void;
@@ -50,6 +51,18 @@ export function useMovePositionRepay({
   const { refreshBalances } = useBalance();
   const movementWallet = useMovementWallet();
 
+  // Use refs to store callbacks to avoid recreating useCallback on every render
+  const onSuccessRef = useRef(onSuccess);
+  const onErrorRef = useRef(onError);
+  const refreshBalancesRef = useRef(refreshBalances);
+
+  // Update refs when callbacks change (but don't trigger re-renders)
+  useEffect(() => {
+    onSuccessRef.current = onSuccess;
+    onErrorRef.current = onError;
+    refreshBalancesRef.current = refreshBalances;
+  }, [onSuccess, onError, refreshBalances]);
+
   const [state, setState] = useState<MovePositionRepayState>({
     repaying: false,
     error: null,
@@ -71,14 +84,14 @@ export function useMovePositionRepay({
       if (!walletValidation.isValid) {
         const error = walletValidation.error || "Wallet validation failed";
         setState((prev) => ({ ...prev, error }));
-        onError?.(error);
+        onErrorRef.current?.(error);
         return false;
       }
 
       if (!ready || !authenticated) {
         const error = "Please authenticate first";
         setState((prev) => ({ ...prev, error }));
-        onError?.(error);
+        onErrorRef.current?.(error);
         return false;
       }
 
@@ -87,7 +100,7 @@ export function useMovePositionRepay({
       if (!assetValidation.isValid) {
         const error = assetValidation.error || "Invalid asset";
         setState((prev) => ({ ...prev, error }));
-        onError?.(error);
+        onErrorRef.current?.(error);
         return false;
       }
 
@@ -101,7 +114,7 @@ export function useMovePositionRepay({
       if (!amountValidation.isValid) {
         const error = amountValidation.error || "Invalid amount";
         setState((prev) => ({ ...prev, error }));
-        onError?.(error);
+        onErrorRef.current?.(error);
         return false;
       }
 
@@ -109,17 +122,26 @@ export function useMovePositionRepay({
       if (!movementWallet) {
         const error = "Movement wallet not found";
         setState((prev) => ({ ...prev, error }));
-        onError?.(error);
+        onErrorRef.current?.(error);
+        return false;
+      }
+
+      // Type-safe publicKey extraction
+      if (!hasPublicKey(movementWallet)) {
+        const error =
+          "Wallet missing public key. Please reconnect your wallet.";
+        setState((prev) => ({ ...prev, error }));
+        onErrorRef.current?.(error);
         return false;
       }
 
       const walletAddress = movementWallet.address as string;
-      const publicKey = (movementWallet as any).publicKey as string;
+      const publicKey = movementWallet.publicKey;
 
       if (!publicKey || publicKey.length < 2) {
         const error = "Invalid public key format";
         setState((prev) => ({ ...prev, error }));
-        onError?.(error);
+        onErrorRef.current?.(error);
         return false;
       }
 
@@ -128,7 +150,7 @@ export function useMovePositionRepay({
         ...prev,
         repaying: true,
         error: null,
-        step: "Fetching broker information...",
+        step: "Loading broker data...",
       }));
 
       try {
@@ -148,16 +170,137 @@ export function useMovePositionRepay({
         const currentPortfolioState =
           buildCurrentPortfolioBasicState(portfolioResponse);
 
-        // Convert amount to raw format
+        // Convert amount to raw format (underlying tokens)
         const decimals = getCoinDecimals(asset.symbol);
-        const rawAmount = convertAmountToRaw(amount, decimals);
+
+        // Validate decimals is a positive integer
+        if (!Number.isInteger(decimals) || decimals < 0 || decimals > 18) {
+          throw new Error(
+            `Invalid coin decimals: ${decimals}. Expected integer between 0 and 18.`
+          );
+        }
+
+        const rawAmountUnderlying = convertAmountToRaw(amount, decimals);
+
+        // CRITICAL: For REPAY, the API expects amount in NOTE TOKENS (raw), not underlying tokens (raw)
+        // Following MovePosition's approach: loanNoteAmount = scaleUp(amount, loanNoteDecimals) / loanNoteExchangeRate
+        // Convert underlying token amount (raw) to note token amount (raw)
+        const loanNoteDecimals = broker.loanNote?.decimals ?? decimals;
+
+        // Validate loanNoteDecimals is a positive integer
+        if (
+          !Number.isInteger(loanNoteDecimals) ||
+          loanNoteDecimals < 0 ||
+          loanNoteDecimals > 18
+        ) {
+          throw new Error(
+            `Invalid loan note decimals: ${loanNoteDecimals}. Expected integer between 0 and 18. Broker configuration error.`
+          );
+        }
+
+        const loanNoteExchangeRate = broker.loanNoteExchangeRate || 1;
+
+        // Validate loan note exchange rate is positive and finite
+        if (
+          loanNoteExchangeRate <= 0 ||
+          !Number.isFinite(loanNoteExchangeRate)
+        ) {
+          throw new Error(
+            `Invalid loan note exchange rate: ${loanNoteExchangeRate}. Must be a positive finite number. Broker configuration error.`
+          );
+        }
+
+        const decimalDiff = loanNoteDecimals - decimals;
+
+        // Validate decimal difference is reasonable (prevent extreme scale factors)
+        if (Math.abs(decimalDiff) > 18) {
+          throw new Error(
+            `Invalid decimal difference: ${decimalDiff}. Difference between loan note decimals (${loanNoteDecimals}) and coin decimals (${decimals}) is too large. Broker configuration error.`
+          );
+        }
+
+        const scaleFactor = Math.pow(10, decimalDiff);
+
+        // Validate scale factor is finite
+        if (!Number.isFinite(scaleFactor) || scaleFactor <= 0) {
+          throw new Error(
+            `Invalid scale factor: ${scaleFactor}. Calculated from decimal difference: ${decimalDiff}.`
+          );
+        }
+
+        // Calculate note tokens: (rawUnderlying * scaleFactor) / exchangeRate
+        const rawAmountNoteTokens = Math.floor(
+          (Number(rawAmountUnderlying) * scaleFactor) / loanNoteExchangeRate
+        ).toString();
+
+        // Validate calculated note token amount is valid
+        if (
+          rawAmountNoteTokens === "NaN" ||
+          rawAmountNoteTokens === "Infinity" ||
+          rawAmountNoteTokens === "-Infinity"
+        ) {
+          throw new Error(
+            `Invalid note token amount calculation. Raw underlying: ${rawAmountUnderlying}, scale factor: ${scaleFactor}, exchange rate: ${loanNoteExchangeRate}.`
+          );
+        }
+
+        // Validate repay amount against user's loan note balance
+        const loanNoteName = broker.loanNote?.name;
+        if (!loanNoteName) {
+          throw new Error(
+            `Loan note not found for broker ${broker.underlyingAsset.name}`
+          );
+        }
+
+        const userLoanNotePosition = currentPortfolioState.liabilities.find(
+          (l) => l.instrumentId === loanNoteName
+        );
+
+        if (!userLoanNotePosition) {
+          throw new Error(
+            `You don't have any ${asset.symbol} borrowed. Cannot repay.`
+          );
+        }
+
+        const userLoanNoteBalanceRaw = BigInt(userLoanNotePosition.amount);
+        const repayAmountNoteTokensRawBigInt = BigInt(rawAmountNoteTokens);
+
+        // Validate repay amount doesn't exceed user's loan note balance
+        if (repayAmountNoteTokensRawBigInt > userLoanNoteBalanceRaw) {
+          const userBalanceFormatted =
+            (Number(userLoanNoteBalanceRaw) / Math.pow(10, loanNoteDecimals)) *
+            loanNoteExchangeRate;
+          const repayAmountFormatted =
+            Number(rawAmountUnderlying) / Math.pow(10, decimals);
+
+          throw new Error(
+            `Insufficient balance. You have ${userBalanceFormatted.toFixed(6)} ${asset.symbol} borrowed, but trying to repay ${repayAmountFormatted.toFixed(6)} ${asset.symbol}.`
+          );
+        }
+
+        console.log(`[Repay] Amount conversion (underlying → note tokens):`, {
+          originalAmountUnderlyingRaw: rawAmountUnderlying,
+          coinDecimals: decimals,
+          loanNoteDecimals,
+          loanNoteExchangeRate,
+          decimalDiff,
+          scaleFactor,
+          repayAmountNoteTokensRaw: rawAmountNoteTokens,
+          originalAmountFormatted: (
+            Number(rawAmountUnderlying) / Math.pow(10, decimals)
+          ).toFixed(6),
+          noteTokensFormatted: (
+            Number(rawAmountNoteTokens) / Math.pow(10, loanNoteDecimals)
+          ).toFixed(6),
+        });
 
         setState((prev) => ({ ...prev, step: "Building transaction..." }));
 
+        // CRITICAL: Pass note tokens amount, not underlying tokens amount
         // Execute transaction using unified service
         const result = await executeTransaction({
           txType: "repay",
-          txAmount: rawAmount,
+          txAmount: rawAmountNoteTokens, // Note tokens, not underlying tokens!
           broker,
           address: walletAddress,
           publicKey,
@@ -184,17 +327,19 @@ export function useMovePositionRepay({
           },
         });
 
+        // Clear error state on success to prevent stale error messages
         setState((prev) => ({
           ...prev,
           repaying: false,
           txHash: result ?? null,
+          error: null, // Explicitly clear error on success
           step: null,
         }));
 
         // Refresh balances after successful repay
-        await refreshBalances();
+        await refreshBalancesRef.current();
 
-        onSuccess?.();
+        onSuccessRef.current?.();
         return true;
       } catch (error: any) {
         const errorMessage =
@@ -205,19 +350,11 @@ export function useMovePositionRepay({
           error: errorMessage,
           step: null,
         }));
-        onError?.(errorMessage);
+        onErrorRef.current?.(errorMessage);
         return false;
       }
     },
-    [
-      movementWallet,
-      ready,
-      authenticated,
-      signRawHash,
-      refreshBalances,
-      onSuccess,
-      onError,
-    ]
+    [movementWallet, ready, authenticated, signRawHash]
   );
 
   return {

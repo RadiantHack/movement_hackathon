@@ -15,6 +15,10 @@ import { toHex } from "viem";
 import * as Gen from "../../lib/super-json-api-client/src";
 import { PortfolioState } from "./portfolio-service";
 import { requireMovementChainId } from "@/lib/super-aptos-sdk/src/globals";
+import {
+  TransactionInstructionData,
+  isTransactionInstruction,
+} from "../types/moveposition";
 
 /**
  * Transaction arguments matching MovePosition's TransactionArgs
@@ -126,7 +130,7 @@ function buildTransactionIx(
   packet: Gen.PacketResponse,
   broker: Gen.Broker,
   address: string
-): any {
+): TransactionInstructionData {
   const { superAptosSDK } = requireSDKContext();
 
   // Convert hex string to Uint8Array (matching MovePosition approach)
@@ -205,11 +209,18 @@ async function signAndSubmitTransaction({
 
   onProgress?.("Building transaction...");
 
-  // Extract transaction data from instruction
-  const txData = txIx.data as any;
-  const txFunction = txData.function as `${string}::${string}::${string}`;
-  const txTypeArguments: string[] = txData.typeArguments || [];
-  const txFunctionArguments: any[] = txData.functionArguments || [];
+  // Validate transaction instruction structure
+  if (!isTransactionInstruction(txIx)) {
+    throw new Error(
+      "Invalid transaction instruction: missing required data structure"
+    );
+  }
+
+  // Extract transaction data from instruction (now type-safe)
+  const txData = txIx.data;
+  const txFunction = txData.function;
+  const txTypeArguments: string[] = txData.typeArguments;
+  const txFunctionArguments: unknown[] = txData.functionArguments;
 
   // Build transaction using Aptos SDK
   const rawTxn = await aptos.transaction.build.simple({

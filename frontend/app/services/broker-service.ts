@@ -16,7 +16,20 @@ let brokersCacheTime: number = 0;
 const CACHE_TTL = 60000; // 1 minute
 
 /**
- * Fetch all brokers with caching
+ * Retry configuration for broker fetching
+ */
+const MAX_RETRIES = 3;
+const INITIAL_RETRY_DELAY = 1000; // 1 second
+
+/**
+ * Wait for a specified duration (for retry delays)
+ */
+function wait(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Fetch all brokers with caching and retry logic
  * Matches MovePosition's broker fetching pattern
  */
 export async function fetchBrokers(
@@ -24,28 +37,105 @@ export async function fetchBrokers(
 ): Promise<Gen.Broker[]> {
   const now = Date.now();
 
+  // Return cached data if valid and not forcing refresh
   if (!forceRefresh && brokersCache && now - brokersCacheTime < CACHE_TTL) {
     return brokersCache;
   }
 
-  try {
-    const { superClient } = requireSDKContext();
-    console.log("[BrokerService] Fetching brokers from API...");
-    const brokers = await superClient.default.getBrokers();
-    console.log(
-      `[BrokerService] Fetched ${brokers.length} brokers:`,
-      brokers.map((b) => b.underlyingAsset.name)
-    );
+  // If cache exists but is stale, we'll try to refresh but return stale cache on failure
+  const hasStaleCache = brokersCache !== null;
 
-    brokersCache = brokers;
-    brokersCacheTime = now;
+  let lastError: any = null;
 
-    return brokers;
-  } catch (error: any) {
-    console.error("[BrokerService] Failed to fetch brokers:", error);
-    // Return empty array instead of throwing to allow graceful degradation
-    return [];
+  // Retry logic with exponential backoff
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    try {
+      const { superClient } = requireSDKContext();
+      console.log(
+        `[BrokerService] Fetching brokers from API... (attempt ${attempt + 1}/${MAX_RETRIES})`
+      );
+
+      const brokers = await superClient.default.getBrokers();
+
+      // Validate response
+      if (!Array.isArray(brokers)) {
+        throw new Error("Invalid broker response: expected array");
+      }
+
+      console.log(
+        `[BrokerService] ✅ Successfully fetched ${brokers.length} brokers:`,
+        brokers.map((b) => b.underlyingAsset.name)
+      );
+
+      // Update cache on success
+      brokersCache = brokers;
+      brokersCacheTime = now;
+
+      return brokers;
+    } catch (error: any) {
+      lastError = error;
+
+      // Log error with more context
+      const errorMessage = error?.message || "Unknown error";
+      const errorStatus = error?.status || error?.response?.status;
+      const isNetworkError =
+        errorMessage.includes("network") ||
+        errorMessage.includes("fetch") ||
+        errorMessage.includes("timeout");
+
+      console.error(
+        `[BrokerService] ❌ Failed to fetch brokers (attempt ${attempt + 1}/${MAX_RETRIES}):`,
+        {
+          error: errorMessage,
+          status: errorStatus,
+          isNetworkError,
+          willRetry: attempt < MAX_RETRIES - 1,
+        }
+      );
+
+      // If this is the last attempt, break out of retry loop
+      if (attempt === MAX_RETRIES - 1) {
+        break;
+      }
+
+      // Exponential backoff: wait before retrying
+      const delay = INITIAL_RETRY_DELAY * Math.pow(2, attempt);
+      console.log(`[BrokerService] ⏳ Retrying in ${delay}ms...`);
+      await wait(delay);
+    }
   }
+
+  // All retries failed
+  console.error(
+    `[BrokerService] ❌ All ${MAX_RETRIES} attempts failed. Last error:`,
+    lastError
+  );
+
+  // Clear cache on error to prevent serving stale data
+  // This ensures next request will try fresh fetch
+  if (forceRefresh || !hasStaleCache) {
+    console.warn(
+      "[BrokerService] ⚠️ Clearing broker cache due to fetch failure"
+    );
+    brokersCache = null;
+    brokersCacheTime = 0;
+  }
+
+  // If we have stale cache and this wasn't a forced refresh, return stale cache
+  // This allows graceful degradation - user can still see previous data
+  if (hasStaleCache && !forceRefresh) {
+    console.warn(
+      `[BrokerService] ⚠️ Returning stale cache (${brokersCache!.length} brokers) due to fetch failure. User may see outdated data.`
+    );
+    return brokersCache!;
+  }
+
+  // No cache available and all retries failed - return empty array
+  // This allows graceful degradation but callers should handle empty array
+  console.error(
+    "[BrokerService] ❌ No brokers available. Returning empty array. Callers should handle this case."
+  );
+  return [];
 }
 
 /**
