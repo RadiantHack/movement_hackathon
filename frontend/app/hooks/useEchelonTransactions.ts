@@ -528,7 +528,6 @@ export async function executeSupplyTransaction(
           if (coinType === "0x1::aptos_coin::AptosCoin") {
             try {
               // Try fetching from balance API (which handles asset type 0xa)
-            try {
               const balanceResponse = await fetch(
                 `/api/balance?address=${encodeURIComponent(senderAddress)}&token=MOVE`
               );
@@ -556,13 +555,12 @@ export async function executeSupplyTransaction(
                   }
                 }
               }
-              } catch (apiError) {
-                // Balance API failed, continue with coin store balance only
-                console.warn(
-                  "[Echelon] Could not fetch FA balance from API:",
-                  apiError
-                );
-              }
+            } catch (apiError) {
+              // Balance API failed, continue with coin store balance only
+              console.warn(
+                "[Echelon] Could not fetch FA balance from API:",
+                apiError
+              );
             }
           }
         }
@@ -570,13 +568,13 @@ export async function executeSupplyTransaction(
         // Sum both balances (user may have both during migration period)
         // According to Aptos FA migration best practices: aggregate both balances
         const totalBalance = coinBalance + faBalance;
-        
+
         if (faBalance > BigInt(0)) {
           console.log(
             `[Echelon] Balance check for ${asset.symbol}: CoinStore=${coinBalance.toString()}, FA=${faBalance.toString()}, Total=${totalBalance.toString()}`
           );
         }
-        
+
         coinBalance = totalBalance;
 
         if (coinBalance === BigInt(0)) {
