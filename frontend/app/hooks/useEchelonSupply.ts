@@ -3,22 +3,14 @@
  * Consolidates supply logic used across multiple components
  */
 
-import { useState, useCallback } from "react";
-import { usePrivy } from "@privy-io/react-auth";
-import { useSignRawHash } from "@privy-io/react-auth/extended-chains";
+import { useCallback } from "react";
 import { AssetInfo, executeSupplyTransaction } from "./useEchelonTransactions";
 import {
-  validateEchelonAmount,
-  validateEchelonWallet,
-  validateEchelonAsset,
-} from "../utils/echelon/validation";
-import { useBalance } from "./useBalanceContext";
-import { useMovementWallet } from "./useMovementWallet";
+  useEchelonTransaction,
+  type UseEchelonTransactionOptions,
+} from "./useEchelonTransaction";
 
-interface UseEchelonSupplyOptions {
-  onSuccess?: () => void;
-  onError?: (error: string) => void;
-}
+interface UseEchelonSupplyOptions extends UseEchelonTransactionOptions {}
 
 interface EchelonSupplyState {
   supplying: boolean;
@@ -36,17 +28,18 @@ export function useEchelonSupply({
   onSuccess,
   onError,
 }: UseEchelonSupplyOptions = {}) {
-  const { signRawHash } = useSignRawHash();
-  const { ready, authenticated } = usePrivy();
-  const { refreshBalances } = useBalance();
-  const movementWallet = useMovementWallet();
-
-  const [state, setState] = useState<EchelonSupplyState>({
-    supplying: false,
-    error: null,
-    txHash: null,
-    step: null,
-  });
+  const {
+    state,
+    signRawHash,
+    movementWallet,
+    validateTransaction,
+    setLoading,
+    setError,
+    handleSuccess,
+    handleError,
+    resetState,
+    updateStep,
+  } = useEchelonTransaction({ onSuccess, onError });
 
   const handleSupply = useCallback(
     async (
@@ -54,146 +47,71 @@ export function useEchelonSupply({
       amount: number,
       availableBalance?: number
     ): Promise<boolean> => {
-      // Reset error state
-      setState((prev) => ({ ...prev, error: null, step: null }));
-
-      // Validate wallet
-      const walletValidation = validateEchelonWallet(movementWallet);
-      if (!walletValidation.isValid) {
-        const error = walletValidation.error || "Wallet validation failed";
-        setState((prev) => ({ ...prev, error }));
-        onError?.(error);
-        return false;
-      }
-
-      if (!ready || !authenticated) {
-        const error = "Please authenticate first";
-        setState((prev) => ({ ...prev, error }));
-        onError?.(error);
-        return false;
-      }
-
-      // Validate asset
-      const assetValidation = validateEchelonAsset(asset);
-      if (!assetValidation.isValid) {
-        const error = assetValidation.error || "Invalid asset";
-        setState((prev) => ({ ...prev, error }));
-        onError?.(error);
-        return false;
-      }
-
-      // Validate amount
-      const amountValidation = validateEchelonAmount(
+      // Validate transaction prerequisites
+      const validation = validateTransaction(
+        asset,
         amount,
         availableBalance,
         "supply"
       );
-      if (!amountValidation.isValid) {
-        const error = amountValidation.error || "Invalid amount";
-        setState((prev) => ({ ...prev, error }));
-        onError?.(error);
+
+      if (
+        !validation.isValid ||
+        !validation.publicKey ||
+        !validation.parsedAmount
+      ) {
+        setError(validation.error || "Validation failed");
         return false;
       }
 
-      // Use wallet from hook (already validated)
       if (!movementWallet) {
-        const error = "Movement wallet not found";
-        setState((prev) => ({ ...prev, error }));
-        onError?.(error);
-        return false;
-      }
-
-      const publicKey = (movementWallet as any).publicKey;
-      if (!publicKey) {
-        const error = "Wallet public key not found";
-        setState((prev) => ({ ...prev, error }));
-        onError?.(error);
+        setError("Movement wallet not found");
         return false;
       }
 
       // Execute supply
-      setState((prev) => ({
-        ...prev,
-        supplying: true,
-        error: null,
-        step: "Initializing...",
-      }));
+      setLoading(true, "Initializing...");
 
       try {
         const result = await executeSupplyTransaction({
           asset,
-          amount: amountValidation.parsedAmount!,
+          amount: validation.parsedAmount,
           movementWallet,
-          publicKey,
+          publicKey: validation.publicKey,
           signRawHash,
-          onStepChange: (step: string) => {
-            setState((prev) => ({ ...prev, step }));
-          },
+          onStepChange: updateStep,
         });
 
         if (result.success && result.txHash) {
-          setState((prev) => ({
-            ...prev,
-            supplying: false,
-            txHash: result.txHash ?? null,
-            error: null,
-            step: null,
-          }));
-
-          // Refresh balances after successful supply
-          await refreshBalances();
-
-          onSuccess?.();
+          await handleSuccess(result.txHash);
           return true;
         } else {
-          const error = result.error || "Supply transaction failed";
-          setState((prev) => ({
-            ...prev,
-            supplying: false,
-            error,
-            step: null,
-          }));
-          onError?.(error);
+          handleError(result.error || "Supply transaction failed");
           return false;
         }
       } catch (err: unknown) {
         console.error("Supply error:", err);
-        const errorMessage =
-          err instanceof Error
-            ? err.message
-            : "Supply failed. Please try again.";
-        setState((prev) => ({
-          ...prev,
-          supplying: false,
-          error: errorMessage,
-          step: null,
-        }));
-        onError?.(errorMessage);
+        handleError(err);
         return false;
       }
     },
     [
+      validateTransaction,
       movementWallet,
-      ready,
-      authenticated,
       signRawHash,
-      refreshBalances,
-      onSuccess,
-      onError,
+      setLoading,
+      setError,
+      handleSuccess,
+      handleError,
+      updateStep,
     ]
   );
 
-  const resetState = useCallback(() => {
-    setState({
-      supplying: false,
-      error: null,
-      txHash: null,
-      step: null,
-    });
-  }, []);
-
   return {
-    ...state,
+    supplying: state.loading,
+    error: state.error,
+    txHash: state.txHash,
+    step: state.step,
     handleSupply,
     resetState,
   };

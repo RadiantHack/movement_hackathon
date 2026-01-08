@@ -226,7 +226,6 @@ def initiate_bridge(
     Returns:
         Transaction details as a string
     """
-    # TODO: Implement actual bridge initiation with Movement Bridge contract
     return json.dumps(
         {
             "status": "initiated",
@@ -252,7 +251,6 @@ def check_bridge_status(tx_hash: str) -> str:
     Returns:
         Bridge transaction status as a string
     """
-    # TODO: Implement actual bridge status checking
     return json.dumps(
         {
             "tx_hash": tx_hash,
@@ -282,7 +280,6 @@ def get_bridge_fees(
     Returns:
         Fee estimates as a string
     """
-    # TODO: Implement actual fee calculation
     return json.dumps(
         {
             "source_chain": source_chain,

@@ -3,23 +3,15 @@
  * Consolidates borrow logic used across multiple components
  */
 
-import { useState, useCallback } from "react";
-import { usePrivy } from "@privy-io/react-auth";
-import { useSignRawHash } from "@privy-io/react-auth/extended-chains";
+import { useCallback } from "react";
 import { AssetInfo, executeBorrowTransaction } from "./useEchelonTransactions";
+import { validateBorrowingPower } from "../utils/echelon/validation";
 import {
-  validateEchelonAmount,
-  validateEchelonWallet,
-  validateEchelonAsset,
-  validateBorrowingPower,
-} from "../utils/echelon/validation";
-import { useBalance } from "./useBalanceContext";
-import { useMovementWallet } from "./useMovementWallet";
+  useEchelonTransaction,
+  type UseEchelonTransactionOptions,
+} from "./useEchelonTransaction";
 
-interface UseEchelonBorrowOptions {
-  onSuccess?: () => void;
-  onError?: (error: string) => void;
-}
+interface UseEchelonBorrowOptions extends UseEchelonTransactionOptions {}
 
 interface EchelonBorrowState {
   borrowing: boolean;
@@ -37,17 +29,18 @@ export function useEchelonBorrow({
   onSuccess,
   onError,
 }: UseEchelonBorrowOptions = {}) {
-  const { signRawHash } = useSignRawHash();
-  const { ready, authenticated } = usePrivy();
-  const { refreshBalances } = useBalance();
-  const movementWallet = useMovementWallet();
-
-  const [state, setState] = useState<EchelonBorrowState>({
-    borrowing: false,
-    error: null,
-    txHash: null,
-    step: null,
-  });
+  const {
+    state,
+    signRawHash,
+    movementWallet,
+    validateTransaction,
+    setLoading,
+    setError,
+    handleSuccess,
+    handleError,
+    resetState,
+    updateStep,
+  } = useEchelonTransaction({ onSuccess, onError });
 
   const handleBorrow = useCallback(
     async (
@@ -58,166 +51,90 @@ export function useEchelonBorrow({
       totalSupplyBalance: number,
       totalBorrowBalance: number
     ): Promise<boolean> => {
-      // Reset error state
-      setState((prev) => ({ ...prev, error: null, step: null }));
-
-      // Validate wallet
-      const walletValidation = validateEchelonWallet(movementWallet);
-      if (!walletValidation.isValid) {
-        const error = walletValidation.error || "Wallet validation failed";
-        setState((prev) => ({ ...prev, error }));
-        onError?.(error);
-        return false;
-      }
-
-      if (!ready || !authenticated) {
-        const error = "Please authenticate first";
-        setState((prev) => ({ ...prev, error }));
-        onError?.(error);
-        return false;
-      }
-
-      // Validate asset
-      const assetValidation = validateEchelonAsset(asset);
-      if (!assetValidation.isValid) {
-        const error = assetValidation.error || "Invalid asset";
-        setState((prev) => ({ ...prev, error }));
-        onError?.(error);
-        return false;
-      }
-
-      // Validate amount
-      const amountValidation = validateEchelonAmount(
+      // Validate transaction prerequisites
+      const validation = validateTransaction(
+        asset,
         amount,
         undefined,
         "borrow"
       );
-      if (!amountValidation.isValid) {
-        const error = amountValidation.error || "Invalid amount";
-        setState((prev) => ({ ...prev, error }));
-        onError?.(error);
+
+      if (
+        !validation.isValid ||
+        !validation.publicKey ||
+        !validation.parsedAmount
+      ) {
+        setError(validation.error || "Validation failed");
         return false;
       }
 
       // Validate borrowing power
       const borrowingPowerValidation = validateBorrowingPower(
-        amountValidation.parsedAmount!,
+        validation.parsedAmount,
         availableBalance,
         hasCollateral,
         totalSupplyBalance,
         totalBorrowBalance
       );
       if (!borrowingPowerValidation.isValid) {
-        const error =
-          borrowingPowerValidation.error || "Insufficient borrowing power";
-        setState((prev) => ({ ...prev, error }));
-        onError?.(error);
+        setError(
+          borrowingPowerValidation.error || "Insufficient borrowing power"
+        );
         return false;
       }
 
-      // Use wallet from hook (already validated)
       if (!movementWallet) {
-        const error = "Movement wallet not found";
-        setState((prev) => ({ ...prev, error }));
-        onError?.(error);
-        return false;
-      }
-
-      const publicKey = (movementWallet as any).publicKey;
-      if (!publicKey) {
-        const error = "Wallet public key not found";
-        setState((prev) => ({ ...prev, error }));
-        onError?.(error);
+        setError("Movement wallet not found");
         return false;
       }
 
       // Execute borrow
-      setState((prev) => ({
-        ...prev,
-        borrowing: true,
-        error: null,
-        step: "Initializing...",
-      }));
+      setLoading(true, "Initializing...");
 
       try {
         const result = await executeBorrowTransaction({
           asset,
-          amount: amountValidation.parsedAmount!,
+          amount: validation.parsedAmount,
           availableBalance,
           hasCollateral,
           totalSupplyBalance,
           totalBorrowBalance,
           movementWallet,
-          publicKey,
+          publicKey: validation.publicKey,
           signRawHash,
-          onStepChange: (step: string) => {
-            setState((prev) => ({ ...prev, step }));
-          },
+          onStepChange: updateStep,
         });
 
         if (result.success && result.txHash) {
-          setState((prev) => ({
-            ...prev,
-            borrowing: false,
-            txHash: result.txHash ?? null,
-            error: null,
-            step: null,
-          }));
-
-          // Refresh balances after successful borrow
-          await refreshBalances();
-
-          onSuccess?.();
+          await handleSuccess(result.txHash);
           return true;
         } else {
-          const error = result.error || "Borrow transaction failed";
-          setState((prev) => ({
-            ...prev,
-            borrowing: false,
-            error,
-            step: null,
-          }));
-          onError?.(error);
+          handleError(result.error || "Borrow transaction failed");
           return false;
         }
       } catch (err: unknown) {
         console.error("Borrow error:", err);
-        const errorMessage =
-          err instanceof Error
-            ? err.message
-            : "Borrow failed. Please try again.";
-        setState((prev) => ({
-          ...prev,
-          borrowing: false,
-          error: errorMessage,
-          step: null,
-        }));
-        onError?.(errorMessage);
+        handleError(err);
         return false;
       }
     },
     [
+      validateTransaction,
       movementWallet,
-      ready,
-      authenticated,
       signRawHash,
-      refreshBalances,
-      onSuccess,
-      onError,
+      setLoading,
+      setError,
+      handleSuccess,
+      handleError,
+      updateStep,
     ]
   );
 
-  const resetState = useCallback(() => {
-    setState({
-      borrowing: false,
-      error: null,
-      txHash: null,
-      step: null,
-    });
-  }, []);
-
   return {
-    ...state,
+    borrowing: state.loading,
+    error: state.error,
+    txHash: state.txHash,
+    step: state.step,
     handleBorrow,
     resetState,
   };

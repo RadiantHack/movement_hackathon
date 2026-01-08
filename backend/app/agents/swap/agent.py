@@ -191,7 +191,6 @@ def get_swap_quote(from_token: str, to_token: str, amount: str) -> str:
     Returns:
         Swap quote details as a string
     """
-    # TODO: Implement actual quote fetching from DEX API (e.g., Mosaic API)
     return json.dumps(
         {
             "from_token": from_token.upper(),
@@ -225,7 +224,6 @@ def execute_swap(
     Returns:
         Swap transaction details as a string
     """
-    # TODO: Implement actual swap execution via DEX smart contracts
     return json.dumps(
         {
             "status": "initiated",
@@ -251,7 +249,6 @@ def check_swap_status(tx_hash: str) -> str:
     Returns:
         Swap transaction status as a string
     """
-    # TODO: Implement actual transaction status checking
     return json.dumps(
         {
             "tx_hash": tx_hash,

@@ -54,7 +54,7 @@ export function validateEchelonAmount(
  * @returns Validation result
  */
 export function validateEchelonWallet(
-  movementWallet: any
+  movementWallet: { address?: string } | null | undefined
 ): EchelonValidationResult {
   if (!movementWallet?.address) {
     return {
@@ -73,7 +73,9 @@ export function validateEchelonWallet(
  * @param asset - The asset object
  * @returns Validation result
  */
-export function validateEchelonAsset(asset: any): EchelonValidationResult {
+export function validateEchelonAsset(
+  asset: { symbol?: string; marketAddress?: string } | null | undefined
+): EchelonValidationResult {
   if (!asset || !asset.symbol) {
     return {
       isValid: false,
