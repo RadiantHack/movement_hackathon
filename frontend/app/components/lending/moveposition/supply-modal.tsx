@@ -5,7 +5,6 @@ import { usePrivy } from "@privy-io/react-auth";
 import { useMovementWallet } from "../../../hooks/useMovementWallet";
 import { useSignRawHash } from "@privy-io/react-auth/extended-chains";
 import { type TokenInfo } from "../../../utils/shared/tokens";
-import { getBrokerName } from "../../../utils/moveposition";
 import {
   getCoinDecimals,
   convertAmountToRaw,
@@ -760,7 +759,7 @@ export function SupplyModal({
     }, 500); // Wait 500ms after user stops typing
 
     return () => clearTimeout(timeoutId);
-  }, [buildNextPortfolioState, amount, movementApiBase]);
+  }, [buildNextPortfolioState, amount, activeTab, movementApiBase]);
 
   /**
    * Handle Max button click - works for both Supply and Withdraw tabs
