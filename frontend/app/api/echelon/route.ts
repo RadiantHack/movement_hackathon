@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { EchelonMarketsApiResponse } from "@/app/types/echelon";
 
-const ECHELON_API_URL = "https://app.echelon.market/api/markets?network=movement_mainnet";
+const ECHELON_API_URL =
+  "https://app.echelon.market/api/markets?network=movement_mainnet";
 const FETCH_TIMEOUT = 10000; // 10 seconds
 
 /**
