@@ -20,20 +20,29 @@ interface EchelonWithdrawModalProps {
   isOpen: boolean;
   onClose: () => void;
   asset: WithdrawAsset | null;
+  availableBalance?: number; // Available balance to withdraw (on-chain max if user has borrows, otherwise wallet balance)
+  loadingAvailableBalance?: boolean; // Whether the on-chain available balance is still loading
   onSuccess?: () => void; // Callback after successful transaction
+  totalSupplyBalance?: number; // Total collateral value in USD for health factor calculation
+  totalBorrowBalance?: number; // Total borrowed value in USD for health factor calculation
 }
 
 export function EchelonWithdrawModal({
   isOpen,
   onClose,
   asset,
+  availableBalance = 0,
+  loadingAvailableBalance = false,
   onSuccess,
+  totalSupplyBalance = 0,
+  totalBorrowBalance = 0,
 }: EchelonWithdrawModalProps) {
   const [amount, setAmount] = useState("");
   const [percentage, setPercentage] = useState(0);
   const [displayTxHash, setDisplayTxHash] = useState<string | null>(null);
   // Track last shown txHash to prevent re-showing
   const lastShownTxHashRef = useRef<string | null>(null);
+  const [showButtonComplete, setShowButtonComplete] = useState(false);
 
   // Use centralized withdraw hook
   const withdraw = useEchelonWithdraw({
@@ -65,33 +74,90 @@ export function EchelonWithdrawModal({
     if (!isOpen) {
       setDisplayTxHash(null);
       lastShownTxHashRef.current = null;
+      setAmount("");
+      setPercentage(0);
+      setShowButtonComplete(false);
     }
   }, [isOpen]);
 
-  if (!isOpen || !asset) return null;
+  // Show button complete state after transaction
+  useEffect(() => {
+    if (withdraw.txHash && displayTxHash) {
+      const timer = setTimeout(() => {
+        setShowButtonComplete(true);
+      }, 250);
+      return () => clearTimeout(timer);
+    } else {
+      setShowButtonComplete(false);
+    }
+  }, [withdraw.txHash, displayTxHash]);
 
-  const availableBalance =
-    parseFloat(asset.amount) / Math.pow(10, asset.decimals);
+  // Use the availableBalance prop (on-chain max if user has borrows, otherwise wallet balance)
+  // Memoize it to ensure it recalculates when prop changes
+  const memoizedAvailableBalance = useMemo(() => {
+    return availableBalance || 0;
+  }, [availableBalance]);
+
   const numericAmount = parseFloat(amount) || 0;
-  const usdValue = numericAmount * asset.price;
+  const usdValue = numericAmount * (asset?.price || 0);
   const rateLimit = 985826.12;
   const rateLimitMax = 1000000;
 
+  // Calculate current health factor (equity / debt, or ∞ if no debt)
+  const currentHealthFactor = useMemo(() => {
+    if (totalBorrowBalance <= 0) return null; // No debt = infinite health
+    return totalSupplyBalance / totalBorrowBalance;
+  }, [totalSupplyBalance, totalBorrowBalance]);
+
+  // Calculate simulated health factor when amount changes (withdraw reduces supply)
+  const simulatedHealthFactor = useMemo(() => {
+    if (!numericAmount || numericAmount <= 0 || !asset)
+      return currentHealthFactor;
+
+    const withdrawAmountUSD = numericAmount * asset.price;
+    const newSupplyBalance = Math.max(
+      0,
+      totalSupplyBalance - withdrawAmountUSD
+    );
+
+    if (totalBorrowBalance <= 0) return null; // No debt = infinite health
+    return newSupplyBalance / totalBorrowBalance;
+  }, [
+    numericAmount,
+    asset?.price,
+    totalSupplyBalance,
+    totalBorrowBalance,
+    currentHealthFactor,
+  ]);
+
+  // Determine health factor color
+  const getHealthFactorColor = (hf: number | null) => {
+    if (hf === null) return "text-green-500";
+    if (hf <= 1.0) return "text-red-500";
+    if (hf <= 1.2) return "text-yellow-500";
+    return "text-green-500";
+  };
+
+  const displayHealthFactor = simulatedHealthFactor ?? currentHealthFactor;
+
+  if (!isOpen || !asset) return null;
+
   const handlePercentageChange = (pct: number) => {
     setPercentage(pct);
-    const newAmount = (availableBalance * pct) / 100;
+    const newAmount = (memoizedAvailableBalance * pct) / 100;
     setAmount(newAmount.toFixed(8));
   };
 
   const handleAmountChange = (value: string) => {
     setAmount(value);
     const num = parseFloat(value) || 0;
-    const pct = availableBalance > 0 ? (num / availableBalance) * 100 : 0;
+    const pct =
+      memoizedAvailableBalance > 0 ? (num / memoizedAvailableBalance) * 100 : 0;
     setPercentage(Math.min(pct, 100));
   };
 
   const handleMax = () => {
-    setAmount(availableBalance.toFixed(8));
+    setAmount(memoizedAvailableBalance.toFixed(8));
     setPercentage(100);
   };
 
@@ -107,7 +173,7 @@ export function EchelonWithdrawModal({
       } as AssetInfo,
       numericAmount,
       percentage,
-      availableBalance
+      memoizedAvailableBalance
     );
   };
 
@@ -179,13 +245,18 @@ export function EchelonWithdrawModal({
                 >
                   MAX
                 </button>
-                <div className="text-zinc-400 dark:text-zinc-500 text-[9px] sm:text-[10px] md:text-xs mt-1.5 sm:mt-2">
-                  Available:{" "}
-                  <span className="text-zinc-600 dark:text-zinc-300 font-medium">
-                    {availableBalance.toFixed(8)}
-                  </span>{" "}
-                  {asset.symbol}
-                </div>
+                {loadingAvailableBalance ? (
+                  <div className="text-zinc-400 dark:text-zinc-500 text-[9px] sm:text-[10px] md:text-xs mt-1.5 sm:mt-2">
+                    Loading...
+                  </div>
+                ) : memoizedAvailableBalance > 0 ? (
+                  <div className="text-zinc-400 dark:text-zinc-500 text-[9px] sm:text-[10px] md:text-xs mt-1.5 sm:mt-2">
+                    <span className="text-zinc-600 dark:text-zinc-300 font-medium">
+                      {memoizedAvailableBalance.toFixed(6)}
+                    </span>{" "}
+                    {asset.symbol}
+                  </div>
+                ) : null}
               </div>
             </div>
           </div>
@@ -223,9 +294,31 @@ export function EchelonWithdrawModal({
                   />
                 </svg>
               </div>
-              <span className="text-sm sm:text-base md:text-lg font-bold text-green-500">
-                ∞%
-              </span>
+              <div className="flex items-center gap-1.5 sm:gap-2">
+                {currentHealthFactor !== null &&
+                simulatedHealthFactor !== null &&
+                numericAmount > 0 ? (
+                  <>
+                    <span
+                      className={`text-sm sm:text-base md:text-lg font-bold ${getHealthFactorColor(currentHealthFactor)}`}
+                    >
+                      {currentHealthFactor.toFixed(2)}x
+                    </span>
+                    <span className="text-zinc-400">→</span>
+                    <span
+                      className={`text-sm sm:text-base md:text-lg font-bold ${getHealthFactorColor(simulatedHealthFactor)}`}
+                    >
+                      {simulatedHealthFactor.toFixed(2)}x
+                    </span>
+                  </>
+                ) : (
+                  <span className="text-sm sm:text-base md:text-lg font-bold text-green-500">
+                    {displayHealthFactor !== null
+                      ? `${displayHealthFactor.toFixed(2)}x`
+                      : "∞"}
+                  </span>
+                )}
+              </div>
             </div>
 
             <div className="h-px bg-zinc-200 dark:bg-zinc-700/50" />
@@ -302,10 +395,10 @@ export function EchelonWithdrawModal({
                   : "bg-zinc-100 dark:bg-zinc-800 text-zinc-400 dark:text-zinc-500 cursor-not-allowed"
             }`}
           >
-            {displayTxHash ? (
-              <span className="flex items-center justify-center gap-2">
+            {displayTxHash && showButtonComplete ? (
+              <span className="flex items-center justify-center gap-1.5 sm:gap-2">
                 <svg
-                  className="w-5 h-5"
+                  className="w-4 h-4 sm:w-5 sm:h-5"
                   fill="none"
                   viewBox="0 0 24 24"
                   stroke="currentColor"
@@ -320,9 +413,9 @@ export function EchelonWithdrawModal({
                 Transaction Complete
               </span>
             ) : withdraw.withdrawing ? (
-              <span className="flex items-center justify-center gap-2">
+              <span className="flex items-center justify-center gap-1.5 sm:gap-2">
                 <svg
-                  className="w-5 h-5 animate-spin"
+                  className="w-4 h-4 sm:w-5 sm:h-5 animate-spin"
                   fill="none"
                   viewBox="0 0 24 24"
                 >
@@ -343,9 +436,24 @@ export function EchelonWithdrawModal({
                 {withdraw.step || "Processing..."}
               </span>
             ) : numericAmount > 0 ? (
-              "Withdraw"
+              <span className="flex items-center justify-center gap-1.5 sm:gap-2">
+                <svg
+                  className="w-4 h-4 sm:w-5 sm:h-5"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"
+                  />
+                </svg>
+                Withdraw {asset.symbol}
+              </span>
             ) : (
-              "Withdraw"
+              "Enter an amount"
             )}
           </button>
         </div>

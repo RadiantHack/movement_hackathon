@@ -51,11 +51,11 @@ export function AssetIcon({
   // If we have an icon URL and no error, try to show the image
   if (iconUrl && !imageError) {
     return (
-      <div className={`relative ${sizeClass} ${className}`}>
+      <div className={`relative ${sizeClass} flex-shrink-0 ${className}`}>
         <img
           src={iconUrl}
           alt={symbol}
-          className={`${sizeClass} rounded-full object-cover ${ringClass}`}
+          className={`${sizeClass} rounded-full object-cover aspect-square ${ringClass}`}
           onError={() => setImageError(true)}
         />
         {showBadge && (
@@ -69,9 +69,9 @@ export function AssetIcon({
 
   // Fallback to gradient with first letter
   return (
-    <div className={`relative ${sizeClass} ${className}`}>
+    <div className={`relative ${sizeClass} flex-shrink-0 ${className}`}>
       <div
-        className={`${sizeClass} rounded-full bg-gradient-to-br from-purple-500 via-violet-500 to-indigo-600 flex items-center justify-center ${ringClass}`}
+        className={`${sizeClass} rounded-full bg-gradient-to-br from-purple-500 via-violet-500 to-indigo-600 flex items-center justify-center aspect-square ${ringClass}`}
       >
         <span className={`text-white font-bold ${textSize}`}>
           {symbol.charAt(0).toUpperCase()}

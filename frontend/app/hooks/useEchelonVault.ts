@@ -5,7 +5,13 @@
 
 "use client";
 
-import { UserSupply, UserBorrow, EchelonAsset } from "../types/echelon";
+import {
+  UserSupply,
+  UserBorrow,
+  EchelonAsset,
+  ProcessedVaultCollateral,
+  ProcessedVaultLiability,
+} from "../types/echelon";
 import { MARKET_TO_SYMBOL } from "../constants/echelon";
 
 /**
@@ -57,7 +63,7 @@ export async function fetchAvailableBalances(
  * Helper function to process vault collaterals (supplies)
  */
 export function processVaultCollaterals(
-  collaterals: any[],
+  collaterals: ProcessedVaultCollateral[],
   assets: EchelonAsset[]
 ): UserSupply[] {
   if (!Array.isArray(collaterals) || collaterals.length === 0) {
@@ -65,7 +71,7 @@ export function processVaultCollaterals(
   }
 
   return collaterals
-    .map((item: { marketAddress: string; coinAmount: string }) => {
+    .map((item: ProcessedVaultCollateral) => {
       const marketAddress = item.marketAddress;
       const symbol = MARKET_TO_SYMBOL[marketAddress] || "Unknown";
       const asset = assets.find((a) => a.symbol === symbol);
@@ -107,7 +113,7 @@ export function processVaultCollaterals(
  * Helper function to process vault liabilities (borrows)
  */
 export function processVaultLiabilities(
-  liabilities: any[],
+  liabilities: ProcessedVaultLiability[],
   assets: EchelonAsset[]
 ): UserBorrow[] {
   if (!Array.isArray(liabilities) || liabilities.length === 0) {
@@ -115,7 +121,7 @@ export function processVaultLiabilities(
   }
 
   return liabilities
-    .map((item: { marketAddress: string; totalLiability: string }) => {
+    .map((item: ProcessedVaultLiability) => {
       const marketAddress = item.marketAddress;
       const symbol = MARKET_TO_SYMBOL[marketAddress] || "Unknown";
       const asset = assets.find((a) => a.symbol === symbol);

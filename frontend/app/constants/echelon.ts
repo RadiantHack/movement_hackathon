@@ -4,6 +4,15 @@
  */
 
 /**
+ * Echelon contract address on Movement Network
+ * Can be overridden via NEXT_PUBLIC_ECHELON_CONTRACT_ADDRESS environment variable
+ */
+export const ECHELON_CONTRACT_ADDRESS =
+  (typeof process !== "undefined" &&
+    process.env.NEXT_PUBLIC_ECHELON_CONTRACT_ADDRESS) ||
+  "0x6a01d5761d43a5b5a0ccbfc42edf2d02c0611464aae99a2ea0e0d4819f0550b5";
+
+/**
  * Maps Echelon market addresses to their corresponding token symbols
  * Used for identifying assets in user positions and market data
  */

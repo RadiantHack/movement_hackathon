@@ -21,7 +21,10 @@ interface EchelonRepayModalProps {
   onClose: () => void;
   asset: RepayAsset | null;
   availableBalance?: number; // Available balance of the asset to repay with
+  onChainLiability?: number | null; // On-chain liability amount (from useEchelonMaxRepay) in human-readable format
   onSuccess?: () => void; // Callback after successful transaction
+  totalSupplyBalance?: number; // Total collateral value in USD for health factor calculation
+  totalBorrowBalance?: number; // Total borrowed value in USD for health factor calculation
 }
 
 const ECHELON_CONTRACT =
@@ -32,13 +35,17 @@ export function EchelonRepayModal({
   onClose,
   asset,
   availableBalance = 0,
+  onChainLiability = null,
   onSuccess,
+  totalSupplyBalance = 0,
+  totalBorrowBalance = 0,
 }: EchelonRepayModalProps) {
   const [amount, setAmount] = useState("");
   const [percentage, setPercentage] = useState(0);
   const [displayTxHash, setDisplayTxHash] = useState<string | null>(null);
   // Track last shown txHash to prevent re-showing
   const lastShownTxHashRef = useRef<string | null>(null);
+  const [showButtonComplete, setShowButtonComplete] = useState(false);
 
   // Use centralized repay hook
   const repay = useEchelonRepay({
@@ -70,20 +77,93 @@ export function EchelonRepayModal({
     if (!isOpen) {
       setDisplayTxHash(null);
       lastShownTxHashRef.current = null;
+      setAmount("");
+      setPercentage(0);
+      setShowButtonComplete(false);
     }
   }, [isOpen]);
 
-  if (!isOpen || !asset) return null;
+  // Show button complete state after transaction
+  useEffect(() => {
+    if (repay.txHash && displayTxHash) {
+      const timer = setTimeout(() => {
+        setShowButtonComplete(true);
+      }, 250);
+      return () => clearTimeout(timer);
+    } else {
+      setShowButtonComplete(false);
+    }
+  }, [repay.txHash, displayTxHash]);
 
   // Debt amount (what the user owes)
-  const debtAmount = parseFloat(asset.amount) / Math.pow(10, asset.decimals);
+  // Prefer on-chain liability if available (more accurate), otherwise use vault data
+  const debtAmount = useMemo(() => {
+    return onChainLiability !== null
+      ? onChainLiability
+      : asset
+        ? parseFloat(asset.amount) / Math.pow(10, asset.decimals)
+        : 0;
+  }, [onChainLiability, asset]);
+
   // Available balance to repay with (what the user has)
   const availableToRepay = availableBalance || 0;
+
   // Maximum amount that can be repaid (min of debt and available balance)
-  const maxRepayable = Math.min(debtAmount, availableToRepay);
+  const maxRepayable = useMemo(() => {
+    return Math.min(debtAmount, availableToRepay);
+  }, [debtAmount, availableToRepay]);
 
   const numericAmount = parseFloat(amount) || 0;
-  const usdValue = numericAmount * asset.price;
+
+  // Reset amount if it exceeds the new max repayable after debt recalculation
+  useEffect(() => {
+    if (numericAmount > maxRepayable && maxRepayable > 0) {
+      // If the current amount exceeds the new max, reset to max
+      setAmount(maxRepayable.toFixed(8));
+      setPercentage(100);
+    } else if (maxRepayable === 0 && numericAmount > 0) {
+      // If debt is fully repaid, reset the form
+      setAmount("");
+      setPercentage(0);
+    }
+  }, [maxRepayable, numericAmount]);
+  const usdValue = numericAmount * (asset?.price || 0);
+
+  // Calculate current health factor (equity / debt, or ∞ if no debt)
+  const currentHealthFactor = useMemo(() => {
+    if (totalBorrowBalance <= 0) return null; // No debt = infinite health
+    return totalSupplyBalance / totalBorrowBalance;
+  }, [totalSupplyBalance, totalBorrowBalance]);
+
+  // Calculate simulated health factor when amount changes (repay decreases debt)
+  const simulatedHealthFactor = useMemo(() => {
+    if (!numericAmount || numericAmount <= 0 || !asset)
+      return currentHealthFactor;
+
+    const repayAmountUSD = numericAmount * asset.price;
+    const newBorrowBalance = Math.max(0, totalBorrowBalance - repayAmountUSD);
+
+    if (newBorrowBalance <= 0) return null; // No debt = infinite health
+    return totalSupplyBalance / newBorrowBalance;
+  }, [
+    numericAmount,
+    asset?.price,
+    totalSupplyBalance,
+    totalBorrowBalance,
+    currentHealthFactor,
+  ]);
+
+  // Determine health factor color
+  const getHealthFactorColor = (hf: number | null) => {
+    if (hf === null) return "text-green-500";
+    if (hf <= 1.0) return "text-red-500";
+    if (hf <= 1.2) return "text-yellow-500";
+    return "text-green-500";
+  };
+
+  const displayHealthFactor = simulatedHealthFactor ?? currentHealthFactor;
+
+  if (!isOpen || !asset) return null;
 
   const handlePercentageChange = (pct: number) => {
     setPercentage(pct);
@@ -297,6 +377,52 @@ export function EchelonRepayModal({
                 {asset.symbol}
               </span>
             </div>
+            <div className="h-px bg-zinc-200 dark:bg-zinc-700/50" />
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5 sm:gap-2 text-zinc-600 dark:text-zinc-400">
+                <svg
+                  className="w-3.5 h-3.5 sm:w-4 sm:h-4"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"
+                  />
+                </svg>
+                <span className="text-[10px] sm:text-xs md:text-sm">
+                  Health factor
+                </span>
+              </div>
+              <div className="flex items-center gap-1.5 sm:gap-2">
+                {currentHealthFactor !== null &&
+                simulatedHealthFactor !== null &&
+                numericAmount > 0 ? (
+                  <>
+                    <span
+                      className={`text-sm sm:text-base md:text-lg font-bold ${getHealthFactorColor(currentHealthFactor)}`}
+                    >
+                      {currentHealthFactor.toFixed(2)}x
+                    </span>
+                    <span className="text-zinc-400">→</span>
+                    <span
+                      className={`text-sm sm:text-base md:text-lg font-bold ${getHealthFactorColor(simulatedHealthFactor)}`}
+                    >
+                      {simulatedHealthFactor.toFixed(2)}x
+                    </span>
+                  </>
+                ) : (
+                  <span className="text-sm sm:text-base md:text-lg font-bold text-green-500">
+                    {displayHealthFactor !== null
+                      ? `${displayHealthFactor.toFixed(2)}x`
+                      : "∞"}
+                  </span>
+                )}
+              </div>
+            </div>
           </div>
 
           {/* Error Message */}
@@ -334,22 +460,42 @@ export function EchelonRepayModal({
               handleRepay();
             }}
             disabled={
-              numericAmount <= 0 ||
-              repay.repaying ||
-              numericAmount > maxRepayable
+              (numericAmount <= 0 ||
+                repay.repaying ||
+                numericAmount > maxRepayable) &&
+              !repay.txHash
             }
             className={`w-full py-2.5 sm:py-3 md:py-4 rounded-xl sm:rounded-2xl font-semibold text-xs sm:text-sm md:text-base lg:text-lg transition-all duration-200 ${
-              numericAmount > 0 &&
-              !repay.repaying &&
-              numericAmount <= maxRepayable
-                ? "bg-gradient-to-r from-purple-600 to-violet-600 text-white shadow-lg shadow-purple-500/30 hover:shadow-xl hover:shadow-purple-500/40 hover:scale-[1.02] active:scale-[0.98]"
-                : "bg-zinc-100 dark:bg-zinc-800 text-zinc-400 dark:text-zinc-500 cursor-not-allowed"
+              repay.txHash
+                ? "bg-green-600 text-white cursor-pointer"
+                : numericAmount > 0 &&
+                    !repay.repaying &&
+                    numericAmount <= maxRepayable
+                  ? "bg-gradient-to-r from-purple-600 to-violet-600 text-white shadow-lg shadow-purple-500/30 hover:shadow-xl hover:shadow-purple-500/40 hover:scale-[1.02] active:scale-[0.98] cursor-pointer"
+                  : "bg-zinc-100 dark:bg-zinc-800 text-zinc-400 dark:text-zinc-500 cursor-not-allowed"
             }`}
           >
-            {repay.repaying ? (
-              <span className="flex items-center justify-center gap-2">
+            {displayTxHash && showButtonComplete ? (
+              <span className="flex items-center justify-center gap-1.5 sm:gap-2">
                 <svg
-                  className="w-5 h-5 animate-spin"
+                  className="w-4 h-4 sm:w-5 sm:h-5"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M5 13l4 4L19 7"
+                  />
+                </svg>
+                Transaction Complete
+              </span>
+            ) : repay.repaying ? (
+              <span className="flex items-center justify-center gap-1.5 sm:gap-2">
+                <svg
+                  className="w-4 h-4 sm:w-5 sm:h-5 animate-spin"
                   fill="none"
                   viewBox="0 0 24 24"
                 >
@@ -370,9 +516,24 @@ export function EchelonRepayModal({
                 {repay.step || "Processing..."}
               </span>
             ) : numericAmount > 0 ? (
-              `Repay ${asset.symbol}`
+              <span className="flex items-center justify-center gap-1.5 sm:gap-2">
+                <svg
+                  className="w-4 h-4 sm:w-5 sm:h-5"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6"
+                  />
+                </svg>
+                Repay {asset.symbol}
+              </span>
             ) : (
-              "Repay"
+              "Enter an amount"
             )}
           </button>
         </div>

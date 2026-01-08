@@ -1,7 +1,7 @@
 "use client";
 
 import { usePrivy } from "@privy-io/react-auth";
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useRef, useCallback } from "react";
 import {
   Sidebar,
   RightSidebar,
@@ -21,6 +21,8 @@ import {
   MarketStats,
   UserSupply,
   UserBorrow,
+  RawEchelonAsset,
+  EchelonMarketsApiResponse,
 } from "../../types/echelon";
 import { MARKET_TO_SYMBOL } from "../../constants/echelon";
 import {
@@ -28,6 +30,11 @@ import {
   processVaultLiabilities,
   fetchAvailableBalances,
 } from "../../hooks/useEchelonVault";
+import { useEchelonMaxBorrow } from "../../hooks/useEchelonMaxBorrow";
+import { useEchelonMaxWithdraw } from "../../hooks/useEchelonMaxWithdraw";
+import { useEchelonMaxRepay } from "../../hooks/useEchelonMaxRepay";
+import { useEchelonSupplyAmounts } from "../../hooks/useEchelonSupplyAmounts";
+import { useEchelonWithdrawableAmounts } from "../../hooks/useEchelonWithdrawableAmounts";
 
 export default function EchelonPage() {
   const { ready, authenticated } = usePrivy();
@@ -57,29 +64,144 @@ export default function EchelonPage() {
     Record<string, number>
   >({});
 
+  // Fetch on-chain supply amounts (underlying tokens) for all supplies
+  const {
+    supplyAmounts,
+    loading: loadingSupplyAmounts,
+    refresh: refreshSupplyAmounts,
+  } = useEchelonSupplyAmounts(userSupplies);
+
+  // Fetch on-chain withdrawable amounts (max withdrawable) for all supplies
+  // This accounts for health factor when user has borrows
+  // Note: Both hooks depend on userSupplies, but they fetch different data (supply vs withdrawable)
+  // They can run in parallel as they're independent queries, but we coordinate refreshes
+  const {
+    withdrawableAmounts,
+    loading: loadingWithdrawableAmounts,
+    refresh: refreshWithdrawableAmounts,
+  } = useEchelonWithdrawableAmounts(userSupplies);
+
+  // Track last refresh time to prevent excessive simultaneous calls
+  const lastRefreshTimeRef = useRef<number>(0);
+  const REFRESH_COOLDOWN_MS = 100; // 100ms cooldown between coordinated refreshes
+
+  // Coordinated loading state for supply-related data
+  // Only show loading if we have supplies and are actually fetching data
+  const isLoadingSupplyData = useMemo(() => {
+    if (userSupplies.length === 0) return false;
+    // If user has borrows, we need both supply and withdrawable amounts
+    if (userBorrows.length > 0) {
+      return loadingSupplyAmounts || loadingWithdrawableAmounts;
+    }
+    // If no borrows, only need supply amounts
+    return loadingSupplyAmounts;
+  }, [
+    userSupplies.length,
+    userBorrows.length,
+    loadingSupplyAmounts,
+    loadingWithdrawableAmounts,
+  ]);
+
+  // Use the official SDK's on-chain method to get max borrowable amount
+  const marketAddress = selectedAsset?.market || null;
+  const decimals = selectedAsset?.decimals || 8;
+  const {
+    maxBorrowable,
+    loading: loadingMaxBorrow,
+    refresh: refreshMaxBorrow,
+  } = useEchelonMaxBorrow(marketAddress, decimals);
+
+  // Use the exact on-chain value without any buffer
+  // The on-chain query already returns the maximum borrowable amount
+  const availableBorrowBalance =
+    maxBorrowable !== null ? Math.max(0, maxBorrowable) : 0;
+
+  // Use the official SDK's on-chain method to get max withdrawable amount
+  const withdrawMarketAddress = selectedWithdrawAsset?.marketAddress || null;
+  const withdrawDecimals = selectedWithdrawAsset?.decimals || 8;
+  const {
+    maxWithdrawable,
+    loading: loadingMaxWithdraw,
+    refresh: refreshMaxWithdraw,
+  } = useEchelonMaxWithdraw(withdrawMarketAddress, withdrawDecimals);
+
+  // Use on-chain max withdrawable if user has borrows, otherwise use total supply amount
+  // This ensures consistency with "Your Supplies" display
+  // Note: totalBorrowBalance is calculated later in the file, so we use userBorrows.length as a proxy
+  const availableWithdrawBalance = useMemo(() => {
+    if (!selectedWithdrawAsset) return 0;
+
+    // If user has borrows, use withdrawable amount (which accounts for health factor)
+    // Prefer withdrawableAmounts (fetched for all supplies) over maxWithdrawable (single asset)
+    const withdrawableAmount =
+      withdrawableAmounts[selectedWithdrawAsset.marketAddress];
+    if (userBorrows.length > 0) {
+      if (withdrawableAmount !== undefined) {
+        return withdrawableAmount;
+      }
+      // Fallback to maxWithdrawable if withdrawableAmounts not available yet
+      if (maxWithdrawable !== null) {
+        return maxWithdrawable;
+      }
+    }
+
+    // If no borrows, use the total supply amount from on-chain (same as "Your Supplies")
+    const onChainSupplyAmount =
+      supplyAmounts[selectedWithdrawAsset.marketAddress];
+    if (onChainSupplyAmount !== undefined) {
+      return onChainSupplyAmount;
+    }
+
+    // Fallback to wallet balance if on-chain supply not available
+    return availableBalances[selectedWithdrawAsset.symbol.toUpperCase()] || 0;
+  }, [
+    selectedWithdrawAsset,
+    userBorrows.length,
+    maxWithdrawable,
+    withdrawableAmounts,
+    supplyAmounts,
+    availableBalances,
+  ]);
+
+  // Use the official SDK's on-chain method to get max repayable amount (liability)
+  const repayMarketAddress = selectedRepayAsset?.marketAddress || null;
+  const repayDecimals = selectedRepayAsset?.decimals || 8;
+  const {
+    maxRepayable,
+    loading: loadingMaxRepay,
+    refresh: refreshMaxRepay,
+  } = useEchelonMaxRepay(repayMarketAddress, repayDecimals);
+
   useEffect(() => {
     const fetchMarkets = async () => {
       try {
         setLoading(true);
         const response = await fetch("/api/echelon");
-        const json = await response.json();
+
+        if (!response.ok) {
+          throw new Error(`Failed to fetch markets: ${response.status}`);
+        }
+
+        const json = (await response.json()) as EchelonMarketsApiResponse;
+
+        // Validate response structure
+        if (!json.data || !Array.isArray(json.data.assets)) {
+          throw new Error(
+            "Invalid API response structure: missing assets array"
+          );
+        }
+
+        if (!Array.isArray(json.data.marketStats)) {
+          throw new Error(
+            "Invalid API response structure: missing marketStats array"
+          );
+        }
+
         const data = json.data;
 
+        // Map raw assets to EchelonAsset with proper type safety
         const assetList: EchelonAsset[] = data.assets.map(
-          (asset: {
-            symbol: string;
-            name: string;
-            icon: string;
-            price: number;
-            supplyApr: number;
-            borrowApr: number;
-            supplyCap: number;
-            borrowCap: number;
-            ltv: number;
-            decimals: number;
-            faAddress: string;
-            market: string;
-          }) => ({
+          (asset: RawEchelonAsset): EchelonAsset => ({
             symbol: asset.symbol,
             name: asset.name,
             icon: asset.icon,
@@ -95,17 +217,27 @@ export default function EchelonPage() {
           })
         );
 
+        // Process market stats with type safety
         const statsMap = new Map<string, MarketStats>();
         data.marketStats.forEach(([address, stats]: [string, MarketStats]) => {
-          statsMap.set(address, stats);
+          // Validate that address is a string and stats is a valid MarketStats object
+          if (
+            typeof address === "string" &&
+            stats &&
+            typeof stats === "object"
+          ) {
+            statsMap.set(address, stats);
+          }
         });
 
         setAssets(assetList);
         setMarketStats(statsMap);
         setError(null);
       } catch (err) {
-        setError("Failed to fetch market data");
-        console.error(err);
+        const errorMessage =
+          err instanceof Error ? err.message : "Failed to fetch market data";
+        setError(errorMessage);
+        console.error("[Echelon] Error fetching markets:", err);
       } finally {
         setLoading(false);
       }
@@ -115,83 +247,85 @@ export default function EchelonPage() {
   }, []);
 
   // Fetch user vault data with optional retry mechanism
-  const fetchVault = async (retryCount = 0, maxRetries = 2) => {
-    if (!movementWallet?.address) {
-      console.log("[UI] fetchVault: Skipping - no address");
-      return;
-    }
+  // Memoized with useCallback to prevent unnecessary re-renders
+  const fetchVault = useCallback(
+    async (retryCount = 0, maxRetries = 2) => {
+      if (!movementWallet?.address) {
+        console.log("[UI] fetchVault: Skipping - no address");
+        return;
+      }
 
-    // Don't require assets to be loaded - we can still process vault data
-    // Assets will be matched later if available
+      // Don't require assets to be loaded - we can still process vault data
+      // Assets will be matched later if available
 
-    setLoadingVault(true);
-    try {
-      // Add timestamp to prevent stale data and force fresh fetch
-      const response = await fetch(
-        `/api/echelon/vault?address=${movementWallet.address}&t=${Date.now()}`,
-        {
-          cache: "no-store", // Always fetch fresh data for user's own vault
-          headers: {
-            "Cache-Control": "no-cache",
-          },
+      setLoadingVault(true);
+      try {
+        // Always fetch fresh vault data (user-specific, changes frequently)
+        // Backend sets appropriate no-cache headers, so we don't need to override here
+        const response = await fetch(
+          `/api/echelon/vault?address=${movementWallet.address}&t=${Date.now()}`,
+          {
+            cache: "no-store", // Always fetch fresh data for user's own vault
+          }
+        );
+
+        if (!response.ok) {
+          throw new Error(`Failed to fetch vault: ${response.status}`);
         }
-      );
 
-      if (!response.ok) {
-        throw new Error(`Failed to fetch vault: ${response.status}`);
-      }
+        const data = await response.json();
 
-      const data = await response.json();
-
-      console.log("[UI] Vault API Response:", data);
-      console.log(
-        "[UI] Available assets:",
-        assets.map((a) => a.symbol)
-      );
-
-      // Process collaterals - use coinAmount (converted from shares)
-      // Handle both possible response structures
-      const collaterals = data.data?.collaterals || data.collaterals || [];
-      const supplies = processVaultCollaterals(collaterals, assets);
-      console.log("[UI] Processed supplies (after filtering):", supplies);
-      console.log("[UI] Setting userSupplies with", supplies.length, "item(s)");
-      setUserSupplies(supplies);
-
-      // Process liabilities - use totalLiability (principal + interest_accumulated)
-      // Handle both possible response structures
-      const liabilities = data.data?.liabilities || data.liabilities || [];
-      const borrows = processVaultLiabilities(liabilities, assets);
-      console.log("[UI] Processed borrows (after filtering):", borrows);
-      setUserBorrows(borrows);
-    } catch (err) {
-      console.error("[UI] Failed to fetch vault:", err);
-
-      // Retry logic: if this is a retry attempt and we haven't exceeded max retries
-      if (retryCount < maxRetries) {
+        console.log("[UI] Vault API Response:", data);
         console.log(
-          `[UI] Retrying vault fetch (attempt ${retryCount + 1}/${maxRetries})...`
+          "[UI] Available assets:",
+          assets.map((a) => a.symbol)
         );
-        // Wait before retrying (exponential backoff)
-        await new Promise((resolve) =>
-          setTimeout(resolve, 1000 * (retryCount + 1))
+
+        // Process collaterals - use coinAmount (converted from shares)
+        // Handle both possible response structures
+        const collaterals = data.data?.collaterals || data.collaterals || [];
+        const supplies = processVaultCollaterals(collaterals, assets);
+        console.log("[UI] Processed supplies (after filtering):", supplies);
+        console.log(
+          "[UI] Setting userSupplies with",
+          supplies.length,
+          "item(s)"
         );
-        return fetchVault(retryCount + 1, maxRetries);
+        setUserSupplies(supplies);
+
+        // Process liabilities - use totalLiability (principal + interest_accumulated)
+        // Handle both possible response structures
+        const liabilities = data.data?.liabilities || data.liabilities || [];
+        const borrows = processVaultLiabilities(liabilities, assets);
+        console.log("[UI] Processed borrows (after filtering):", borrows);
+        setUserBorrows(borrows);
+      } catch (err) {
+        console.error("[UI] Failed to fetch vault:", err);
+
+        // Retry logic: if this is a retry attempt and we haven't exceeded max retries
+        if (retryCount < maxRetries) {
+          console.log(
+            `[UI] Retrying vault fetch (attempt ${retryCount + 1}/${maxRetries})...`
+          );
+          // Wait before retrying (exponential backoff)
+          await new Promise((resolve) =>
+            setTimeout(resolve, 1000 * (retryCount + 1))
+          );
+          return fetchVault(retryCount + 1, maxRetries);
+        }
+
+        setUserSupplies([]);
+        setUserBorrows([]);
+      } finally {
+        setLoadingVault(false);
       }
-
-      setUserSupplies([]);
-      setUserBorrows([]);
-    } finally {
-      setLoadingVault(false);
-    }
-  };
+    },
+    [movementWallet?.address, assets]
+  );
 
   useEffect(() => {
     fetchVault();
-  }, [movementWallet?.address, assets]);
-
-  useEffect(() => {
-    fetchVault();
-  }, [movementWallet?.address, assets]);
+  }, [fetchVault]);
 
   useEffect(() => {
     const loadBalances = async () => {
@@ -204,22 +338,33 @@ export default function EchelonPage() {
   }, [movementWallet?.address]);
 
   // Calculate totals
+  // Use on-chain supply amounts for accurate calculations
   const totalSupplyBalance = useMemo(() => {
     return userSupplies.reduce((sum, supply) => {
-      const amount = parseFloat(supply.amount) / Math.pow(10, supply.decimals);
+      // Prefer on-chain supply amount (underlying tokens) over vault amount
+      const onChainAmount = supplyAmounts[supply.marketAddress];
+      const amount =
+        onChainAmount !== undefined
+          ? onChainAmount
+          : parseFloat(supply.amount) / Math.pow(10, supply.decimals);
       return sum + amount * supply.price;
     }, 0);
-  }, [userSupplies]);
+  }, [userSupplies, supplyAmounts]);
 
   const totalSupplyApr = useMemo(() => {
     if (totalSupplyBalance === 0) return 0;
     const weightedApr = userSupplies.reduce((sum, supply) => {
-      const amount = parseFloat(supply.amount) / Math.pow(10, supply.decimals);
+      // Use same amount calculation as totalSupplyBalance for consistency
+      const onChainAmount = supplyAmounts[supply.marketAddress];
+      const amount =
+        onChainAmount !== undefined
+          ? onChainAmount
+          : parseFloat(supply.amount) / Math.pow(10, supply.decimals);
       const value = amount * supply.price;
       return sum + (value / totalSupplyBalance) * supply.apr;
     }, 0);
     return weightedApr;
-  }, [userSupplies, totalSupplyBalance]);
+  }, [userSupplies, totalSupplyBalance, supplyAmounts]);
 
   const totalBorrowBalance = useMemo(() => {
     return userBorrows.reduce((sum, borrow) => {
@@ -358,9 +503,54 @@ export default function EchelonPage() {
                     </div>
                     <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
                       {userSupplies.map((supply) => {
-                        const amount =
-                          parseFloat(supply.amount) /
-                          Math.pow(10, supply.decimals);
+                        // Use withdrawable amount if user has borrows (to match withdraw modal),
+                        // otherwise use total supply amount
+                        // This ensures "Your Supplies" matches what's shown in withdraw modal
+                        const withdrawableAmount =
+                          withdrawableAmounts[supply.marketAddress];
+                        const onChainSupplyAmount =
+                          supplyAmounts[supply.marketAddress];
+
+                        // Determine the amount to display based on user's borrow status and data availability
+                        // This logic ensures consistency between "Your Supplies" and withdraw modal
+                        let amount: number;
+                        const isItemLoading =
+                          userBorrows.length > 0
+                            ? loadingWithdrawableAmounts ||
+                              (withdrawableAmount === undefined &&
+                                loadingSupplyAmounts)
+                            : onChainSupplyAmount === undefined &&
+                              loadingSupplyAmounts;
+
+                        if (isItemLoading) {
+                          // While loading, use fallback amount (will be replaced when loading completes)
+                          amount =
+                            onChainSupplyAmount !== undefined
+                              ? onChainSupplyAmount
+                              : parseFloat(supply.amount) /
+                                Math.pow(10, supply.decimals);
+                        } else if (userBorrows.length > 0) {
+                          // If user has borrows, show withdrawable amount (matches withdraw modal)
+                          if (withdrawableAmount !== undefined) {
+                            amount = withdrawableAmount;
+                          } else {
+                            // Fallback to supply amount if withdrawable fetch failed
+                            amount =
+                              onChainSupplyAmount !== undefined
+                                ? onChainSupplyAmount
+                                : parseFloat(supply.amount) /
+                                  Math.pow(10, supply.decimals);
+                          }
+                        } else if (onChainSupplyAmount !== undefined) {
+                          // If no borrows, show total supply amount
+                          amount = onChainSupplyAmount;
+                        } else {
+                          // Fallback to vault amount
+                          amount =
+                            parseFloat(supply.amount) /
+                            Math.pow(10, supply.decimals);
+                        }
+
                         const usdValue = amount * supply.price;
                         return (
                           <div
@@ -382,12 +572,20 @@ export default function EchelonPage() {
                               <div className="text-xs sm:text-sm text-zinc-500 dark:text-zinc-400 mb-1 sm:hidden">
                                 Balance
                               </div>
-                              <div className="text-zinc-950 dark:text-zinc-50 text-sm sm:text-base">
-                                {amount.toFixed(2)}
-                              </div>
-                              <div className="text-zinc-500 dark:text-zinc-400 text-xs">
-                                ${usdValue.toFixed(2)}
-                              </div>
+                              {isLoadingSupplyData ? (
+                                <div className="text-zinc-500 dark:text-zinc-400 text-sm sm:text-base">
+                                  Loading...
+                                </div>
+                              ) : (
+                                <>
+                                  <div className="text-zinc-950 dark:text-zinc-50 text-sm sm:text-base">
+                                    {amount.toFixed(2)}
+                                  </div>
+                                  <div className="text-zinc-500 dark:text-zinc-400 text-xs">
+                                    ${usdValue.toFixed(2)}
+                                  </div>
+                                </>
+                              )}
                             </div>
                             <div className="sm:block">
                               <div className="text-xs sm:text-sm text-zinc-500 dark:text-zinc-400 mb-1 sm:hidden">
@@ -794,26 +992,16 @@ export default function EchelonPage() {
             setSelectedAsset(null);
           }}
           asset={selectedAsset}
-          availableBalance={
-            selectedAsset && totalSupplyBalance > 0
-              ? // Use asset's actual LTV (loan-to-value) ratio instead of hardcoded 70%
-                // Formula: (Total Collateral Value * LTV) - Existing Borrows = Available Borrow Power (in USD)
-                // Then convert to asset amount: Available Borrow Power / Asset Price
-                Math.max(
-                  0,
-                  (totalSupplyBalance * (selectedAsset.ltv || 0.7) -
-                    totalBorrowBalance) /
-                    (selectedAsset.price || 1)
-                )
-              : 0
-          }
+          availableBalance={availableBorrowBalance}
           totalSupplyBalance={totalSupplyBalance}
           totalBorrowBalance={totalBorrowBalance}
           hasCollateral={userSupplies.length > 0 || totalSupplyBalance > 0}
-          loadingVault={loadingVault}
+          loadingVault={loadingVault || loadingMaxBorrow}
           onSuccess={async () => {
-            // Wait a bit for blockchain state to update after transaction confirmation
-            await new Promise((resolve) => setTimeout(resolve, 2000));
+            // Refresh on-chain max borrowable immediately after transaction completes
+            if (refreshMaxBorrow) {
+              await refreshMaxBorrow();
+            }
             // Refresh vault data after successful borrow
             await fetchVault();
           }}
@@ -832,7 +1020,20 @@ export default function EchelonPage() {
                   icon: selectedWithdrawAsset.icon,
                   price: selectedWithdrawAsset.price,
                   decimals: selectedWithdrawAsset.decimals,
-                  amount: selectedWithdrawAsset.amount,
+                  // Use on-chain supply amount if available, otherwise use vault amount
+                  // Convert to raw format for the amount field
+                  amount: (() => {
+                    const onChainAmount =
+                      supplyAmounts[selectedWithdrawAsset.marketAddress];
+                    if (onChainAmount !== undefined) {
+                      // Convert back to raw units for consistency
+                      return (
+                        onChainAmount *
+                        Math.pow(10, selectedWithdrawAsset.decimals)
+                      ).toString();
+                    }
+                    return selectedWithdrawAsset.amount;
+                  })(),
                   marketAddress: selectedWithdrawAsset.marketAddress,
                   faAddress: assets.find(
                     (a) => a.symbol === selectedWithdrawAsset.symbol
@@ -840,9 +1041,31 @@ export default function EchelonPage() {
                 }
               : null
           }
+          availableBalance={availableWithdrawBalance}
+          loadingAvailableBalance={loadingMaxWithdraw}
+          totalSupplyBalance={totalSupplyBalance}
+          totalBorrowBalance={totalBorrowBalance}
           onSuccess={async () => {
-            // Wait a bit for blockchain state to update after transaction confirmation
-            await new Promise((resolve) => setTimeout(resolve, 2000));
+            // Refresh on-chain max withdrawable immediately after transaction completes
+            if (refreshMaxWithdraw) {
+              await refreshMaxWithdraw();
+            }
+            // Coordinate refreshes to avoid race conditions - refresh supply first, then withdrawable
+            // This ensures data consistency and prevents excessive simultaneous API calls
+            const now = Date.now();
+            if (now - lastRefreshTimeRef.current > REFRESH_COOLDOWN_MS) {
+              lastRefreshTimeRef.current = now;
+              // Refresh supply amounts first
+              if (refreshSupplyAmounts) {
+                await refreshSupplyAmounts();
+              }
+              // Small delay to stagger the requests
+              await new Promise((resolve) => setTimeout(resolve, 50));
+              // Then refresh withdrawable amounts
+              if (refreshWithdrawableAmounts) {
+                await refreshWithdrawableAmounts();
+              }
+            }
             // Refresh vault data and balances after successful withdraw
             await fetchVault();
             if (movementWallet?.address) {
@@ -867,6 +1090,8 @@ export default function EchelonPage() {
                   icon: selectedRepayAsset.icon,
                   price: selectedRepayAsset.price,
                   decimals: selectedRepayAsset.decimals,
+                  // Always use raw amount from selectedRepayAsset (in raw units)
+                  // The modal will convert it properly
                   amount: selectedRepayAsset.amount,
                   marketAddress: selectedRepayAsset.marketAddress,
                   faAddress: assets.find(
@@ -877,12 +1102,22 @@ export default function EchelonPage() {
           }
           availableBalance={
             selectedRepayAsset
-              ? availableBalances[selectedRepayAsset.symbol.toUpperCase()] || 0
+              ? Math.min(
+                  availableBalances[selectedRepayAsset.symbol.toUpperCase()] ||
+                    0,
+                  // Use maxRepayable (on-chain liability) if available, otherwise use wallet balance
+                  maxRepayable !== null ? maxRepayable : Infinity
+                )
               : 0
           }
+          onChainLiability={maxRepayable}
+          totalSupplyBalance={totalSupplyBalance}
+          totalBorrowBalance={totalBorrowBalance}
           onSuccess={async () => {
-            // Wait a bit for blockchain state to update after transaction confirmation
-            await new Promise((resolve) => setTimeout(resolve, 2000));
+            // Refresh on-chain liability immediately after transaction completes
+            if (refreshMaxRepay) {
+              await refreshMaxRepay();
+            }
             // Refresh vault data and balances after successful repay
             await fetchVault();
             if (movementWallet?.address) {

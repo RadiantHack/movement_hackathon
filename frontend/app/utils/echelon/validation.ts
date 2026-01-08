@@ -130,7 +130,11 @@ export function validateBorrowingPower(
     };
   }
 
-  if (amount > availableBalance) {
+  // Add small tolerance for floating point precision (0.000001 = 1e-6)
+  // This handles cases where the amount is set to the exact max but floating point
+  // precision causes a tiny difference (e.g., 0.120169 vs 0.120168999999)
+  const TOLERANCE = 0.000001;
+  if (amount > availableBalance + TOLERANCE) {
     return {
       isValid: false,
       error: `Insufficient borrowing power. You can borrow up to ${availableBalance.toFixed(6)} based on your collateral.`,
