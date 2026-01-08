@@ -34,9 +34,10 @@ export const MessageToA2A: React.FC<MessageActionRenderProps> = ({
   const agentStyle = getAgentStyle(args.agentName);
 
   return (
-    <div className="bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-950/20 dark:to-emerald-950/20 border border-green-200 dark:border-green-800 rounded-lg sm:rounded-xl px-2.5 py-2 sm:px-3 sm:py-3 md:px-4 md:py-4 my-2 sm:my-3 shadow-sm hover:shadow-md transition-shadow a2a-message-enter w-full max-w-full overflow-hidden">
-      {/* Agent badges and query */}
-      <div className="space-y-1.5 sm:space-y-3">
+    <div className="my-2 sm:my-3 w-full max-w-full lg:max-w-3xl lg:mx-auto">
+      <div className="bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-950/20 dark:to-emerald-950/20 border border-green-200 dark:border-green-800 rounded-lg sm:rounded-xl px-2.5 py-2 sm:px-3 sm:py-3 md:px-4 md:py-4 shadow-sm hover:shadow-md transition-shadow a2a-message-enter w-full max-w-full overflow-hidden">
+        {/* Agent badges and query */}
+        <div className="space-y-1.5 sm:space-y-3">
         {/* Agent badges row */}
         <div className="flex items-center justify-center gap-1 sm:gap-2 md:gap-3 flex-wrap">
           <div className="flex flex-col items-center">
@@ -110,6 +111,7 @@ export const MessageToA2A: React.FC<MessageActionRenderProps> = ({
           </div>
         </div>
       </div>
+    </div>
     </div>
   );
 };
