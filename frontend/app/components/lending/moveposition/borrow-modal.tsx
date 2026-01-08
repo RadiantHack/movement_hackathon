@@ -201,6 +201,8 @@ export function BorrowModal({
       setSubmissionStep("");
       setDisplayTxHash(null);
       setShowButtonComplete(false);
+      // Reset hooks will be handled by the hooks themselves
+      setSimulatedRiskData(null);
       lastShownTxHashRef.current = { borrow: null, repay: null };
       return;
     }
@@ -360,7 +362,7 @@ export function BorrowModal({
     }
   }, [borrow.step, submissionStep]);
 
-  // Clear displayTxHash and button state when switching tabs
+  // Clear txHash display and button state when switching tabs
   useEffect(() => {
     if (prevActiveTabRef.current !== activeTab) {
       // Tab switched - clear the displayed txHash and button state immediately
@@ -370,34 +372,35 @@ export function BorrowModal({
     }
   }, [activeTab]);
 
-  // Show notification when txHash appears - only if it's a new txHash
+  // Show notification when txHash appears on current tab - only if it's a new txHash
   // Also reset amount input when transaction completes
   useEffect(() => {
-    const currentTxHash = borrow.txHash;
-    if (currentTxHash) {
-      // Only show if this is a new txHash we haven't shown before for this tab
-      const lastShown =
-        activeTab === "borrow"
-          ? lastShownTxHashRef.current.borrow
-          : lastShownTxHashRef.current.repay;
-
-      if (currentTxHash !== lastShown) {
-        setDisplayTxHash(currentTxHash);
-        if (activeTab === "borrow") {
-          lastShownTxHashRef.current.borrow = currentTxHash;
-        } else {
-          lastShownTxHashRef.current.repay = currentTxHash;
-        }
+    if (activeTab === "borrow" && borrow.txHash) {
+      // Only show if this is a new txHash we haven't shown before
+      if (borrow.txHash !== lastShownTxHashRef.current.borrow) {
+        setDisplayTxHash(borrow.txHash);
+        lastShownTxHashRef.current.borrow = borrow.txHash;
         // Reset amount input when transaction completes
         setAmount("");
       }
-    } else {
-      // Clear displayTxHash when txHash is cleared
+    } else if (activeTab === "repay" && borrow.txHash) {
+      // Only show if this is a new txHash we haven't shown before
+      if (borrow.txHash !== lastShownTxHashRef.current.repay) {
+        setDisplayTxHash(borrow.txHash);
+        lastShownTxHashRef.current.repay = borrow.txHash;
+        // Reset amount input when transaction completes
+        setAmount("");
+      }
+    } else if (
+      (activeTab === "borrow" && !borrow.txHash) ||
+      (activeTab === "repay" && !borrow.txHash)
+    ) {
+      // Clear displayTxHash when current tab's txHash is cleared
       setDisplayTxHash(null);
     }
   }, [activeTab, borrow.txHash]);
 
-  // Manage button complete state - show briefly then clear
+  // Show "Transaction Complete" on button briefly, then clear immediately
   // This ensures button state clears as soon as notification appears
   useEffect(() => {
     if (borrow.txHash && !showButtonComplete) {
@@ -406,6 +409,7 @@ export function BorrowModal({
       const timer = setTimeout(() => {
         setShowButtonComplete(false);
       }, 100); // Very short delay just for visual feedback
+
       return () => clearTimeout(timer);
     }
     // Also clear if txHash disappears
@@ -413,6 +417,14 @@ export function BorrowModal({
       setShowButtonComplete(false);
     }
   }, [borrow.txHash, showButtonComplete]);
+
+  const handleTabSwitch = (tab: "borrow" | "repay") => {
+    setActiveTab(tab);
+    setAmount("");
+    // Reset hooks will be handled by the hooks themselves
+    setSimulatedRiskData(null);
+    setShowButtonComplete(false);
+  };
   // Build next portfolio state for risk simulation API
   const buildNextPortfolioState = useMemo(() => {
     if (!portfolioData || !amount || !asset || parseFloat(amount) <= 0) {
@@ -507,20 +519,26 @@ export function BorrowModal({
 
   /**
    * Check if we should get risk evaluation
-   * Only for borrow tab, and only if there's collateral
+   * For borrow tab: only if there's collateral
+   * For repay tab: always simulate (repaying improves health factor)
    */
   const shouldGetRiskEval = (): boolean => {
-    if (activeTab !== "borrow") {
-      return false;
-    }
     if (!buildNextPortfolioState) {
       return false;
     }
-    // Check if there's collateral
-    const hasCollateral = buildNextPortfolioState.collaterals.some(
-      (c) => BigInt(c.amount) > 0
-    );
-    return hasCollateral;
+
+    if (activeTab === "borrow") {
+      // For borrow: only simulate if there's collateral
+      const hasCollateral = buildNextPortfolioState.collaterals.some(
+        (c) => BigInt(c.amount) > 0
+      );
+      return hasCollateral;
+    } else if (activeTab === "repay") {
+      // For repay: always simulate (repaying reduces debt, improves health factor)
+      return true;
+    }
+
+    return false;
   };
 
   /**
@@ -814,8 +832,7 @@ export function BorrowModal({
       <div className="flex p-1.5 sm:p-2 gap-1.5 sm:gap-2 border-b border-zinc-200 dark:border-zinc-800">
         <button
           onClick={() => {
-            setActiveTab("borrow");
-            setAmount("");
+            handleTabSwitch("borrow");
           }}
           className={`flex-1 py-2 sm:py-3 text-xs sm:text-sm rounded-md font-medium transition-colors ${
             activeTab === "borrow"
@@ -827,8 +844,7 @@ export function BorrowModal({
         </button>
         <button
           onClick={() => {
-            setActiveTab("repay");
-            setAmount("");
+            handleTabSwitch("repay");
           }}
           className={`flex-1 py-2 sm:py-3 text-xs sm:text-sm font-medium rounded-md transition-colors ${
             activeTab === "repay"
@@ -1035,12 +1051,14 @@ export function BorrowModal({
         )}
 
         {/* Success Message - Self-managing, shows for 5 seconds then auto-dismisses */}
+        {/* Key ensures component unmounts completely when displayTxHash changes */}
         {displayTxHash && (
           <TransactionSuccessMessage
             key={displayTxHash}
             txHash={displayTxHash}
             onClose={() => {
               // Clear displayTxHash when notification closes
+              // The lastShownTxHashRef prevents it from showing again
               setDisplayTxHash(null);
               setShowButtonComplete(false);
             }}
@@ -1050,9 +1068,9 @@ export function BorrowModal({
         {/* Submit Button */}
         <button
           onClick={handleSubmit}
-          disabled={(!canReview || submitting) && !displayTxHash}
+          disabled={(!canReview || submitting) && !borrow.txHash}
           className={`w-full font-semibold py-2.5 sm:py-3 md:py-3.5 rounded-lg transition-all duration-200 mt-3 sm:mt-4 shadow-lg text-xs sm:text-sm md:text-base ${
-            displayTxHash && showButtonComplete
+            borrow.txHash
               ? "bg-green-600 text-white cursor-pointer"
               : canReview && !submitting
                 ? "bg-blue-600 text-white hover:bg-blue-700 hover:shadow-xl active:scale-[0.98] cursor-pointer"
@@ -1060,9 +1078,9 @@ export function BorrowModal({
           }`}
         >
           {displayTxHash && showButtonComplete ? (
-            <span className="flex items-center justify-center gap-2">
+            <span className="flex items-center justify-center gap-1.5 sm:gap-2">
               <svg
-                className="w-5 h-5"
+                className="w-4 h-4 sm:w-5 sm:h-5"
                 fill="none"
                 viewBox="0 0 24 24"
                 stroke="currentColor"
@@ -1077,9 +1095,9 @@ export function BorrowModal({
               Transaction Complete
             </span>
           ) : submitting ? (
-            <span className="flex items-center justify-center gap-2">
+            <span className="flex items-center justify-center gap-1.5 sm:gap-2">
               <svg
-                className="w-5 h-5 animate-spin"
+                className="w-4 h-4 sm:w-5 sm:h-5 animate-spin"
                 fill="none"
                 viewBox="0 0 24 24"
               >
@@ -1104,8 +1122,40 @@ export function BorrowModal({
             validationError
           ) : parsedAmount <= 0 ? (
             "Enter amount"
+          ) : activeTab === "borrow" ? (
+            <span className="flex items-center justify-center gap-1.5 sm:gap-2">
+              <svg
+                className="w-4 h-4 sm:w-5 sm:h-5"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"
+                />
+              </svg>
+              Borrow {asset.symbol}
+            </span>
           ) : (
-            `${activeTab === "borrow" ? "Borrow" : "Repay"} ${asset.symbol}`
+            <span className="flex items-center justify-center gap-1.5 sm:gap-2">
+              <svg
+                className="w-4 h-4 sm:w-5 sm:h-5"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6"
+                />
+              </svg>
+              Repay {asset.symbol}
+            </span>
           )}
         </button>
 
