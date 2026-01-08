@@ -504,31 +504,30 @@ export async function executeSupplyTransaction(
         const coinStore = resources.find((r) => r.type === coinStoreResource);
 
         let coinBalance = BigInt(0);
+        let faBalance = BigInt(0);
 
-        // Check coin store balance
+        // Check coin store balance (legacy, but still valid during migration)
         if (coinStore) {
           coinBalance = BigInt((coinStore.data as any)?.coin?.value || "0");
         }
 
-        // Also check FA balance (for MOVE/APT that have been converted to FA)
-        // Asset type 0xa (0x000000000000000000000000000000000000000000000000000000000000000a) is FA MOVE
-        // Coin type 0x1::aptos_coin::AptosCoin is deprecated coin store but some wallets still have it
-        if (coinType === "0x1::aptos_coin::AptosCoin") {
-          try {
-            // Try to get FA balance using the fungible asset resource type
-            const faRes: any = await aptos.account.getAccountResource({
-              accountAddress: senderAddress,
-              resourceType: faResource as `${string}::${string}::${string}`,
-            });
-            const faBalanceValue = faRes?.data?.balance ?? faRes?.data?.value;
-            const faBalance = BigInt(faBalanceValue || "0");
-            // Add FA balance to coin store balance (user can have both)
-            coinBalance = coinBalance + faBalance;
-            console.log(
-              `[Echelon] Found FA balance for MOVE: ${faBalance.toString()}, total: ${coinBalance.toString()}`
-            );
-          } catch (_) {
-            // FA balance not found via resource, try fetching from balance API (which handles asset type 0xa)
+        // Check FA balance for all coin types (not just MOVE/APT)
+        // According to Aptos FA migration: all coins can have both CoinStore and FA balances
+        try {
+          const faRes: any = await aptos.account.getAccountResource({
+            accountAddress: senderAddress,
+            resourceType: faResource as `${string}::${string}::${string}`,
+          });
+          const faBalanceValue = faRes?.data?.balance ?? faRes?.data?.value;
+          if (faBalanceValue != null) {
+            faBalance = BigInt(faBalanceValue);
+          }
+        } catch (_) {
+          // FA balance not found via resource, try balance API for MOVE/APT
+          // Asset type 0xa (0x000000000000000000000000000000000000000000000000000000000000000a) is FA MOVE
+          if (coinType === "0x1::aptos_coin::AptosCoin") {
+            try {
+              // Try fetching from balance API (which handles asset type 0xa)
             try {
               const balanceResponse = await fetch(
                 `/api/balance?address=${encodeURIComponent(senderAddress)}&token=MOVE`
@@ -553,23 +552,32 @@ export async function executeSupplyTransaction(
                     );
                   });
                   if (moveBalance) {
-                    const faBalance = BigInt(moveBalance.amount || "0");
-                    coinBalance = coinBalance + faBalance;
-                    console.log(
-                      `[Echelon] Found FA balance via API for MOVE: ${faBalance.toString()}, total: ${coinBalance.toString()}`
-                    );
+                    faBalance = BigInt(moveBalance.amount || "0");
                   }
                 }
               }
-            } catch (apiError) {
-              // Balance API failed, continue with coin store balance only
-              console.warn(
-                "[Echelon] Could not fetch FA balance from API:",
-                apiError
-              );
+              } catch (apiError) {
+                // Balance API failed, continue with coin store balance only
+                console.warn(
+                  "[Echelon] Could not fetch FA balance from API:",
+                  apiError
+                );
+              }
             }
           }
         }
+
+        // Sum both balances (user may have both during migration period)
+        // According to Aptos FA migration best practices: aggregate both balances
+        const totalBalance = coinBalance + faBalance;
+        
+        if (faBalance > BigInt(0)) {
+          console.log(
+            `[Echelon] Balance check for ${asset.symbol}: CoinStore=${coinBalance.toString()}, FA=${faBalance.toString()}, Total=${totalBalance.toString()}`
+          );
+        }
+        
+        coinBalance = totalBalance;
 
         if (coinBalance === BigInt(0)) {
           return {

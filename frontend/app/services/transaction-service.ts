@@ -373,6 +373,16 @@ async function checkGasBalance(
 
 /**
  * Check underlying asset balance before submit (client-side guard)
+ * 
+ * According to Aptos FA migration best practices:
+ * - Always check both CoinStore (legacy) and FA (new) balances
+ * - Sum both balances for accurate total (user may have both during migration)
+ * - CoinStore is deprecated but still valid during transition period
+ * 
+ * @param address - Wallet address to check
+ * @param coinType - Coin type (e.g., "0x1::aptos_coin::AptosCoin")
+ * @param requiredRawAmount - Required amount in raw units
+ * @param onProgress - Optional progress callback
  */
 async function checkUnderlyingBalance(
   address: string,
@@ -392,7 +402,7 @@ async function checkUnderlyingBalance(
     let faBalance = BigInt(0);
     let coinStoreBalance = BigInt(0);
 
-    // Try fungible asset (FA) balance
+    // Try fungible asset (FA) balance - new standard
     try {
       const faRes: any = await aptos.getAccountResource({
         accountAddress: address,
@@ -403,10 +413,10 @@ async function checkUnderlyingBalance(
         faBalance = BigInt(val);
       }
     } catch (_) {
-      // ignore
+      // FA balance not found, continue
     }
 
-    // Try CoinStore balance
+    // Try CoinStore balance - legacy but still valid during migration
     try {
       const csRes: any = await aptos.getAccountResource({
         accountAddress: address,
@@ -417,10 +427,11 @@ async function checkUnderlyingBalance(
         coinStoreBalance = BigInt(val);
       }
     } catch (_) {
-      // ignore
+      // CoinStore not found, continue
     }
 
-    // Accept either FA balance or coin store balance (both are valid)
+    // Sum both balances (user may have both during migration period)
+    // According to Aptos FA migration: both are valid and should be aggregated
     const totalBalance = faBalance + coinStoreBalance;
 
     if (totalBalance >= required) {
