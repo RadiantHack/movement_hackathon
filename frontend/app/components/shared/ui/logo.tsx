@@ -24,7 +24,10 @@ export function Logo({
 }: LogoProps) {
   const logoSize =
     typeof size === "number" ? size : sizeMap[size] || sizeMap.md;
-  const logoSrc = variant === "icon" ? "/logo-icon.svg" : "/logo.svg";
+  // Use SVG icons - use 192x192 for smaller sizes, 512x512 for larger
+  const logoSrc = logoSize <= 64 
+    ? "/icons/icon-192x192.svg" 
+    : "/icons/icon-512x512.svg";
 
   return (
     <div
@@ -36,7 +39,7 @@ export function Logo({
         alt="Movement Nexus Logo"
         width={logoSize}
         height={logoSize}
-        className="w-full h-full object-contain"
+        className="w-full h-full object-contain rounded-xl"
       />
     </div>
   );
