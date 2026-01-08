@@ -41,12 +41,12 @@ export interface CoinBalanceResult {
 /**
  * Checks both FA balance (asset type 0xa) and coin store balance (0x1::aptos_coin::AptosCoin)
  * for MOVE/APT tokens. Both are treated as valid balances.
- * 
+ *
  * According to Aptos FA migration best practices:
  * - Always check both CoinStore and FA balances
  * - Sum both balances for accurate total
  * - CoinStore is deprecated but still valid during migration
- * 
+ *
  * @param aptos - Aptos SDK instance
  * @param address - Wallet address to check
  * @returns Balance information including both types
@@ -137,7 +137,7 @@ export async function checkMoveBalance(
 /**
  * Checks balance for any coin type (not just MOVE/APT)
  * Checks both CoinStore and FA balances according to Aptos FA migration best practices
- * 
+ *
  * @param aptos - Aptos SDK instance
  * @param address - Wallet address to check
  * @param coinType - Coin type (e.g., "0x1::aptos_coin::AptosCoin" or custom coin type)
@@ -183,7 +183,10 @@ export async function checkCoinBalance(
       // FA balance not found, continue
     }
   } catch (error) {
-    console.warn(`[BalanceUtils] Error checking balance for ${coinType}:`, error);
+    console.warn(
+      `[BalanceUtils] Error checking balance for ${coinType}:`,
+      error
+    );
   }
 
   const totalBalance = coinStoreBalance + faBalance;
@@ -201,11 +204,11 @@ export async function checkCoinBalance(
 /**
  * Checks if user has sufficient gas balance (MOVE/APT) for transactions.
  * Accepts both FA balance (asset type 0xa) and coin store balance.
- * 
+ *
  * According to Aptos FA migration:
  * - Both CoinStore and FA balances are valid
  * - Total balance = CoinStore + FA balance
- * 
+ *
  * @param aptos - Aptos SDK instance
  * @param address - Wallet address to check
  * @param onProgress - Optional progress callback

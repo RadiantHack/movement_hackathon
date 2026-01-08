@@ -373,12 +373,12 @@ async function checkGasBalance(
 
 /**
  * Check underlying asset balance before submit (client-side guard)
- * 
+ *
  * According to Aptos FA migration best practices:
  * - Always check both CoinStore (legacy) and FA (new) balances
  * - Sum both balances for accurate total (user may have both during migration)
  * - CoinStore is deprecated but still valid during transition period
- * 
+ *
  * @param address - Wallet address to check
  * @param coinType - Coin type (e.g., "0x1::aptos_coin::AptosCoin")
  * @param requiredRawAmount - Required amount in raw units
