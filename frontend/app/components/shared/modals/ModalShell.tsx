@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useEffect } from "react";
 
 interface ModalShellProps {
   onClose: () => void;
@@ -13,15 +13,38 @@ export default function ModalShell({
   containerClass = "max-w-lg",
   children,
 }: ModalShellProps) {
+  // Prevent body scroll when modal is open
+  useEffect(() => {
+    const originalStyle = window.getComputedStyle(document.body).overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = originalStyle;
+    };
+  }, []);
+
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/60 dark:bg-black/80 backdrop-blur-md animate-fade-in overflow-y-auto"
+      className="fixed inset-0 z-50 flex items-start sm:items-center justify-center p-2 sm:p-3 md:p-4 bg-black/60 dark:bg-black/80 backdrop-blur-md animate-fade-in"
+      style={{ 
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        overflow: 'hidden',
+        touchAction: 'none'
+      }}
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
       <div
-        className={`relative w-full ${containerClass} my-auto rounded-3xl border border-zinc-200/60 dark:border-zinc-700/40 bg-white/95 dark:bg-zinc-900/95 backdrop-blur-xl shadow-2xl shadow-zinc-900/20 dark:shadow-zinc-950/50 animate-scale-in max-h-[calc(100vh-2rem)] sm:max-h-[calc(100vh-3rem)] flex flex-col`}
+        className={`relative w-full ${containerClass} mt-2 sm:mt-0 sm:my-auto rounded-3xl border border-zinc-200/60 dark:border-zinc-700/40 bg-white/95 dark:bg-zinc-900/95 backdrop-blur-xl shadow-2xl shadow-zinc-900/20 dark:shadow-zinc-950/50 animate-scale-in max-h-[calc(100dvh-1rem)] sm:max-h-[calc(100dvh-2rem)] md:max-h-[calc(100dvh-3rem)] flex flex-col`}
+        style={{
+          maxHeight: 'calc(100dvh - 1rem)',
+          touchAction: 'pan-y',
+          overflow: 'hidden'
+        }}
       >
         {/* Background decoration */}
         <div className="absolute -top-32 -right-32 w-64 h-64 bg-gradient-to-br from-purple-500/10 via-violet-500/5 to-purple-500/10 rounded-full blur-3xl pointer-events-none" />
@@ -50,7 +73,13 @@ export default function ModalShell({
           </svg>
         </button>
 
-        <div className="relative z-10 p-4 sm:p-5 md:p-6 overflow-y-auto flex-1 min-h-0">
+        <div 
+          className="relative z-10 p-4 sm:p-5 md:p-6 overflow-y-auto flex-1 min-h-0 overscroll-contain"
+          style={{
+            WebkitOverflowScrolling: 'touch',
+            touchAction: 'pan-y'
+          }}
+        >
           {children}
         </div>
       </div>
