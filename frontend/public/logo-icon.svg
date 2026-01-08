@@ -1,0 +1,156 @@
+<svg width="256" height="256" viewBox="0 0 256 256" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- Gradients -->
+    <linearGradient id="iconPrimary" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0EA5E9;stop-opacity:1" />
+      <stop offset="50%" style="stop-color:#3B82F6;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#6366F1;stop-opacity:1" />
+    </linearGradient>
+    
+    <linearGradient id="iconAccent" x1="100%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#8B5CF6;stop-opacity:1" />
+      <stop offset="50%" style="stop-color:#A855F7;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#EC4899;stop-opacity:1" />
+    </linearGradient>
+    
+    <linearGradient id="iconCyan" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#06B6D4;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#0EA5E9;stop-opacity:1" />
+    </linearGradient>
+    
+    <radialGradient id="iconNodeGlow">
+      <stop offset="0%" style="stop-color:#FFFFFF;stop-opacity:1" />
+      <stop offset="40%" style="stop-color:#3B82F6;stop-opacity:0.9" />
+      <stop offset="100%" style="stop-color:#6366F1;stop-opacity:0.6" />
+    </radialGradient>
+    
+    <!-- Filters -->
+    <filter id="iconGlow">
+      <feGaussianBlur stdDeviation="5" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    
+    <filter id="iconSoftGlow">
+      <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  
+  <!-- Background -->
+  <circle cx="128" cy="128" r="120" fill="url(#iconPrimary)" opacity="0.06"/>
+  <circle cx="128" cy="128" r="105" fill="url(#iconCyan)" opacity="0.05"/>
+  
+  <!-- Outer Rings -->
+  <circle cx="128" cy="128" r="110" stroke="url(#iconPrimary)" stroke-width="2" fill="none" opacity="0.3"/>
+  <circle cx="128" cy="128" r="105" stroke="url(#iconCyan)" stroke-width="1" fill="none" opacity="0.25" stroke-dasharray="5,4"/>
+  
+  <!-- Connection Lines -->
+  <g opacity="0.4" stroke-width="1.5" stroke-linecap="round" filter="url(#iconSoftGlow)">
+    <line x1="128" y1="20" x2="128" y2="75" stroke="url(#iconPrimary)"/>
+    <line x1="203.4" y1="52.6" x2="158" y2="93" stroke="url(#iconCyan)"/>
+    <line x1="236" y1="128" x2="181" y2="128" stroke="url(#iconAccent)"/>
+    <line x1="203.4" y1="203.4" x2="158" y2="163" stroke="url(#iconPrimary)"/>
+    <line x1="128" y1="236" x2="128" y2="181" stroke="url(#iconCyan)"/>
+    <line x1="52.6" y1="203.4" x2="98" y2="163" stroke="url(#iconAccent)"/>
+    <line x1="20" y1="128" x2="75" y2="128" stroke="url(#iconPrimary)"/>
+    <line x1="52.6" y1="52.6" x2="98" y2="93" stroke="url(#iconCyan)"/>
+  </g>
+  
+  <!-- 8 Agent Nodes with Icons -->
+  <g filter="url(#iconGlow)">
+    <!-- 1. Balance (Top) -->
+    <circle cx="128" cy="20" r="10" fill="url(#iconPrimary)" opacity="0.3"/>
+    <circle cx="128" cy="20" r="8" fill="url(#iconNodeGlow)"/>
+    <circle cx="128" cy="20" r="5" fill="url(#iconPrimary)"/>
+    <path d="M 126 19 L 126 21 M 130 19 L 130 21 M 125 19 L 131 19 L 131 21 L 125 21 Z" 
+          stroke="white" stroke-width="0.5" fill="none"/>
+    
+    <!-- 2. Swap (Top Right) -->
+    <circle cx="203.4" cy="52.6" r="10" fill="url(#iconCyan)" opacity="0.3"/>
+    <circle cx="203.4" cy="52.6" r="8" fill="url(#iconNodeGlow)"/>
+    <circle cx="203.4" cy="52.6" r="5" fill="url(#iconCyan)"/>
+    <path d="M 201 51 L 204 51 L 203 50 M 204 51 L 203 52 M 206 55 L 203 55 L 204 54 M 203 55 L 204 56" 
+          stroke="white" stroke-width="0.5" stroke-linecap="round"/>
+    
+    <!-- 3. Transfer (Right) -->
+    <circle cx="236" cy="128" r="10" fill="url(#iconAccent)" opacity="0.3"/>
+    <circle cx="236" cy="128" r="8" fill="url(#iconNodeGlow)"/>
+    <circle cx="236" cy="128" r="5" fill="url(#iconAccent)"/>
+    <path d="M 233 128 L 239 128 M 239 128 L 237 126 M 239 128 L 237 130" 
+          stroke="white" stroke-width="0.6" stroke-linecap="round"/>
+    
+    <!-- 4. Bridge (Bottom Right) -->
+    <circle cx="203.4" cy="203.4" r="10" fill="url(#iconPrimary)" opacity="0.3"/>
+    <circle cx="203.4" cy="203.4" r="8" fill="url(#iconNodeGlow)"/>
+    <circle cx="203.4" cy="203.4" r="5" fill="url(#iconPrimary)"/>
+    <path d="M 201 205 Q 203.4 201, 206 205 M 201 205 L 201 206 M 206 205 L 206 206" 
+          stroke="white" stroke-width="0.5" stroke-linecap="round" fill="none"/>
+    
+    <!-- 5. Lending (Bottom) -->
+    <circle cx="128" cy="236" r="10" fill="url(#iconCyan)" opacity="0.3"/>
+    <circle cx="128" cy="236" r="8" fill="url(#iconNodeGlow)"/>
+    <circle cx="128" cy="236" r="5" fill="url(#iconCyan)"/>
+    <ellipse cx="128" cy="235" rx="2" ry="1" fill="white" opacity="0.9"/>
+    <ellipse cx="128" cy="236" rx="2" ry="1" fill="white" opacity="0.9"/>
+    <ellipse cx="128" cy="237" rx="2" ry="1" fill="white" opacity="0.9"/>
+    
+    <!-- 6. Premium (Bottom Left) -->
+    <circle cx="52.6" cy="203.4" r="10" fill="url(#iconAccent)" opacity="0.3"/>
+    <circle cx="52.6" cy="203.4" r="8" fill="url(#iconNodeGlow)"/>
+    <circle cx="52.6" cy="203.4" r="5" fill="url(#iconAccent)"/>
+    <path d="M 52.6 201 L 53.3 203 L 55.3 203.4 L 54 204.7 L 54.3 206.7 L 52.6 205.9 L 50.9 206.7 L 51.2 204.7 L 49.9 203.4 L 51.9 203 Z" 
+          fill="white"/>
+    
+    <!-- 7. Sentiment (Left) -->
+    <circle cx="20" cy="128" r="10" fill="url(#iconPrimary)" opacity="0.3"/>
+    <circle cx="20" cy="128" r="8" fill="url(#iconNodeGlow)"/>
+    <circle cx="20" cy="128" r="5" fill="url(#iconPrimary)"/>
+    <path d="M 17 130 L 19 128.5 L 20 129 L 21 126 L 23 128" 
+          stroke="white" stroke-width="0.6" stroke-linecap="round" fill="none"/>
+    
+    <!-- 8. Orchestrator (Top Left) -->
+    <circle cx="52.6" cy="52.6" r="10" fill="url(#iconCyan)" opacity="0.3"/>
+    <circle cx="52.6" cy="52.6" r="8" fill="url(#iconNodeGlow)"/>
+    <circle cx="52.6" cy="52.6" r="5" fill="url(#iconCyan)"/>
+    <circle cx="52.6" cy="52.6" r="1" fill="white"/>
+    <circle cx="50" cy="51" r="0.8" fill="white"/>
+    <circle cx="55.2" cy="51" r="0.8" fill="white"/>
+    <circle cx="50" cy="54.2" r="0.8" fill="white"/>
+    <circle cx="55.2" cy="54.2" r="0.8" fill="white"/>
+    <line x1="52.6" y1="52.6" x2="50" y2="51" stroke="white" stroke-width="0.3"/>
+    <line x1="52.6" y1="52.6" x2="55.2" y2="51" stroke="white" stroke-width="0.3"/>
+    <line x1="52.6" y1="52.6" x2="50" y2="54.2" stroke="white" stroke-width="0.3"/>
+    <line x1="52.6" y1="52.6" x2="55.2" y2="54.2" stroke="white" stroke-width="0.3"/>
+  </g>
+  
+  <!-- Central Hexagon -->
+  <g>
+    <path d="M 128 75 L 168 97 L 168 159 L 128 181 L 88 159 L 88 97 Z" 
+          fill="url(#iconPrimary)" opacity="0.85" filter="url(#iconSoftGlow)"/>
+    <path d="M 128 82 L 162 101 L 162 155 L 128 174 L 94 155 L 94 101 Z" 
+          fill="url(#iconCyan)" opacity="0.4"/>
+    <path d="M 128 82 L 162 101 L 162 155 L 128 174 L 94 155 L 94 101 Z" 
+          stroke="white" stroke-width="1.5" fill="none" opacity="0.3"/>
+  </g>
+  
+  <!-- M Letter -->
+  <g filter="url(#iconSoftGlow)">
+    <path d="M 101 105 L 101 151 M 101 105 L 116 120 L 128 108 L 140 120 L 155 105 M 155 105 L 155 151" 
+          stroke="white" stroke-width="8" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+    <path d="M 101 105 L 101 145 M 101 105 L 116 120 L 128 108 L 140 120 L 155 105 M 155 105 L 155 145" 
+          stroke="url(#iconCyan)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none" opacity="0.6"/>
+  </g>
+  
+  <!-- Orbital Rings -->
+  <g opacity="0.25" stroke-width="1" fill="none">
+    <circle cx="128" cy="128" r="80" stroke="url(#iconPrimary)" stroke-dasharray="4,5"/>
+    <circle cx="128" cy="128" r="65" stroke="url(#iconCyan)" stroke-dasharray="3,4"/>
+  </g>
+</svg>
