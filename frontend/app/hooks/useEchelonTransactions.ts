@@ -17,6 +17,25 @@ import {
 } from "@aptos-labs/ts-sdk";
 import { toHex } from "viem";
 import { store } from "@/store";
+import type {
+  ConfigState,
+  SignRawHashFunction,
+  TransactionFunctionArgument,
+  TransactionData,
+  RawTransactionWithChainId,
+  TokenBalance,
+  BalanceApiResponse,
+  CoinStoreData,
+  AccountResource,
+  FungibleAssetResource,
+  ErrorWithMessage,
+} from "@/app/types/echelon-transactions";
+import type { MovementWallet } from "@/app/types/moveposition";
+import {
+  isErrorWithMessage,
+  isError,
+  getErrorMessage,
+} from "@/app/types/echelon-transactions";
 
 const ECHELON_CONTRACT =
   "0x6a01d5761d43a5b5a0ccbfc42edf2d02c0611464aae99a2ea0e0d4819f0550b5";
@@ -40,7 +59,7 @@ const MOVEMENT_CHAIN_ID = 126;
  * Get Movement RPC URL from runtime config
  */
 function getMovementRpc(): string {
-  const state = store.getState() as any;
+  const state = store.getState() as ConfigState;
   const cfg = state.config || {};
   if (!cfg.loaded) {
     // Fallback to default if config not loaded
@@ -74,22 +93,18 @@ export interface RepayTransactionParams {
   asset: AssetInfo;
   amount: number;
   maxRepayable: number;
-  movementWallet: {
-    address: string;
-  } & any;
+  movementWallet: MovementWallet;
   publicKey: string;
-  signRawHash: (params: any) => Promise<{ signature: string }>;
+  signRawHash: SignRawHashFunction;
   onStepChange: (step: string) => void;
 }
 
 export interface SupplyTransactionParams {
   asset: AssetInfo;
   amount: number;
-  movementWallet: {
-    address: string;
-  } & any;
+  movementWallet: MovementWallet;
   publicKey: string;
-  signRawHash: (params: any) => Promise<{ signature: string }>;
+  signRawHash: SignRawHashFunction;
   onStepChange: (step: string) => void;
 }
 
@@ -100,11 +115,9 @@ export interface BorrowTransactionParams {
   hasCollateral: boolean;
   totalSupplyBalance: number;
   totalBorrowBalance: number;
-  movementWallet: {
-    address: string;
-  } & any;
+  movementWallet: MovementWallet;
   publicKey: string;
-  signRawHash: (params: any) => Promise<{ signature: string }>;
+  signRawHash: SignRawHashFunction;
   onStepChange: (step: string) => void;
 }
 
@@ -112,11 +125,9 @@ export interface WithdrawTransactionParams {
   asset: AssetInfo;
   amount: number;
   percentage: number;
-  movementWallet: {
-    address: string;
-  } & any;
+  movementWallet: MovementWallet;
   publicKey: string;
-  signRawHash: (params: any) => Promise<{ signature: string }>;
+  signRawHash: SignRawHashFunction;
   onStepChange: (step: string) => void;
 }
 
@@ -210,7 +221,7 @@ export async function executeRepayTransaction(
     // Build the transaction payload
     let functionName: `${string}::${string}::${string}`;
     let typeArguments: string[] | undefined = undefined;
-    let functionArguments: any[];
+    let functionArguments: TransactionFunctionArgument[];
 
     if (isFungibleAsset && asset.faAddress) {
       // For fungible assets, use repay_fa or repay_all_fa (no type arguments needed)
@@ -250,7 +261,7 @@ export async function executeRepayTransaction(
       isFungibleAsset,
     });
 
-    const transactionData: any = {
+    const transactionData: TransactionData = {
       function: functionName,
       functionArguments,
     };
@@ -266,7 +277,7 @@ export async function executeRepayTransaction(
       data: transactionData,
     });
 
-    const txnObj = rawTxn as any;
+    const txnObj = rawTxn as unknown as RawTransactionWithChainId;
     if (txnObj.rawTransaction) {
       txnObj.rawTransaction.chain_id = new ChainId(MOVEMENT_CHAIN_ID);
     }
@@ -327,16 +338,20 @@ export async function executeRepayTransaction(
       success: true,
       txHash: pending.hash,
     };
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("[Repay Utility] Error occurred:", err);
-    console.error("[Repay Utility] Error details:", {
-      message: err.message,
-      stack: err.stack,
-      name: err.name,
-    });
+
+    let errorMessage = getErrorMessage(err);
+    if (isErrorWithMessage(err)) {
+      const errorDetails: ErrorWithMessage = err;
+      console.error("[Repay Utility] Error details:", {
+        message: errorDetails.message,
+        stack: errorDetails.stack,
+        name: errorDetails.name,
+      });
+    }
 
     // Parse Move abort errors for better user experience
-    let errorMessage = err.message || "Transaction failed";
 
     if (errorMessage.includes("Move abort")) {
       const abortMatch = errorMessage.match(
@@ -431,17 +446,19 @@ export async function executeSupplyTransaction(
               .toUpperCase()
               .replace(/\./g, "")
               .trim();
-            const tokenBalance = balanceData.balances.find((b: any) => {
-              const normalizedSymbol = (b.metadata?.symbol || "")
-                .toUpperCase()
-                .replace(/\./g, "")
-                .trim();
-              return (
-                normalizedSymbol === normalizedToken ||
-                normalizedSymbol.startsWith(normalizedToken) ||
-                normalizedToken.startsWith(normalizedSymbol)
-              );
-            });
+            const tokenBalance = balanceData.balances.find(
+              (b: TokenBalance) => {
+                const normalizedSymbol = (b.metadata?.symbol || "")
+                  .toUpperCase()
+                  .replace(/\./g, "")
+                  .trim();
+                return (
+                  normalizedSymbol === normalizedToken ||
+                  normalizedSymbol.startsWith(normalizedToken) ||
+                  normalizedToken.startsWith(normalizedSymbol)
+                );
+              }
+            );
 
             if (tokenBalance) {
               actualDecimals =
@@ -479,7 +496,7 @@ export async function executeSupplyTransaction(
             numericAmount * Math.pow(10, actualDecimals)
           ).toString();
         }
-      } catch (balanceError: any) {
+      } catch (balanceError: unknown) {
         actualDecimals = asset.decimals || 8;
         rawAmount = Math.floor(
           numericAmount * Math.pow(10, actualDecimals)
@@ -504,32 +521,31 @@ export async function executeSupplyTransaction(
         const coinStore = resources.find((r) => r.type === coinStoreResource);
 
         let coinBalance = BigInt(0);
+        let faBalance = BigInt(0);
 
-        // Check coin store balance
+        // Check coin store balance (legacy, but still valid during migration)
         if (coinStore) {
-          coinBalance = BigInt((coinStore.data as any)?.coin?.value || "0");
+          const coinStoreData = coinStore.data as CoinStoreData;
+          coinBalance = BigInt(coinStoreData?.coin?.value?.toString() || "0");
         }
 
-        // Also check FA balance (for MOVE/APT that have been converted to FA)
-        // Asset type 0xa (0x000000000000000000000000000000000000000000000000000000000000000a) is FA MOVE
-        // Coin type 0x1::aptos_coin::AptosCoin is deprecated coin store but some wallets still have it
-        if (coinType === "0x1::aptos_coin::AptosCoin") {
-          try {
-            // Try to get FA balance using the fungible asset resource type
-            const faRes: any = await aptos.account.getAccountResource({
-              accountAddress: senderAddress,
-              resourceType: faResource as `${string}::${string}::${string}`,
-            });
-            const faBalanceValue = faRes?.data?.balance ?? faRes?.data?.value;
-            const faBalance = BigInt(faBalanceValue || "0");
-            // Add FA balance to coin store balance (user can have both)
-            coinBalance = coinBalance + faBalance;
-            console.log(
-              `[Echelon] Found FA balance for MOVE: ${faBalance.toString()}, total: ${coinBalance.toString()}`
-            );
-          } catch (_) {
-            // FA balance not found via resource, try fetching from balance API (which handles asset type 0xa)
+        // Check FA balance for all coin types (not just MOVE/APT)
+        // According to Aptos FA migration: all coins can have both CoinStore and FA balances
+        try {
+          const faRes = (await aptos.account.getAccountResource({
+            accountAddress: senderAddress,
+            resourceType: faResource as `${string}::${string}::${string}`,
+          })) as FungibleAssetResource;
+          const faBalanceValue = faRes?.data?.balance ?? faRes?.data?.value;
+          if (faBalanceValue != null) {
+            faBalance = BigInt(faBalanceValue);
+          }
+        } catch (_) {
+          // FA balance not found via resource, try balance API for MOVE/APT
+          // Asset type 0xa (0x000000000000000000000000000000000000000000000000000000000000000a) is FA MOVE
+          if (coinType === "0x1::aptos_coin::AptosCoin") {
             try {
+              // Try fetching from balance API (which handles asset type 0xa)
               const balanceResponse = await fetch(
                 `/api/balance?address=${encodeURIComponent(senderAddress)}&token=MOVE`
               );
@@ -541,23 +557,21 @@ export async function executeSupplyTransaction(
                   balanceData.balances.length > 0
                 ) {
                   // Find MOVE balance (asset type 0xa or symbol MOVE)
-                  const moveBalance = balanceData.balances.find((b: any) => {
-                    const assetType = (b.assetType || "").toLowerCase();
-                    const symbol = (b.metadata?.symbol || "").toUpperCase();
-                    // Check for asset type 0xa (FA MOVE) or symbol MOVE
-                    return (
-                      assetType ===
-                        "0x000000000000000000000000000000000000000000000000000000000000000a" ||
-                      assetType === "0xa" ||
-                      symbol === "MOVE"
-                    );
-                  });
+                  const moveBalance = balanceData.balances.find(
+                    (b: TokenBalance) => {
+                      const assetType = (b.assetType || "").toLowerCase();
+                      const symbol = (b.metadata?.symbol || "").toUpperCase();
+                      // Check for asset type 0xa (FA MOVE) or symbol MOVE
+                      return (
+                        assetType ===
+                          "0x000000000000000000000000000000000000000000000000000000000000000a" ||
+                        assetType === "0xa" ||
+                        symbol === "MOVE"
+                      );
+                    }
+                  );
                   if (moveBalance) {
-                    const faBalance = BigInt(moveBalance.amount || "0");
-                    coinBalance = coinBalance + faBalance;
-                    console.log(
-                      `[Echelon] Found FA balance via API for MOVE: ${faBalance.toString()}, total: ${coinBalance.toString()}`
-                    );
+                    faBalance = BigInt(moveBalance.amount || "0");
                   }
                 }
               }
@@ -570,6 +584,18 @@ export async function executeSupplyTransaction(
             }
           }
         }
+
+        // Sum both balances (user may have both during migration period)
+        // According to Aptos FA migration best practices: aggregate both balances
+        const totalBalance = coinBalance + faBalance;
+
+        if (faBalance > BigInt(0)) {
+          console.log(
+            `[Echelon] Balance check for ${asset.symbol}: CoinStore=${coinBalance.toString()}, FA=${faBalance.toString()}, Total=${totalBalance.toString()}`
+          );
+        }
+
+        coinBalance = totalBalance;
 
         if (coinBalance === BigInt(0)) {
           return {
@@ -587,7 +613,7 @@ export async function executeSupplyTransaction(
             error: `Insufficient balance. You have ${balanceFormatted.toFixed(actualDecimals)} ${asset.symbol}, but trying to supply ${numericAmount} ${asset.symbol}.`,
           };
         }
-      } catch (balanceError: any) {
+      } catch (balanceError: unknown) {
         console.warn(
           "[Supply Utility] Coin balance check failed:",
           balanceError
@@ -600,7 +626,7 @@ export async function executeSupplyTransaction(
     // Build transaction
     let functionName: `${string}::${string}::${string}`;
     let typeArguments: string[] | undefined = undefined;
-    let functionArguments: any[];
+    let functionArguments: TransactionFunctionArgument[];
 
     if (isFungibleAsset) {
       functionName =
@@ -620,7 +646,7 @@ export async function executeSupplyTransaction(
       functionArguments = [asset.marketAddress, rawAmount];
     }
 
-    const transactionData: any = {
+    const transactionData: TransactionData = {
       function: functionName,
       functionArguments,
     };
@@ -635,7 +661,7 @@ export async function executeSupplyTransaction(
       data: transactionData,
     });
 
-    const txnObj = rawTxn as any;
+    const txnObj = rawTxn as unknown as RawTransactionWithChainId;
     if (txnObj.rawTransaction) {
       txnObj.rawTransaction.chain_id = new ChainId(MOVEMENT_CHAIN_ID);
     }
@@ -689,9 +715,9 @@ export async function executeSupplyTransaction(
       success: true,
       txHash: pending.hash,
     };
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("[Supply Utility] Error occurred:", err);
-    let errorMessage = err.message || "Transaction failed";
+    let errorMessage = getErrorMessage(err);
 
     if (errorMessage.includes("Move abort")) {
       const abortMatch = errorMessage.match(
@@ -840,7 +866,7 @@ export async function executeBorrowTransaction(
     // Build transaction
     let functionName: `${string}::${string}::${string}`;
     let typeArguments: string[] | undefined = undefined;
-    let functionArguments: any[];
+    let functionArguments: TransactionFunctionArgument[];
 
     if (isFungibleAsset && asset.faAddress) {
       functionName =
@@ -860,7 +886,7 @@ export async function executeBorrowTransaction(
       functionArguments = [asset.marketAddress, rawAmount];
     }
 
-    const transactionData: any = {
+    const transactionData: TransactionData = {
       function: functionName,
       functionArguments,
     };
@@ -875,7 +901,7 @@ export async function executeBorrowTransaction(
       data: transactionData,
     });
 
-    const txnObj = rawTxn as any;
+    const txnObj = rawTxn as unknown as RawTransactionWithChainId;
     if (txnObj.rawTransaction) {
       txnObj.rawTransaction.chain_id = new ChainId(MOVEMENT_CHAIN_ID);
     }
@@ -929,9 +955,9 @@ export async function executeBorrowTransaction(
       success: true,
       txHash: pending.hash,
     };
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("[Borrow Utility] Error occurred:", err);
-    let errorMessage = err.message || "Transaction failed";
+    let errorMessage = getErrorMessage(err);
 
     if (errorMessage.includes("ERR_LENDING_INSUFFICIENT_BORROW_POWER")) {
       errorMessage =
@@ -998,7 +1024,7 @@ export async function executeWithdrawTransaction(
     // Build transaction
     let functionName: `${string}::${string}::${string}`;
     let typeArguments: string[] | undefined = undefined;
-    let functionArguments: any[];
+    let functionArguments: TransactionFunctionArgument[];
 
     if (isFungibleAsset && asset.faAddress) {
       functionName = isWithdrawAll
@@ -1033,7 +1059,7 @@ export async function executeWithdrawTransaction(
           ];
     }
 
-    const transactionData: any = {
+    const transactionData: TransactionData = {
       function: functionName,
       functionArguments,
     };
@@ -1048,7 +1074,7 @@ export async function executeWithdrawTransaction(
       data: transactionData,
     });
 
-    const txnObj = rawTxn as any;
+    const txnObj = rawTxn as unknown as RawTransactionWithChainId;
     if (txnObj.rawTransaction) {
       txnObj.rawTransaction.chain_id = new ChainId(MOVEMENT_CHAIN_ID);
     }
@@ -1102,9 +1128,9 @@ export async function executeWithdrawTransaction(
       success: true,
       txHash: pending.hash,
     };
-  } catch (err: any) {
+  } catch (err: unknown) {
     console.error("[Withdraw Utility] Error occurred:", err);
-    let errorMessage = err.message || "Transaction failed";
+    let errorMessage = getErrorMessage(err);
 
     if (errorMessage.includes("Move abort")) {
       const abortMatch = errorMessage.match(

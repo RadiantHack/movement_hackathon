@@ -3,25 +3,17 @@
  * Consolidates withdraw logic used across multiple components
  */
 
-import { useState, useCallback } from "react";
-import { usePrivy } from "@privy-io/react-auth";
-import { useSignRawHash } from "@privy-io/react-auth/extended-chains";
+import { useCallback } from "react";
 import {
   AssetInfo,
   executeWithdrawTransaction,
 } from "./useEchelonTransactions";
 import {
-  validateEchelonAmount,
-  validateEchelonWallet,
-  validateEchelonAsset,
-} from "../utils/echelon/validation";
-import { useBalance } from "./useBalanceContext";
-import { useMovementWallet } from "./useMovementWallet";
+  useEchelonTransaction,
+  type UseEchelonTransactionOptions,
+} from "./useEchelonTransaction";
 
-interface UseEchelonWithdrawOptions {
-  onSuccess?: () => void;
-  onError?: (error: string) => void;
-}
+interface UseEchelonWithdrawOptions extends UseEchelonTransactionOptions {}
 
 interface EchelonWithdrawState {
   withdrawing: boolean;
@@ -39,17 +31,18 @@ export function useEchelonWithdraw({
   onSuccess,
   onError,
 }: UseEchelonWithdrawOptions = {}) {
-  const { signRawHash } = useSignRawHash();
-  const { ready, authenticated } = usePrivy();
-  const { refreshBalances } = useBalance();
-  const movementWallet = useMovementWallet();
-
-  const [state, setState] = useState<EchelonWithdrawState>({
-    withdrawing: false,
-    error: null,
-    txHash: null,
-    step: null,
-  });
+  const {
+    state,
+    signRawHash,
+    movementWallet,
+    validateTransaction,
+    setLoading,
+    setError,
+    handleSuccess,
+    handleError,
+    resetState,
+    updateStep,
+  } = useEchelonTransaction({ onSuccess, onError });
 
   const handleWithdraw = useCallback(
     async (
@@ -58,147 +51,72 @@ export function useEchelonWithdraw({
       percentage: number,
       availableBalance?: number
     ): Promise<boolean> => {
-      // Reset error state
-      setState((prev) => ({ ...prev, error: null, step: null }));
-
-      // Validate wallet
-      const walletValidation = validateEchelonWallet(movementWallet);
-      if (!walletValidation.isValid) {
-        const error = walletValidation.error || "Wallet validation failed";
-        setState((prev) => ({ ...prev, error }));
-        onError?.(error);
-        return false;
-      }
-
-      if (!ready || !authenticated) {
-        const error = "Please authenticate first";
-        setState((prev) => ({ ...prev, error }));
-        onError?.(error);
-        return false;
-      }
-
-      // Validate asset
-      const assetValidation = validateEchelonAsset(asset);
-      if (!assetValidation.isValid) {
-        const error = assetValidation.error || "Invalid asset";
-        setState((prev) => ({ ...prev, error }));
-        onError?.(error);
-        return false;
-      }
-
-      // Validate amount
-      const amountValidation = validateEchelonAmount(
+      // Validate transaction prerequisites
+      const validation = validateTransaction(
+        asset,
         amount,
         availableBalance,
         "withdraw"
       );
-      if (!amountValidation.isValid) {
-        const error = amountValidation.error || "Invalid amount";
-        setState((prev) => ({ ...prev, error }));
-        onError?.(error);
+
+      if (
+        !validation.isValid ||
+        !validation.publicKey ||
+        !validation.parsedAmount
+      ) {
+        setError(validation.error || "Validation failed");
         return false;
       }
 
-      // Use wallet from hook (already validated)
       if (!movementWallet) {
-        const error = "Movement wallet not found";
-        setState((prev) => ({ ...prev, error }));
-        onError?.(error);
-        return false;
-      }
-
-      const publicKey = (movementWallet as any).publicKey;
-      if (!publicKey) {
-        const error = "Wallet public key not found";
-        setState((prev) => ({ ...prev, error }));
-        onError?.(error);
+        setError("Movement wallet not found");
         return false;
       }
 
       // Execute withdraw
-      setState((prev) => ({
-        ...prev,
-        withdrawing: true,
-        error: null,
-        step: "Initializing...",
-      }));
+      setLoading(true, "Initializing...");
 
       try {
         const result = await executeWithdrawTransaction({
           asset,
-          amount: amountValidation.parsedAmount!,
+          amount: validation.parsedAmount,
           percentage,
           movementWallet,
-          publicKey,
+          publicKey: validation.publicKey,
           signRawHash,
-          onStepChange: (step: string) => {
-            setState((prev) => ({ ...prev, step }));
-          },
+          onStepChange: updateStep,
         });
 
         if (result.success && result.txHash) {
-          setState((prev) => ({
-            ...prev,
-            withdrawing: false,
-            txHash: result.txHash ?? null,
-            error: null,
-            step: null,
-          }));
-
-          // Refresh balances after successful withdraw
-          await refreshBalances();
-
-          onSuccess?.();
+          await handleSuccess(result.txHash);
           return true;
         } else {
-          const error = result.error || "Withdraw transaction failed";
-          setState((prev) => ({
-            ...prev,
-            withdrawing: false,
-            error,
-            step: null,
-          }));
-          onError?.(error);
+          handleError(result.error || "Withdraw transaction failed");
           return false;
         }
       } catch (err: unknown) {
         console.error("Withdraw error:", err);
-        const errorMessage =
-          err instanceof Error
-            ? err.message
-            : "Withdraw failed. Please try again.";
-        setState((prev) => ({
-          ...prev,
-          withdrawing: false,
-          error: errorMessage,
-          step: null,
-        }));
-        onError?.(errorMessage);
+        handleError(err);
         return false;
       }
     },
     [
+      validateTransaction,
       movementWallet,
-      ready,
-      authenticated,
       signRawHash,
-      refreshBalances,
-      onSuccess,
-      onError,
+      setLoading,
+      setError,
+      handleSuccess,
+      handleError,
+      updateStep,
     ]
   );
 
-  const resetState = useCallback(() => {
-    setState({
-      withdrawing: false,
-      error: null,
-      txHash: null,
-      step: null,
-    });
-  }, []);
-
   return {
-    ...state,
+    withdrawing: state.loading,
+    error: state.error,
+    txHash: state.txHash,
+    step: state.step,
     handleWithdraw,
     resetState,
   };

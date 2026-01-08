@@ -10,11 +10,16 @@ import {
   AccountAuthenticatorEd25519,
   generateSigningMessageForTransaction,
   ChainId,
+  AccountAddress,
 } from "@aptos-labs/ts-sdk";
 import { toHex } from "viem";
 import * as Gen from "../../lib/super-json-api-client/src";
 import { PortfolioState } from "./portfolio-service";
 import { requireMovementChainId } from "@/lib/super-aptos-sdk/src/globals";
+import {
+  TransactionInstructionData,
+  isTransactionInstruction,
+} from "../types/moveposition";
 
 /**
  * Transaction arguments matching MovePosition's TransactionArgs
@@ -126,7 +131,7 @@ function buildTransactionIx(
   packet: Gen.PacketResponse,
   broker: Gen.Broker,
   address: string
-): any {
+): TransactionInstructionData {
   const { superAptosSDK } = requireSDKContext();
 
   // Convert hex string to Uint8Array (matching MovePosition approach)
@@ -181,7 +186,20 @@ function buildTransactionIx(
     }
   );
 
-  return ix;
+  // Convert InputTransactionData to TransactionInstructionData
+  // The SDK returns InputTransactionData which has sender as AccountAddressInput | undefined
+  // We need to convert it to string | undefined
+  const senderString =
+    typeof ix.sender === "string"
+      ? ix.sender
+      : ix.sender
+        ? AccountAddress.from(ix.sender).toString()
+        : undefined;
+
+  return {
+    sender: senderString,
+    data: ix.data,
+  } as TransactionInstructionData;
 }
 
 /**
@@ -205,11 +223,18 @@ async function signAndSubmitTransaction({
 
   onProgress?.("Building transaction...");
 
-  // Extract transaction data from instruction
-  const txData = txIx.data as any;
-  const txFunction = txData.function as `${string}::${string}::${string}`;
-  const txTypeArguments: string[] = txData.typeArguments || [];
-  const txFunctionArguments: any[] = txData.functionArguments || [];
+  // Validate transaction instruction structure
+  if (!isTransactionInstruction(txIx)) {
+    throw new Error(
+      "Invalid transaction instruction: missing required data structure"
+    );
+  }
+
+  // Extract transaction data from instruction (now type-safe)
+  const txData = txIx.data;
+  const txFunction = txData.function;
+  const txTypeArguments: string[] = txData.typeArguments;
+  const txFunctionArguments: unknown[] = txData.functionArguments;
 
   // Build transaction using Aptos SDK
   const rawTxn = await aptos.transaction.build.simple({
@@ -217,7 +242,7 @@ async function signAndSubmitTransaction({
     data: {
       function: txFunction as `${string}::${string}::${string}`,
       typeArguments: txTypeArguments,
-      functionArguments: txFunctionArguments,
+      functionArguments: txFunctionArguments as any, // SDK accepts various argument types
     },
   });
 
@@ -348,6 +373,16 @@ async function checkGasBalance(
 
 /**
  * Check underlying asset balance before submit (client-side guard)
+ *
+ * According to Aptos FA migration best practices:
+ * - Always check both CoinStore (legacy) and FA (new) balances
+ * - Sum both balances for accurate total (user may have both during migration)
+ * - CoinStore is deprecated but still valid during transition period
+ *
+ * @param address - Wallet address to check
+ * @param coinType - Coin type (e.g., "0x1::aptos_coin::AptosCoin")
+ * @param requiredRawAmount - Required amount in raw units
+ * @param onProgress - Optional progress callback
  */
 async function checkUnderlyingBalance(
   address: string,
@@ -367,7 +402,7 @@ async function checkUnderlyingBalance(
     let faBalance = BigInt(0);
     let coinStoreBalance = BigInt(0);
 
-    // Try fungible asset (FA) balance
+    // Try fungible asset (FA) balance - new standard
     try {
       const faRes: any = await aptos.getAccountResource({
         accountAddress: address,
@@ -378,10 +413,10 @@ async function checkUnderlyingBalance(
         faBalance = BigInt(val);
       }
     } catch (_) {
-      // ignore
+      // FA balance not found, continue
     }
 
-    // Try CoinStore balance
+    // Try CoinStore balance - legacy but still valid during migration
     try {
       const csRes: any = await aptos.getAccountResource({
         accountAddress: address,
@@ -392,10 +427,11 @@ async function checkUnderlyingBalance(
         coinStoreBalance = BigInt(val);
       }
     } catch (_) {
-      // ignore
+      // CoinStore not found, continue
     }
 
-    // Accept either FA balance or coin store balance (both are valid)
+    // Sum both balances (user may have both during migration period)
+    // According to Aptos FA migration: both are valid and should be aggregated
     const totalBalance = faBalance + coinStoreBalance;
 
     if (totalBalance >= required) {

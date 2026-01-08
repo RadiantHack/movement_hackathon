@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ThemeToggle } from "./themeToggle";
+import { Logo } from "./logo";
 import { useState } from "react";
 import { FiSidebar } from "react-icons/fi";
 import {
@@ -111,15 +112,28 @@ export function Sidebar({
       >
         {/* Logo */}
         <div>
-          <div className="flex items-center justify-between border-b border-zinc-200 p-4 dark:border-zinc-800">
-            {!isCollapsed && (
-              <div>
-                <h1 className="text-xl font-semibold text-zinc-950 dark:text-zinc-50">
-                  Movement Nexus
-                </h1>
-                <p className="text-xs text-zinc-600 dark:text-zinc-400">
-                  AI-Powered DeFi Gateway
-                </p>
+          <div className="relative flex items-center justify-between border-b border-zinc-200/80 dark:border-zinc-800/80 bg-gradient-to-br from-zinc-50/50 via-transparent to-zinc-100/30 dark:from-zinc-900/50 dark:via-transparent dark:to-zinc-800/30 p-3 sm:p-4 backdrop-blur-sm">
+            {!isCollapsed ? (
+              <div className="flex items-center gap-2.5 sm:gap-3.5 flex-1 min-w-0 pr-2">
+                <div className="flex-shrink-0 relative">
+                  <div className="absolute inset-0 bg-gradient-to-br from-cyan-400/20 to-purple-500/20 rounded-xl blur-sm"></div>
+                  <Logo size="md" variant="icon" className="relative" />
+                </div>
+                <div className="flex-1 min-w-0 overflow-hidden">
+                  <h1 className="text-base sm:text-lg font-bold tracking-tight bg-gradient-to-r from-zinc-950 via-zinc-900 to-zinc-950 dark:from-zinc-50 dark:via-zinc-100 dark:to-zinc-50 bg-clip-text text-transparent truncate">
+                    Movement Nexus
+                  </h1>
+                  <p className="text-[9px] sm:text-[10px] font-medium text-zinc-500 dark:text-zinc-400 mt-0.5 tracking-wide uppercase truncate">
+                    AI-Powered DeFi Gateway
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <div className="flex justify-center w-full">
+                <div className="relative">
+                  <div className="absolute inset-0 bg-gradient-to-br from-cyan-400/20 to-purple-500/20 rounded-xl blur-sm"></div>
+                  <Logo size="sm" variant="icon" className="relative" />
+                </div>
               </div>
             )}
 

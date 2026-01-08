@@ -3,7 +3,7 @@
  * Refactored to use unified transaction service matching MovePosition architecture
  */
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { usePrivy } from "@privy-io/react-auth";
 import { useSignRawHash } from "@privy-io/react-auth/extended-chains";
 import {
@@ -14,6 +14,7 @@ import {
 import { useBalance } from "./useBalanceContext";
 import { useMovementWallet } from "./useMovementWallet";
 import { getCoinDecimals, convertAmountToRaw } from "../utils/shared/tokens";
+import { MovementWallet, hasPublicKey } from "../types/moveposition";
 import {
   getBrokerByAssetName,
   validateBroker,
@@ -52,6 +53,18 @@ export function useMovePositionSupply({
   const { refreshBalances } = useBalance();
   const movementWallet = useMovementWallet();
 
+  // Use refs to store callbacks to avoid recreating useCallback on every render
+  const onSuccessRef = useRef(onSuccess);
+  const onErrorRef = useRef(onError);
+  const refreshBalancesRef = useRef(refreshBalances);
+
+  // Update refs when callbacks change (but don't trigger re-renders)
+  useEffect(() => {
+    onSuccessRef.current = onSuccess;
+    onErrorRef.current = onError;
+    refreshBalancesRef.current = refreshBalances;
+  }, [onSuccess, onError, refreshBalances]);
+
   const [state, setState] = useState<MovePositionSupplyState>({
     supplying: false,
     error: null,
@@ -73,14 +86,14 @@ export function useMovePositionSupply({
       if (!walletValidation.isValid) {
         const error = walletValidation.error || "Wallet validation failed";
         setState((prev) => ({ ...prev, error }));
-        onError?.(error);
+        onErrorRef.current?.(error);
         return false;
       }
 
       if (!ready || !authenticated) {
         const error = "Please authenticate first";
         setState((prev) => ({ ...prev, error }));
-        onError?.(error);
+        onErrorRef.current?.(error);
         return false;
       }
 
@@ -89,7 +102,7 @@ export function useMovePositionSupply({
       if (!assetValidation.isValid) {
         const error = assetValidation.error || "Invalid asset";
         setState((prev) => ({ ...prev, error }));
-        onError?.(error);
+        onErrorRef.current?.(error);
         return false;
       }
 
@@ -103,7 +116,7 @@ export function useMovePositionSupply({
       if (!amountValidation.isValid) {
         const error = amountValidation.error || "Invalid amount";
         setState((prev) => ({ ...prev, error }));
-        onError?.(error);
+        onErrorRef.current?.(error);
         return false;
       }
 
@@ -111,17 +124,26 @@ export function useMovePositionSupply({
       if (!movementWallet) {
         const error = "Movement wallet not found";
         setState((prev) => ({ ...prev, error }));
-        onError?.(error);
+        onErrorRef.current?.(error);
+        return false;
+      }
+
+      // Type-safe publicKey extraction
+      if (!hasPublicKey(movementWallet)) {
+        const error =
+          "Wallet missing public key. Please reconnect your wallet.";
+        setState((prev) => ({ ...prev, error }));
+        onErrorRef.current?.(error);
         return false;
       }
 
       const walletAddress = movementWallet.address as string;
-      const publicKey = (movementWallet as any).publicKey as string;
+      const publicKey = movementWallet.publicKey;
 
       if (!publicKey || publicKey.length < 2) {
         const error = "Invalid public key format";
         setState((prev) => ({ ...prev, error }));
-        onError?.(error);
+        onErrorRef.current?.(error);
         return false;
       }
 
@@ -191,17 +213,19 @@ export function useMovePositionSupply({
         });
 
         // Success - transaction hash returned
+        // Clear error state on success to prevent stale error messages
         setState((prev) => ({
           ...prev,
           supplying: false,
           txHash: hash,
+          error: null, // Explicitly clear error on success
           step: null,
         }));
 
         // Refresh balances after successful supply (matches MovePosition's postTransactionRefresh)
-        await refreshBalances();
+        await refreshBalancesRef.current();
 
-        onSuccess?.();
+        onSuccessRef.current?.();
         return true;
       } catch (error: any) {
         const errorMessage =
@@ -212,19 +236,11 @@ export function useMovePositionSupply({
           error: errorMessage,
           step: null,
         }));
-        onError?.(errorMessage);
+        onErrorRef.current?.(errorMessage);
         return false;
       }
     },
-    [
-      movementWallet,
-      ready,
-      authenticated,
-      signRawHash,
-      refreshBalances,
-      onSuccess,
-      onError,
-    ]
+    [movementWallet, ready, authenticated, signRawHash]
   );
 
   return {
