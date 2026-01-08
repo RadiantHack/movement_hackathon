@@ -24,7 +24,7 @@ export default function ModalShell({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-start sm:items-center justify-center p-2 sm:p-3 md:p-4 bg-black/60 dark:bg-black/80 backdrop-blur-md animate-fade-in"
+      className="fixed inset-0 z-50 flex items-center justify-center p-2 sm:p-3 md:p-4 bg-black/60 dark:bg-black/80 backdrop-blur-md animate-fade-in"
       style={{ 
         position: 'fixed',
         top: 0,
@@ -32,18 +32,22 @@ export default function ModalShell({
         right: 0,
         bottom: 0,
         overflow: 'hidden',
-        touchAction: 'none'
+        touchAction: 'none',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center'
       }}
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
       <div
-        className={`relative w-full ${containerClass} mt-2 sm:mt-0 sm:my-auto rounded-3xl border border-zinc-200/60 dark:border-zinc-700/40 bg-white/95 dark:bg-zinc-900/95 backdrop-blur-xl shadow-2xl shadow-zinc-900/20 dark:shadow-zinc-950/50 animate-scale-in max-h-[calc(100dvh-1rem)] sm:max-h-[calc(100dvh-2rem)] md:max-h-[calc(100dvh-3rem)] flex flex-col`}
+        className={`relative w-full ${containerClass} my-auto rounded-3xl border border-zinc-200/60 dark:border-zinc-700/40 bg-white/95 dark:bg-zinc-900/95 backdrop-blur-xl shadow-2xl shadow-zinc-900/20 dark:shadow-zinc-950/50 animate-scale-in max-h-[calc(100dvh-1rem)] sm:max-h-[calc(100dvh-2rem)] md:max-h-[calc(100dvh-3rem)] flex flex-col`}
         style={{
           maxHeight: 'calc(100dvh - 1rem)',
           touchAction: 'pan-y',
-          overflow: 'hidden'
+          overflow: 'hidden',
+          margin: 'auto'
         }}
       >
         {/* Background decoration */}
