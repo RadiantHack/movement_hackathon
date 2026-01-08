@@ -664,3 +664,15 @@ movement/
 - [Google ADK Documentation](https://ai.google.dev/adk)
 - [A2A Protocol](https://github.com/ag-ui/a2a-sdk)
 - [AG-UI Protocol](https://github.com/ag-ui/ag-ui-adk)
+
+---
+
+## Demo & Pitch Deck
+
+### Final Demo Video
+🎥 [Watch the final demo on YouTube](https://www.youtube.com/watch?v=Cha7hsdvtl8)
+
+### Pitch Deck
+📊 [View Pitch Deck on Canva](https://www.canva.com/design/DAG9dz5gxcw/xHOnRmIwxX40fEClO-Y_qQ/view?utm_content=DAG9dz5gxcw&utm_campaign=designshare&utm_medium=link2&utm_source=uniquelinks&utlId=heef7d61143)
+
+📝 [Edit Pitch Deck on Canva](https://www.canva.com/design/DAG9dz5gxcw/H7Wvla6Dfn-WQ703AfnTUA/edit?utm_content=DAG9dz5gxcw&utm_campaign=designshare&utm_medium=link2&utm_source=sharebutton)
