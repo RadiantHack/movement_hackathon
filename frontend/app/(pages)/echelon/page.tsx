@@ -996,12 +996,44 @@ export default function EchelonPage() {
           hasCollateral={userSupplies.length > 0 || totalSupplyBalance > 0}
           loadingVault={loadingVault || loadingMaxBorrow}
           onSuccess={async () => {
-            // Refresh on-chain max borrowable immediately after transaction completes
+            // Refresh immediately for instant UI update
+            await fetchVault();
+            if (movementWallet?.address) {
+              const balances = await fetchAvailableBalances(
+                movementWallet.address
+              );
+              setAvailableBalances(balances);
+            }
+            // Refresh on-chain max borrowable
             if (refreshMaxBorrow) {
               await refreshMaxBorrow();
             }
-            // Refresh vault data after successful borrow
+            // Wait a bit for blockchain state to fully propagate, then refresh again
+            await new Promise((resolve) => setTimeout(resolve, 1500));
+            // Coordinate refreshes to avoid race conditions - refresh supply first, then withdrawable
+            // This ensures data consistency and prevents excessive simultaneous API calls
+            const now = Date.now();
+            if (now - lastRefreshTimeRef.current > REFRESH_COOLDOWN_MS) {
+              lastRefreshTimeRef.current = now;
+              // Refresh supply amounts first
+              if (refreshSupplyAmounts) {
+                await refreshSupplyAmounts();
+              }
+              // Small delay to stagger the requests
+              await new Promise((resolve) => setTimeout(resolve, 50));
+              // Then refresh withdrawable amounts (borrow affects health factor)
+              if (refreshWithdrawableAmounts) {
+                await refreshWithdrawableAmounts();
+              }
+            }
+            // Final refresh to ensure "Your Borrows" card shows the latest state
             await fetchVault();
+            if (movementWallet?.address) {
+              const balances = await fetchAvailableBalances(
+                movementWallet.address
+              );
+              setAvailableBalances(balances);
+            }
           }}
         />
 
@@ -1139,11 +1171,38 @@ export default function EchelonPage() {
           totalSupplyBalance={totalSupplyBalance}
           totalBorrowBalance={totalBorrowBalance}
           onSuccess={async () => {
-            // Refresh on-chain liability immediately after transaction completes
+            // Refresh immediately for instant UI update
+            await fetchVault();
+            if (movementWallet?.address) {
+              const balances = await fetchAvailableBalances(
+                movementWallet.address
+              );
+              setAvailableBalances(balances);
+            }
+            // Refresh on-chain liability
             if (refreshMaxRepay) {
               await refreshMaxRepay();
             }
-            // Refresh vault data and balances after successful repay
+            // Wait a bit for blockchain state to fully propagate, then refresh again
+            await new Promise((resolve) => setTimeout(resolve, 1500));
+            // Coordinate refreshes to avoid race conditions - refresh supply first, then withdrawable
+            // This ensures data consistency and prevents excessive simultaneous API calls
+            // Repay affects health factor, so withdrawable amounts may change
+            const now = Date.now();
+            if (now - lastRefreshTimeRef.current > REFRESH_COOLDOWN_MS) {
+              lastRefreshTimeRef.current = now;
+              // Refresh supply amounts first
+              if (refreshSupplyAmounts) {
+                await refreshSupplyAmounts();
+              }
+              // Small delay to stagger the requests
+              await new Promise((resolve) => setTimeout(resolve, 50));
+              // Then refresh withdrawable amounts (repay affects health factor)
+              if (refreshWithdrawableAmounts) {
+                await refreshWithdrawableAmounts();
+              }
+            }
+            // Final refresh to ensure "Your Borrows" card shows the latest state
             await fetchVault();
             if (movementWallet?.address) {
               const balances = await fetchAvailableBalances(
