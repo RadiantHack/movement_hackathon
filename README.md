@@ -4,6 +4,9 @@
 
 Multi-agent AI platform orchestrating 8 specialized agents for seamless DeFi operations on Movement Network. Built for the Movement M1 Hackathon.
 
+⚠️ **CAUTION: Movement Mainnet Only** : 
+ **All applications in this repository are deployed and tested exclusively on Movement Mainnet.** 
+
 ---
 
 ## 🎬 Demo Videos
